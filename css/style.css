@@ -402,9 +402,11 @@ td.col-wx {
   width: calc(var(--w-wx) * var(--colScale));
 }
 
+/* 小红书名称：桌面右对齐 */
 th.col-xhs,
 td.col-xhs {
   width: calc(var(--w-xhs) * var(--colScale));
+  text-align: right;
 }
 
 th.col-note,
@@ -547,8 +549,10 @@ td.col-cat select {
 .m-phone {
   font-size: 20px;
   font-weight: 600;
+  flex: 0 0 auto;
 }
 
+/* 小红书名称：移动端靠右显示 + 右对齐 */
 .m-xhs {
   font-size: 14px;
   color: #333;
@@ -556,6 +560,8 @@ td.col-cat select {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  margin-left: auto;
+  text-align: right;
 }
 
 /* 头部第二行：所属人标签 + 分类 pill */
@@ -569,11 +575,13 @@ td.col-cat select {
   color: var(--muted);
 }
 
+/* 所属人：字体大小调到和 m-xhs 一致 */
 .m-owner {
   padding: 2px 8px;
   border-radius: 999px;
   background: #f2f2f7;
   color: #333;
+  font-size: 14px;
 }
 
 /* 分类 pill（颜色与桌面保持一致，由 JS 设置背景） */

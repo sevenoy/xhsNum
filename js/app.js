@@ -15,15 +15,14 @@ const CATS_KEY = "xhs_cats_v7";
 
 // 视图默认：紧凑 + 版本号
 const DEFAULT_VIEW = {
-  viewVersion: 2,
-  pad: 4,
-  colScale: 0.7,
-  zebraOn: true,
-  zebraColor: "#f5f5f7",
-  fontFamily:
-    '-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro SC","PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif',
   titleText: "XHSPHONE",
   titleColor: "#111111",
+  fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif",
+  pad: 14,
+  colScale: 1,
+  zebraOn: true,
+  // 统一隔行颜色：222/240/255
+  zebraColor: "#def0ff",
 };
 
 const DEFAULT_CATS = [
@@ -213,9 +212,11 @@ async function cloudSave(payload, snapshotName) {
 }
 
 // 云端历史快照列表
+a// 云端历史快照列表
 async function renderCloudHistory() {
   const panel = $("#cloudHistoryPanel");
-  panel.innerHTML = '<div class="cloud-history-empty">正在加载云端历史...</div>';
+  panel.innerHTML =
+    '<div class="cloud-history-empty">正在加载云端历史...</div>';
   try {
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
@@ -229,6 +230,7 @@ async function renderCloudHistory() {
         '<div class="cloud-history-empty">云端暂时没有历史快照</div>';
       return;
     }
+
     panel.innerHTML = data
       .map((row, idx) => {
         const d = new Date(row.updated_at);
@@ -238,12 +240,23 @@ async function renderCloudHistory() {
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
         const label = `${y}-${m}-${day} ${hh}:${mm}`;
-        const name =
+
+        // 1）优先使用 snapshot_label
+        // 2）兼容旧的 snapshot_name，自动去掉末尾的日期时间
+        let rawName =
           (row.payload &&
-            (row.payload.snapshot_name ||
-              row.payload.snapshot_label ||
+            (row.payload.snapshot_label ||
+              row.payload.snapshot_name ||
               row.payload.snapshotLabel)) ||
           `快照${idx + 1}`;
+
+        // 如果名字形如 "测试 2025-11-07 22:46" → 裁掉日期时间
+        rawName = String(rawName).replace(
+          /\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?$/,
+          "",
+        );
+        const name = rawName || `快照${idx + 1}`;
+
         return `<div class="cloud-history-item" data-key="${row.key}">
           <span>${escapeHtml(name)}</span>
           <time>${label}</time>
@@ -256,6 +269,7 @@ async function renderCloudHistory() {
       '<div class="cloud-history-empty">加载云端历史失败</div>';
   }
 }
+
 
 // ------- 数据读写 -------
 
@@ -469,13 +483,14 @@ function makeRowTr(r) {
 
 // ------- 渲染手机折叠列表 -------
 
+// ------- 渲染手机折叠列表 -------
 function renderMobileList(rows) {
   const list = $("#mobileList");
   list.innerHTML = "";
   const cats = readCats();
   const view = readView();
   const zebraOn = view.zebraOn !== false;
-  const zebraColor = view.zebraColor || "#f5f5f7";
+  const zebraColor = view.zebraColor || "#def0ff"; // 新默认
 
   if (!rows.length) {
     const empty = document.createElement("div");
@@ -490,8 +505,12 @@ function renderMobileList(rows) {
   rows.forEach((row, idx) => {
     const card = document.createElement("div");
     card.className = "m-row";
+
+    // 卡片整体背景：隔行着色
     const cardBg = zebraOn && idx % 2 === 1 ? zebraColor : "var(--cell)";
     card.style.setProperty("--card-bg", cardBg);
+
+    const note1 = row.note1 || "";
 
     card.innerHTML = `
       <button type="button" class="m-row-header">
@@ -507,24 +526,32 @@ function renderMobileList(rows) {
       <div class="m-row-details">
         <div class="m-detail-row">
           <div class="m-detail-label">所属人</div>
-          <div class="m-detail-value" contenteditable="true" data-k="owner">${row.owner || ""}</div>
+          <div class="m-detail-value" contenteditable="true" data-k="owner">
+            ${row.owner || ""}
+          </div>
         </div>
         <div class="m-detail-row">
           <div class="m-detail-label">微信实名人</div>
-          <div class="m-detail-value" contenteditable="true" data-k="wx_real">${row.wx_real || ""}</div>
+          <div class="m-detail-value" contenteditable="true" data-k="wx_real">
+            ${row.wx_real || ""}
+          </div>
         </div>
         <div class="m-detail-row">
           <div class="m-detail-label">对应微信名</div>
-          <div class="m-detail-value" contenteditable="true" data-k="wx_name">${row.wx_name || ""}</div>
+          <div class="m-detail-value" contenteditable="true" data-k="wx_name">
+            ${row.wx_name || ""}
+          </div>
         </div>
-        <div class="m-detail-row">
+        <div class="m-detail-row m-detail-row-note">
           <div class="m-detail-label">备注</div>
-          <div class="m-detail-value" contenteditable="true" data-k="note1">${row.note1 || ""}</div>
+          <div class="m-detail-value" contenteditable="true" data-k="note1">
+            ${note1}
+          </div>
         </div>
         <div class="m-detail-row">
           <div class="m-detail-label">分类</div>
           <div class="m-detail-value">
-            <select data-k="row_color" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:15px;text-align-last:right;">
+            <select data-k="row_color">
               <option value="">无</option>
               ${cats
                 .map(
@@ -538,31 +565,21 @@ function renderMobileList(rows) {
           </div>
         </div>
         <div class="m-actions">
-          <button class="ghost m-edit">编辑</button>
-          <div class="m-hidden-actions">
-            <button class="ghost" data-act="up">上移</button>
-            <button class="ghost" data-act="down">下移</button>
-            <button class="ghost danger" data-act="del">删除</button>
-          </div>
+          <button class="ghost" data-act="up">上移</button>
+          <button class="ghost" data-act="down">下移</button>
+          <button class="ghost danger" data-act="del">删除</button>
         </div>
       </div>
     `;
 
     const header = card.querySelector(".m-row-header");
     const details = card.querySelector(".m-row-details");
-    const arrow = card.querySelector(".m-arrow");
-    const editBtn = card.querySelector(".m-edit");
-    const hidden = card.querySelector(".m-hidden-actions");
 
     header.addEventListener("click", () => {
       card.classList.toggle("open");
     });
 
-    editBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      hidden.classList.toggle("show");
-    });
-
+    // 文本编辑
     card
       .querySelectorAll(".m-detail-value[contenteditable='true']")
       .forEach((el) => {
@@ -578,30 +595,35 @@ function renderMobileList(rows) {
         );
       });
 
+    // 分类下拉
     const sel = card.querySelector("select[data-k='row_color']");
     sel.addEventListener("change", async () => {
       await updateRow(row.id, { row_color: sel.value });
       await renderTable();
     });
 
-    hidden.querySelectorAll("button[data-act]").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const act = btn.dataset.act;
-        if (act === "del") {
-          if (!confirm("确定删除这一行？")) return;
-          await deleteRowById(row.id);
-        } else if (act === "up") {
-          await moveRow(row.id, "up");
-        } else if (act === "down") {
-          await moveRow(row.id, "down");
-        }
+    // 三个操作按钮：上移 / 下移 / 删除
+    card
+      .querySelectorAll(".m-actions button[data-act]")
+      .forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const act = btn.dataset.act;
+          if (act === "del") {
+            if (!confirm("确定删除这一行？")) return;
+            await deleteRowById(row.id);
+          } else if (act === "up") {
+            await moveRow(row.id, "up");
+          } else if (act === "down") {
+            await moveRow(row.id, "down");
+          }
+        });
       });
-    });
 
     list.appendChild(card);
   });
 }
+
 
 // ------- 总渲染 -------
 
@@ -968,34 +990,32 @@ function bindEvents() {
   });
 
   // 云端保存
-  $("#btnSaveCloud").addEventListener("click", async () => {
-    const rows = await getAllRows();
-    const view = readView();
-    const payload = {
-      rows,
-      cats: readCats(),
-      view,
-      ver: 1,
-      updated_at: new Date().toISOString(),
-    };
-    const userInput = prompt("请输入本次云端快照名称（可选）", "");
-    if (userInput === null) return;
-    const trimmed = userInput.trim();
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const baseLabel = `${y}-${m}-${d} ${hh}:${mm}`;
-    const snapshotName = trimmed ? `${trimmed} ${baseLabel}` : `快照 ${baseLabel}`;
-    if (trimmed) {
-      payload.snapshot_label = trimmed;
-    } else {
-      delete payload.snapshot_label;
-    }
-    await cloudSave(payload, snapshotName);
-  });
+// 云端保存
+$("#btnSaveCloud").addEventListener("click", async () => {
+  const rows = await getAllRows();
+  const view = readView();
+  const payload = {
+    rows,
+    cats: readCats(),
+    view,
+    ver: 1,
+    updated_at: new Date().toISOString(),
+  };
+
+  const userInput = prompt("请输入本次云端快照名称（可选）", "");
+  if (userInput === null) return;
+  const trimmed = userInput.trim();
+
+  // 快照显示名称：只保留自定义名称，不再拼接日期时间
+  const snapshotLabel = trimmed || "未命名快照";
+  const snapshotName = snapshotLabel;
+
+  payload.snapshot_label = snapshotLabel;
+  payload.snapshot_name = snapshotName; // 兼容旧字段
+
+  await cloudSave(payload, snapshotName);
+});
+
 
   // 云端加载：展开 / 收起历史列表
   $("#btnLoadCloud").addEventListener("click", async () => {

@@ -541,22 +541,30 @@ td.col-cat select {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .m-phone {
   font-size: 20px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
+/* ⭐ 小红书名称靠右对齐 */
 .m-xhs {
   font-size: 14px;
   color: #333;
+  margin-left: auto;              /* 把它推到这一行最右边 */
   max-width: 60%;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  text-align: right;
 }
+
+.m-arrow {
+  margin-left: 4px;
+}
+
 
 /* 头部第二行：所属人标签 + 分类 pill */
 
@@ -565,7 +573,7 @@ td.col-cat select {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
 }
 

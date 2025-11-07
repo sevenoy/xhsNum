@@ -1,19 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// === Supabase 配置（已替换为你提供的项目） ===
 const supabase = createClient(
   "https://tmeqccupnsvxexbrlflo.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
 );
 
-// 工具
-const $ = (q, s = document) => s.querySelector(q);
-const $$ = (q, s = document) => Array.from(s.querySelectorAll(q));
+// === 工具函数 ===
 
-// 本地存储键
+const $ = (q, s = document) => s.querySelector(q);
+
+// 本地存储 key
 const VIEW_KEY = "xhs_view_v7";
 const CATS_KEY = "xhs_cats_v7";
 
-// 视图默认：紧凑 + 版本号
+// 显示设置默认值（紧凑 + 版本号控制）
 const DEFAULT_VIEW = {
   viewVersion: 2,
   pad: 4,
@@ -42,15 +43,12 @@ db.version(1).stores({
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_KEY = "default";
 
-// ------- 视图 & 分类 -------
+// === 视图 & 分类 ===
 
 function readView() {
   try {
     const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
-    if (raw.viewVersion !== DEFAULT_VIEW.viewVersion) {
-      // 版本不一致，强制使用新默认
-      return { ...DEFAULT_VIEW };
-    }
+    if (raw.viewVersion !== DEFAULT_VIEW.viewVersion) return { ...DEFAULT_VIEW };
     return { ...DEFAULT_VIEW, ...raw };
   } catch {
     return { ...DEFAULT_VIEW };
@@ -63,17 +61,16 @@ function applyView(v) {
   document.documentElement.style.setProperty("--pad", (v.pad ?? 4) + "px");
   document.documentElement.style.setProperty(
     "--colScale",
-    v.colScale ?? 0.7,
+    v.colScale ?? 0.7
   );
   document.documentElement.style.setProperty(
     "--zebra",
-    v.zebraColor || "#f5f5f7",
+    v.zebraColor || "#f5f5f7"
   );
   document.documentElement.style.setProperty(
     "--font-main",
-    v.fontFamily || DEFAULT_VIEW.fontFamily,
+    v.fontFamily || DEFAULT_VIEW.fontFamily
   );
-
   const titleEl = $("#appTitle");
   if (titleEl) {
     titleEl.textContent = v.titleText || "XHSPHONE";
@@ -100,7 +97,7 @@ function catNameOf(key) {
   return c ? c.name : "";
 }
 
-// 高亮底色：黑色等深色会更明显
+// 根据分类色生成高亮背景色（黑色会更明显一点）
 function makeHighlightColor(hex) {
   hex = (hex || "").replace("#", "");
   if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
@@ -108,12 +105,12 @@ function makeHighlightColor(hex) {
   const g = parseInt(hex.slice(2, 4), 16) || 0;
   const b = parseInt(hex.slice(4, 6), 16) || 0;
   const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-  // 越黑越提高透明度一点，让颜色更明显
   const alpha = brightness < 80 ? 0.35 : 0.18;
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// 云端状态 UI
+// 云端状态
+
 function setCloudStatus(ok, text) {
   const dot = $("#cloudDot");
   const tx = $("#cloudText");
@@ -121,7 +118,8 @@ function setCloudStatus(ok, text) {
   if (tx) tx.textContent = text || (ok ? "Base 数据连接：已连接" : "Base 数据连接：离线");
 }
 
-// Supabase 云端：读取某个 key
+// === Supabase 云端：读取 / 保存 / 历史快照 ===
+
 async function cloudLoad(whichKey = SUPABASE_KEY) {
   try {
     const { data, error } = await supabase
@@ -150,31 +148,30 @@ async function cloudLoad(whichKey = SUPABASE_KEY) {
   }
 }
 
-// Supabase 云端：保存当前快照 + 历史 5 个版本
+// 保存云端：payload 内部包含 snapshotName
 async function cloudSave(payload) {
   const nowIso = new Date().toISOString();
   const snapKey = `snap_${Date.now()}`;
 
   try {
-    // 1）更新 default（最新）
+    // 更新 default
     const { error: e1 } = await supabase
       .from(SUPABASE_TABLE)
       .upsert({ key: SUPABASE_KEY, payload, updated_at: nowIso });
     if (e1) throw e1;
 
-    // 2）插入历史快照
+    // 插入历史快照（带 snapshotName）
     const { error: e2 } = await supabase
       .from(SUPABASE_TABLE)
       .insert({ key: snapKey, payload, updated_at: nowIso });
     if (e2) throw e2;
 
-    // 3）只保留最近 5 个 snap_ 记录
+    // 只保留最近 5 个 snap_
     const { data: snaps, error: e3 } = await supabase
       .from(SUPABASE_TABLE)
       .select("key,updated_at")
       .neq("key", SUPABASE_KEY)
       .order("updated_at", { ascending: false });
-
     if (e3) throw e3;
 
     if (snaps && snaps.length > 5) {
@@ -195,14 +192,14 @@ async function cloudSave(payload) {
   }
 }
 
-// 云端历史快照列表
+// 渲染云端历史列表（带自定义快照名称）
 async function renderCloudHistory() {
   const panel = $("#cloudHistoryPanel");
   panel.innerHTML = '<div class="cloud-history-empty">正在加载云端历史...</div>';
   try {
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
-      .select("key,updated_at")
+      .select("key,updated_at,payload")
       .neq("key", SUPABASE_KEY)
       .order("updated_at", { ascending: false })
       .limit(5);
@@ -220,10 +217,12 @@ async function renderCloudHistory() {
         const day = String(d.getDate()).padStart(2, "0");
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
-        const label = `${y}-${m}-${day} ${hh}:${mm}`;
+        const labelTime = `${y}-${m}-${day} ${hh}:${mm}`;
+        const snapName =
+          (row.payload && row.payload.snapshotName) || `快照${idx + 1}`;
         return `<div class="cloud-history-item" data-key="${row.key}">
-          <span>快照${idx + 1}</span>
-          <time>${label}</time>
+          <span>${snapName}</span>
+          <time>${labelTime}</time>
         </div>`;
       })
       .join("");
@@ -234,7 +233,7 @@ async function renderCloudHistory() {
   }
 }
 
-// ------- 数据读写 -------
+// === 数据层：本地 Dexie ===
 
 const state = {
   q: "",
@@ -295,7 +294,7 @@ async function moveRow(id, dir) {
   await renderTable();
 }
 
-// ------- 搜索 & 筛选 -------
+// === 搜索 & 筛选 ===
 
 async function refreshFilters() {
   const all = await getAllRows();
@@ -321,7 +320,6 @@ async function refreshFilters() {
 function applySearchFilter(rows) {
   const qRaw = state.q.trim();
   if (!qRaw) return rows;
-
   const q = qRaw.toLowerCase();
   const digits = q.replace(/\D/g, "");
 
@@ -363,33 +361,33 @@ async function applyFilters(all) {
   switch (state.sortBy) {
     case "owner":
       rows.sort((a, b) =>
-        String(a.owner || "").localeCompare(String(b.owner || ""), "zh-CN"),
+        String(a.owner || "").localeCompare(String(b.owner || ""), "zh-CN")
       );
       break;
     case "wx_real":
       rows.sort((a, b) =>
-        String(a.wx_real || "").localeCompare(String(b.wx_real || ""), "zh-CN"),
+        String(a.wx_real || "").localeCompare(String(b.wx_real || ""), "zh-CN")
       );
       break;
     case "phone":
       rows.sort((a, b) =>
-        String(a.phone || "").localeCompare(String(b.phone || ""), "zh-CN"),
+        String(a.phone || "").localeCompare(String(b.phone || ""), "zh-CN")
       );
       break;
     case "xhs_name":
       rows.sort((a, b) =>
         String(a.xhs_name || "").localeCompare(
           String(b.xhs_name || ""),
-          "zh-CN",
-        ),
+          "zh-CN"
+        )
       );
       break;
     case "row_color":
       rows.sort((a, b) =>
         catNameOf(a.row_color || "").localeCompare(
           catNameOf(b.row_color || ""),
-          "zh-CN",
-        ),
+          "zh-CN"
+        )
       );
       break;
     default:
@@ -400,7 +398,7 @@ async function applyFilters(all) {
   return rows;
 }
 
-// ------- 渲染桌面表格 -------
+// === 桌面表格渲染 ===
 
 function makeRowTr(r) {
   const tr = document.createElement("tr");
@@ -444,7 +442,7 @@ function makeRowTr(r) {
   return tr;
 }
 
-// ------- 渲染手机折叠列表 -------
+// === 手机端折叠列表渲染（“详情弹窗”布局优化） ===
 
 function renderMobileList(rows) {
   const list = $("#mobileList");
@@ -471,7 +469,7 @@ function renderMobileList(rows) {
           <div class="m-phone">${row.phone || ""}</div>
           <div class="m-xhs">${row.xhs_name || ""}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;width:100%;justify-content:space-between;margin-top:2px;">
+        <div class="m-owner-line">
           <span class="m-owner-tag">${row.owner || "未设置所属人"}</span>
           <span class="m-arrow">⌄</span>
         </div>
@@ -491,19 +489,19 @@ function renderMobileList(rows) {
         </div>
         <div class="m-detail-row">
           <div class="m-detail-label">备注</div>
-          <div class="m-detail-value" contenteditable="true" data-k="note1">${row.note1 || ""}</div>
+          <div class="m-detail-value m-note" contenteditable="true" data-k="note1">${row.note1 || ""}</div>
         </div>
         <div class="m-detail-row">
           <div class="m-detail-label">分类</div>
           <div class="m-detail-value">
-            <select data-k="row_color" style="width:100%;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;">
+            <select data-k="row_color">
               <option value="">无</option>
               ${cats
                 .map(
                   (c) =>
                     `<option value="${c.key}" ${
                       c.key === row.row_color ? "selected" : ""
-                    }>${c.name}</option>`,
+                    }>${c.name}</option>`
                 )
                 .join("")}
             </select>
@@ -535,6 +533,7 @@ function renderMobileList(rows) {
       hidden.classList.toggle("show");
     });
 
+    // 文本编辑字段（右对齐，宽度与分类下拉统一）
     card
       .querySelectorAll(".m-detail-value[contenteditable='true']")
       .forEach((el) => {
@@ -546,16 +545,18 @@ function renderMobileList(rows) {
             await updateRow(row.id, { [k]: v });
             await renderTable();
           },
-          true,
+          true
         );
       });
 
+    // 分类下拉
     const sel = card.querySelector("select[data-k='row_color']");
     sel.addEventListener("change", async () => {
       await updateRow(row.id, { row_color: sel.value });
       await renderTable();
     });
 
+    // 操作按钮
     hidden.querySelectorAll("button[data-act]").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -575,7 +576,7 @@ function renderMobileList(rows) {
   });
 }
 
-// ------- 总渲染 -------
+// === 总渲染 ===
 
 async function renderTable() {
   const all = await getAllRows();
@@ -599,9 +600,14 @@ async function renderTable() {
 
   // 手机版列表
   renderMobileList(rows);
+
+  // 隔行色开关
+  const v = readView();
+  if (v.zebraOn) body.classList.add("zebra");
+  else body.classList.remove("zebra");
 }
 
-// ------- 分类 UI -------
+// === 分类 UI ===
 
 function renderCatList() {
   const cats = readCats();
@@ -628,7 +634,7 @@ function renderCatList() {
   });
 }
 
-// ------- 事件绑定 -------
+// === 事件绑定 ===
 
 function bindEvents() {
   const view = readView();
@@ -642,7 +648,7 @@ function bindEvents() {
   $("#zebraOn").checked = view.zebraOn !== false;
   $("#zebraColor").value = view.zebraColor;
 
-  // 搜索 + 筛选
+  // 搜索 / 筛选
   $("#q").addEventListener("input", async (e) => {
     state.q = e.target.value;
     await renderTable();
@@ -737,7 +743,7 @@ function bindEvents() {
       lines.push(
         headers
           .map((h) => `"${String(r[h] || "").replace(/"/g, '""')}"`)
-          .join(","),
+          .join(",")
       );
     });
     const csv = lines.join("\n");
@@ -860,9 +866,7 @@ function bindEvents() {
     applyView(v);
   });
   $("#btnCompact").addEventListener("click", () => {
-    const v = {
-      ...DEFAULT_VIEW,
-    };
+    const v = { ...DEFAULT_VIEW };
     saveView(v);
     applyView(v);
     $("#titleText").value = v.titleText;
@@ -901,7 +905,7 @@ function bindEvents() {
         await renderTable();
       }
     },
-    true,
+    true
   );
   $("#gridBody").addEventListener("change", async (e) => {
     const sel = e.target.closest("select[data-k='row_color']");
@@ -920,7 +924,6 @@ function bindEvents() {
     const id = tr.dataset.id;
 
     if (act === "edit") {
-      // 只展开当前行的额外操作
       const extra = tr.querySelector(".actions-extra");
       if (extra) extra.classList.toggle("show");
       return;
@@ -935,28 +938,54 @@ function bindEvents() {
     }
   });
 
-  // 云端保存
+  // 云端保存：带快照名称 + 时间戳
   $("#btnSaveCloud").addEventListener("click", async () => {
+    const nameInput = prompt(
+      "请输入本次快照名称（例如：11号晚备份）：",
+      ""
+    );
+    if (nameInput === null) return; // 取消
+    const baseName = nameInput.trim() || "未命名快照";
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    const timeStr = `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+    const snapshotName = `${baseName} ${timeStr}`;
+
     const rows = await getAllRows();
     const payload = {
       rows,
       cats: readCats(),
       view: readView(),
       ver: 1,
-      updated_at: new Date().toISOString(),
+      updated_at: now.toISOString(),
+      snapshotName,
     };
-    await cloudSave(payload);
+    const ok = await cloudSave(payload);
+    if (ok) {
+      const panel = $("#cloudHistoryPanel");
+      if (panel.style.display !== "none") {
+        await renderCloudHistory();
+      }
+    }
   });
 
-  // 云端加载：展开 / 收起历史列表
+  // 云端加载：展开 / 收起 + 激活蓝色高亮
   $("#btnLoadCloud").addEventListener("click", async () => {
     const panel = $("#cloudHistoryPanel");
-    const show = panel.style.display === "none" || !panel.style.display;
-    if (show) {
-      panel.style.display = "block";
-      await renderCloudHistory();
-    } else {
+    const btn = $("#btnLoadCloud");
+    const open = panel.style.display !== "none";
+    if (open) {
       panel.style.display = "none";
+      btn.classList.remove("active");
+    } else {
+      panel.style.display = "block";
+      btn.classList.add("active");
+      await renderCloudHistory();
     }
   });
 
@@ -986,7 +1015,7 @@ function bindEvents() {
   });
 }
 
-// ------- 初始化 -------
+// === 初始化 ===
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();

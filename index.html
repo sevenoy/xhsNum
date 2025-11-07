@@ -5,18 +5,21 @@
   <title>XHSPHONE</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
 
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20251107">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20251107">
-  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=20251107">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=20251107">
-  <link rel="shortcut icon" href="favicon.ico?v=20251107">
+  <!-- 图标：全部从 /icon 目录读取 -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon/icon-512.png">
+  <link rel="icon" type="image/x-icon" href="icon/favicon.ico">
+  <link rel="shortcut icon" href="icon/favicon.ico">
+
+  <!-- PWA Manifest -->
   <link rel="manifest" href="site.webmanifest">
 
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="XHSPHONE" />
 
-  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="style.css" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -63,8 +66,8 @@
         <button id="btnImportCSV" class="ghost">导入数据</button>
         <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none" />
         <button id="btnExportCSV" class="ghost">导出数据</button>
-        <button id="btnSaveCloud" class="ghost">保存云端</button>
-        <button id="btnLoadCloud" class="ghost">云端加载</button>
+        <button id="btnSaveCloud" class="ghost btn-cloud">保存云端</button>
+        <button id="btnLoadCloud" class="ghost btn-cloud" data-open="0">云端加载</button>
         <button id="btnClearAll" class="ghost">清空全部</button>
         <button id="btnCategories" class="ghost">分类设置</button>
         <button id="btnView" class="ghost">显示设置</button>
@@ -74,7 +77,7 @@
       <div id="cloudHistoryPanel" class="cloud-history-panel" style="display:none"></div>
 
       <div class="status" id="statusText">
-        本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本）。
+        本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本，支持自定义快照名称）。
       </div>
     </div>
 
@@ -165,11 +168,11 @@
       </div>
 
       <!-- 手机版折叠列表 -->
-      <div id="mobileList" class="mobile-only"></div>
+      <div id="mobileList" class="mobile-only mobile-list"></div>
     </div>
   </div>
 
   <!-- 主脚本 -->
-  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

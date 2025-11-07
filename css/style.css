@@ -85,7 +85,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #30d158; /* 连接正常绿色 */
+  background: #30d158;
 }
 
 #cloudText {
@@ -107,7 +107,7 @@ body {
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center; /* 垂直居中，保证文字 + 输入框对齐 */
+  align-items: center; /* 文本与输入控件垂直对齐 */
   gap: 8px;
   margin-bottom: 6px;
 }
@@ -137,7 +137,7 @@ button {
   border-radius: 999px;
   border: 1px solid var(--line);
   padding: 6px 12px;
-  height: 32px; /* 更紧凑：控制整体“表格高度”落在 ~100px 范围内 */
+  height: 32px; /* 整体控件高度收紧 */
   background: #ffffff;
   color: #111;
   outline: none;
@@ -155,21 +155,21 @@ button:focus-visible {
   box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
 }
 
-/* 下拉菜单统一白底，避免被隔行色等影响 */
+/* 表格中的下拉菜单：固定白底，避免被隔行色染色 */
 
 table select,
 .m-detail-value select {
   background-color: #ffffff;
 }
 
-/* 文本输入宽度 */
+/* 搜索框宽度 */
 
 #q {
   min-width: 220px;
   flex: 1 1 180px;
 }
 
-/* 标签式控件 */
+/* label + 控件 */
 
 .label-inline {
   display: inline-flex;
@@ -279,7 +279,7 @@ button.primary:hover {
   color: var(--muted);
 }
 
-/* 右侧时间戳（你要保留的“最右日期时间”） */
+/* 右侧时间戳 */
 
 .cloud-item-time {
   font-size: 11px;
@@ -361,7 +361,7 @@ td {
   text-overflow: ellipsis;
 }
 
-/* 蓝色行 / 高亮时，表头保持统一浅色，不会变成奇怪灰色 */
+/* 表头颜色固定浅灰，避免“蓝行 + 灰头”怪异 */
 
 th {
   font-weight: 500;
@@ -374,7 +374,7 @@ tbody.zebra tr:nth-child(even) td {
   background: var(--zebra);
 }
 
-/* hover 行，再稍微加一点高亮 */
+/* hover 高亮 */
 
 tbody tr:hover td {
   background: #e9f3ff;
@@ -443,7 +443,7 @@ td.col-cat select {
   height: 28px;
 }
 
-/* 操作列（桌面） */
+/* 操作列 */
 
 .actions-container {
   display: inline-flex;
@@ -451,8 +451,6 @@ td.col-cat select {
   justify-content: center;
   gap: 4px;
 }
-
-/* 兼容旧逻辑：有“编辑” + 隐藏动作时 */
 
 .actions-extra {
   display: inline-flex;
@@ -464,8 +462,6 @@ td.col-cat select {
   display: none;
 }
 
-/* 三个功能按钮样式（上移/下移/删除） */
-
 .actions-container .btn-mini,
 .actions-extra .btn-mini {
   padding: 2px 6px;
@@ -473,8 +469,6 @@ td.col-cat select {
   font-size: 12px;
   border-radius: 999px;
 }
-
-/* 删除按钮稍微醒目一点 */
 
 .btn-danger {
   background: #ff3b30;
@@ -486,7 +480,7 @@ td.col-cat select {
   background: #e03228;
 }
 
-/* 桌面 / 手机显示切换 */
+/* 桌面 / 手机切换 */
 
 .desktop-only {
   display: block;
@@ -496,7 +490,7 @@ td.col-cat select {
   display: none;
 }
 
-/* 手机版折叠列表卡片 */
+/* 手机版卡片 */
 
 .m-row {
   border: 1px solid var(--line);
@@ -513,14 +507,14 @@ td.col-cat select {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
-/* 卡片头：保证“手机号 + 人名”对齐，不显得太高 */
+/* 卡片头部 */
 
 .m-row-header {
   width: 100%;
   border: none;
   background: transparent;
   padding: 16px 18px;
-  min-height: 60px; /* 对应你说的高度从 160px 收紧到约 100px 整体视觉 */
+  min-height: 60px; /* 整体视觉高度 ~100px */
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -535,7 +529,7 @@ td.col-cat select {
   background: #f5f7ff;
 }
 
-/* 头部主行：手机号 + 小红书名称 */
+/* 头部第一行：手机号 + XHS 名称 + 箭头 */
 
 .m-main-line {
   display: flex;
@@ -549,11 +543,12 @@ td.col-cat select {
   flex-shrink: 0;
 }
 
-/* ⭐ 小红书名称靠右对齐 */
+/* XHS 名称靠右 */
+
 .m-xhs {
   font-size: 14px;
   color: #333;
-  margin-left: auto;              /* 把它推到这一行最右边 */
+  margin-left: auto;
   max-width: 60%;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -563,17 +558,23 @@ td.col-cat select {
 
 .m-arrow {
   margin-left: 4px;
+  font-size: 14px;
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
+.m-row.open .m-arrow {
+  transform: rotate(180deg);
+}
 
-/* 头部第二行：所属人标签 + 分类 pill */
+/* 头部第二行：所属人 + 分类 pill */
 
 .m-meta-line {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 14px;
+  font-size: 14px; /* 与小红书名称同字号 */
   color: var(--muted);
 }
 
@@ -584,29 +585,14 @@ td.col-cat select {
   color: #333;
 }
 
-/* 分类 pill（颜色与桌面保持一致，由 JS 设置背景） */
-
 .m-cat-pill {
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 12px; /* 略小一点，层级更清晰 */
   background: rgba(0, 122, 255, 0.09);
 }
 
-/* 下拉箭头 */
-
-.m-arrow {
-  margin-left: auto;
-  font-size: 14px;
-  transform-origin: center;
-  transition: transform 0.15s ease;
-}
-
-.m-row.open .m-arrow {
-  transform: rotate(180deg);
-}
-
-/* 手机详情区域 */
+/* 详情区域 */
 
 .m-row-details {
   max-height: 0;
@@ -658,7 +644,7 @@ td.col-cat select {
   background: #ffffff;
 }
 
-/* 底部操作区域（手机） */
+/* 手机操作区域 */
 
 .m-actions {
   border-top: 1px solid var(--line);
@@ -680,7 +666,7 @@ td.col-cat select {
   gap: 6px;
 }
 
-/* 兼容旧版的“编辑 + 隐藏操作按钮” */
+/* 兼容 show/hide */
 
 .m-hidden-actions {
   display: none;
@@ -691,7 +677,7 @@ td.col-cat select {
   gap: 6px;
 }
 
-/* 手机操作按钮统一小号 */
+/* 手机按钮尺寸 */
 
 .m-actions button {
   height: 26px;
@@ -699,7 +685,7 @@ td.col-cat select {
   font-size: 12px;
 }
 
-/* 小屏优化 */
+/* 自适应 */
 
 @media (max-width: 1024px) {
   .wrap {

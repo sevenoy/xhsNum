@@ -113,6 +113,15 @@ function makeHighlightColor(hex) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // 云端状态 UI
 function setCloudStatus(ok, text) {
   const dot = $("#cloudDot");
@@ -151,8 +160,13 @@ async function cloudLoad(whichKey = SUPABASE_KEY) {
 }
 
 // Supabase 云端：保存当前快照 + 历史 5 个版本
-async function cloudSave(payload) {
-  const nowIso = new Date().toISOString();
+async function cloudSave(payload, snapshotName) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  if (snapshotName) {
+    payload.snapshot_name = snapshotName;
+    payload.snapshot_saved_at = nowIso;
+  }
   const snapKey = `snap_${Date.now()}`;
 
   try {
@@ -185,7 +199,10 @@ async function cloudSave(payload) {
     }
 
     setCloudStatus(true, "Base 数据连接：已同步");
-    alert("云端保存成功（保留最近 5 个快照）");
+    const successText = snapshotName
+      ? `云端保存成功：${snapshotName}\n（保留最近 5 个快照）`
+      : "云端保存成功（保留最近 5 个快照）";
+    alert(successText);
     return true;
   } catch (e) {
     console.error("云端保存失败", e);
@@ -202,7 +219,7 @@ async function renderCloudHistory() {
   try {
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
-      .select("key,updated_at")
+      .select("key,updated_at,payload")
       .neq("key", SUPABASE_KEY)
       .order("updated_at", { ascending: false })
       .limit(5);
@@ -221,8 +238,14 @@ async function renderCloudHistory() {
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
         const label = `${y}-${m}-${day} ${hh}:${mm}`;
+        const name =
+          (row.payload &&
+            (row.payload.snapshot_name ||
+              row.payload.snapshot_label ||
+              row.payload.snapshotLabel)) ||
+          `快照${idx + 1}`;
         return `<div class="cloud-history-item" data-key="${row.key}">
-          <span>快照${idx + 1}</span>
+          <span>${escapeHtml(name)}</span>
           <time>${label}</time>
         </div>`;
       })
@@ -450,6 +473,9 @@ function renderMobileList(rows) {
   const list = $("#mobileList");
   list.innerHTML = "";
   const cats = readCats();
+  const view = readView();
+  const zebraOn = view.zebraOn !== false;
+  const zebraColor = view.zebraColor || "#f5f5f7";
 
   if (!rows.length) {
     const empty = document.createElement("div");
@@ -461,9 +487,11 @@ function renderMobileList(rows) {
     return;
   }
 
-  rows.forEach((row) => {
+  rows.forEach((row, idx) => {
     const card = document.createElement("div");
     card.className = "m-row";
+    const cardBg = zebraOn && idx % 2 === 1 ? zebraColor : "var(--cell)";
+    card.style.setProperty("--card-bg", cardBg);
 
     card.innerHTML = `
       <button type="button" class="m-row-header">
@@ -471,7 +499,7 @@ function renderMobileList(rows) {
           <div class="m-phone">${row.phone || ""}</div>
           <div class="m-xhs">${row.xhs_name || ""}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;width:100%;justify-content:space-between;margin-top:2px;">
+        <div class="m-meta-line">
           <span class="m-owner-tag">${row.owner || "未设置所属人"}</span>
           <span class="m-arrow">⌄</span>
         </div>
@@ -496,7 +524,7 @@ function renderMobileList(rows) {
         <div class="m-detail-row">
           <div class="m-detail-label">分类</div>
           <div class="m-detail-value">
-            <select data-k="row_color" style="width:100%;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:13px;">
+            <select data-k="row_color" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:15px;text-align-last:right;">
               <option value="">无</option>
               ${cats
                 .map(
@@ -842,7 +870,7 @@ function bindEvents() {
     saveView(v);
     applyView(v);
   });
-  $("#zebraOn").addEventListener("change", (e) => {
+  $("#zebraOn").addEventListener("change", async (e) => {
     const v = readView();
     v.zebraOn = e.target.checked;
     saveView(v);
@@ -852,14 +880,16 @@ function bindEvents() {
       if (v.zebraOn) body.classList.add("zebra");
       else body.classList.remove("zebra");
     }
+    await renderTable();
   });
-  $("#zebraColor").addEventListener("input", (e) => {
+  $("#zebraColor").addEventListener("input", async (e) => {
     const v = readView();
     v.zebraColor = e.target.value || "#f5f5f7";
     saveView(v);
     applyView(v);
+    await renderTable();
   });
-  $("#btnCompact").addEventListener("click", () => {
+  $("#btnCompact").addEventListener("click", async () => {
     const v = {
       ...DEFAULT_VIEW,
     };
@@ -872,8 +902,9 @@ function bindEvents() {
     $("#colScale").value = v.colScale;
     $("#zebraOn").checked = v.zebraOn;
     $("#zebraColor").value = v.zebraColor;
+    await renderTable();
   });
-  $("#btnResetSize").addEventListener("click", () => {
+  $("#btnResetSize").addEventListener("click", async () => {
     const v = { ...DEFAULT_VIEW };
     saveView(v);
     applyView(v);
@@ -884,6 +915,7 @@ function bindEvents() {
     $("#colScale").value = v.colScale;
     $("#zebraOn").checked = v.zebraOn;
     $("#zebraColor").value = v.zebraColor;
+    await renderTable();
   });
 
   // 桌面表格 inline 编辑 + 操作
@@ -938,14 +970,31 @@ function bindEvents() {
   // 云端保存
   $("#btnSaveCloud").addEventListener("click", async () => {
     const rows = await getAllRows();
+    const view = readView();
     const payload = {
       rows,
       cats: readCats(),
-      view: readView(),
+      view,
       ver: 1,
       updated_at: new Date().toISOString(),
     };
-    await cloudSave(payload);
+    const userInput = prompt("请输入本次云端快照名称（可选）", "");
+    if (userInput === null) return;
+    const trimmed = userInput.trim();
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const baseLabel = `${y}-${m}-${d} ${hh}:${mm}`;
+    const snapshotName = trimmed ? `${trimmed} ${baseLabel}` : `快照 ${baseLabel}`;
+    if (trimmed) {
+      payload.snapshot_label = trimmed;
+    } else {
+      delete payload.snapshot_label;
+    }
+    await cloudSave(payload, snapshotName);
   });
 
   // 云端加载：展开 / 收起历史列表
@@ -958,6 +1007,7 @@ function bindEvents() {
     } else {
       panel.style.display = "none";
     }
+    $("#btnLoadCloud").classList.toggle("active", show);
   });
 
   // 点击历史快照进行回溯
@@ -967,6 +1017,10 @@ function bindEvents() {
     const key = item.dataset.key;
     if (!key) return;
     if (!confirm("确定加载这个快照？当前本地数据将被覆盖。")) return;
+    $$(".cloud-history-item", $("#cloudHistoryPanel")).forEach((el) =>
+      el.classList.remove("active"),
+    );
+    item.classList.add("active");
     const data = await cloudLoad(key);
     if (!data) return;
     if (Array.isArray(data.rows)) {

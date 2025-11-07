@@ -1,178 +1,163 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>XHSPHONE</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
+  <title>XHSPHONE 号码管理</title>
 
-  <!-- 图标：全部从 /icon 目录读取 -->
+  <!-- 关键：加载样式 -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- 图标全部从 /icon 目录读取 -->
+  <link rel="icon" type="image/x-icon" href="icon/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="icon/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icon/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icon/icon-512.png">
-  <link rel="icon" type="image/x-icon" href="icon/favicon.ico">
-  <link rel="shortcut icon" href="icon/favicon.ico">
-
-  <!-- PWA Manifest -->
   <link rel="manifest" href="site.webmanifest">
 
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="XHSPHONE" />
-
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- Dexie：本地 IndexedDB -->
-  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 </head>
 <body>
-  <div class="wrap">
-    <!-- 顶部导航 -->
-    <div class="topbar">
-      <div class="top-left">
-        <h1 id="appTitle">XHSPHONE</h1>
+  <div id="app">
+    <header class="app-header">
+      <h1 id="appTitle">XHSPHONE</h1>
+      <div class="app-subtitle">
+        <span>Base 数据连接：<span id="baseStatus">未知</span></span>
       </div>
-      <div class="top-right">
-        <span id="cloudStatus" class="cloud-status">
-          <span id="cloudDot"></span>
-          <span id="cloudText">Base 数据连接：未知</span>
-        </span>
-      </div>
-    </div>
+    </header>
 
-    <!-- 工具栏：搜索 + 筛选 + 操作 -->
-    <div class="panel">
-      <div class="toolbar">
-        <input id="q" placeholder="搜索：任意关键词" />
-        <button id="btnSearchMode" class="ghost">当前：模糊搜索</button>
+    <!-- 工具栏 -->
+    <section class="toolbar">
+      <div class="toolbar-row">
+        <input id="searchInput" class="field" placeholder="搜索：任意关键词">
+        <button id="btnSearchMode" class="btn ghost">当前：模糊搜索</button>
 
-        <select id="filterOwner">
+        <select id="filterOwner" class="field">
           <option value="all">所属人：全部</option>
         </select>
-        <select id="filterWxReal">
+        <select id="filterWxReal" class="field">
           <option value="all">微信实名人：全部</option>
         </select>
-        <select id="sortBy">
+        <select id="sortBy" class="field">
           <option value="order">排序：手动</option>
           <option value="owner">排序：所属人</option>
           <option value="wx_real">排序：微信实名人</option>
           <option value="phone">排序：电话号码</option>
           <option value="xhs_name">排序：小红书名称</option>
-          <option value="row_color">排序：分类</option>
         </select>
       </div>
 
-      <div class="toolbar">
-        <button id="btnAdd">新增一行</button>
-        <button id="btnImportCSV" class="ghost">导入数据</button>
-        <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none" />
-        <button id="btnExportCSV" class="ghost">导出数据</button>
-        <button id="btnSaveCloud" class="ghost btn-cloud">保存云端</button>
-        <button id="btnLoadCloud" class="ghost btn-cloud" data-open="0">云端加载</button>
-        <button id="btnClearAll" class="ghost">清空全部</button>
-        <button id="btnCategories" class="ghost">分类设置</button>
-        <button id="btnView" class="ghost">显示设置</button>
+      <div class="toolbar-row">
+        <button id="btnAddRow" class="btn primary">新增一行</button>
+
+        <label class="btn ghost">
+          导入数据
+          <input id="fileImport" type="file" accept=".csv" hidden>
+        </label>
+
+        <button id="btnExport" class="btn ghost">导出数据</button>
+
+        <button id="btnSaveCloud" class="btn ghost">保存云端</button>
+        <button id="btnLoadCloud" class="btn ghost cloud-btn">
+          云端加载
+          <select id="cloudHistory" class="cloud-select"></select>
+        </button>
+
+        <button id="btnClearAll" class="btn ghost danger">清空全部</button>
+        <button id="btnCats" class="btn ghost">分类设置</button>
+        <button id="btnView" class="btn ghost">显示设置</button>
       </div>
 
-      <!-- 云端历史快照下拉 -->
-      <div id="cloudHistoryPanel" class="cloud-history-panel" style="display:none"></div>
-
-      <div class="status" id="statusText">
+      <p class="hint-text">
         本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本，支持自定义快照名称）。
-      </div>
-    </div>
+      </p>
+    </section>
 
-    <!-- 分类设置面板 -->
-    <div class="panel" id="panelCategories" style="display:none">
-      <div class="toolbar" style="align-items:flex-start">
-        <div class="chip">
-          <span class="colorDot" id="catColorPreview"></span>
-          <input id="catName" placeholder="分类名称，例如：Olina用" />
-          <input id="catColor" type="color" value="#007aff" />
-        </div>
-        <button id="btnCatAdd">新增分类</button>
+    <!-- 分类设置 -->
+    <section id="catsPanel" class="panel hidden">
+      <h2>分类设置</h2>
+      <div class="cats-new">
+        <input id="newCatName" class="field" placeholder="分类名称，例如：Olina用">
+        <input id="newCatColor" class="field color" type="color" value="#007aff">
+        <button id="btnAddCat" class="btn primary">新增分类</button>
       </div>
-      <div id="catList"></div>
-    </div>
+      <div id="catsList" class="cats-list"></div>
+    </section>
 
-    <!-- 显示设置面板 -->
-    <div class="panel" id="panelView" style="display:none">
-      <div class="toolbar toolbar-wrap">
-        <label class="label-inline">
-          标题文字
-          <input id="titleText" />
-        </label>
-        <label class="label-inline">
-          标题颜色
-          <input id="titleColor" type="color" />
-        </label>
-        <label class="label-inline">
-          字体
-          <select id="fontFamily">
-            <option value="-apple-system,BlinkMacSystemFont,&quot;SF Pro Text&quot;,Helvetica,Arial,sans-serif">
-              系统默认
-            </option>
-            <option value="PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
-              苹方
-            </option>
-            <option value="Helvetica Neue, Helvetica, Arial, sans-serif">
-              Helvetica
-            </option>
-            <option value="Arial, sans-serif">
-              Arial
-            </option>
-          </select>
-        </label>
-      </div>
+    <!-- 显示设置 -->
+    <section id="viewPanel" class="panel hidden">
+      <h2>显示设置</h2>
 
-      <div class="toolbar toolbar-wrap">
-        <label class="label-inline">
-          行高
-          <input id="rowPad" type="range" min="4" max="14" step="1" />
+      <div class="view-row">
+        <label>行高
+          <input id="viewPad" type="range" min="4" max="14">
         </label>
-        <label class="label-inline">
-          列宽缩放
-          <input id="colScale" type="range" min="0.7" max="1.4" step="0.05" />
+
+        <label>列宽缩放
+          <input id="viewColScale" type="range" min="0.7" max="1.4" step="0.05">
         </label>
-        <label class="label-inline">
-          <input id="zebraOn" type="checkbox" />
+
+        <label class="checkbox">
+          <input id="viewZebra" type="checkbox">
           隔行着色
         </label>
-        <label class="label-inline">
-          隔行颜色
-          <input id="zebraColor" type="color" />
+
+        <label class="view-color">
+          颜色
+          <input id="viewZebraColor" type="color">
         </label>
-        <button id="btnCompact" class="ghost">一键紧凑</button>
-        <button id="btnResetSize" class="ghost">恢复默认</button>
-      </div>
-    </div>
-
-    <!-- 数据面板 -->
-    <div class="panel" style="overflow:auto;max-height:92vh">
-      <!-- 桌面版表格 -->
-      <div class="table-wrap desktop-only">
-        <table id="grid">
-          <thead>
-            <tr>
-              <th class="col-phone">电话号码</th>
-              <th class="col-owner">所属人</th>
-              <th class="col-real">微信实名人</th>
-              <th class="col-wx">对应微信名</th>
-              <th class="col-xhs">小红书名称</th>
-              <th class="col-note">备注</th>
-              <th class="col-cat">分类</th>
-              <th class="col-act">操作</th>
-            </tr>
-          </thead>
-          <tbody id="gridBody" class="zebra"></tbody>
-        </table>
       </div>
 
-      <!-- 手机版折叠列表 -->
-      <div id="mobileList" class="mobile-only mobile-list"></div>
-    </div>
+      <div class="view-row">
+        <label>字体
+          <select id="viewFont" class="field">
+            <option value="-apple-system,BlinkMacSystemFont,&quot;SF Pro Text&quot;,&quot;Helvetica Neue&quot;,Arial,sans-serif">系统默认（推荐）</option>
+            <option value="&quot;SF Pro Text&quot;, -apple-system, BlinkMacSystemFont, Arial, sans-serif">SF Pro 风格</option>
+            <option value="&quot;PingFang SC&quot;, -apple-system, BlinkMacSystemFont, Arial, sans-serif">苹方</option>
+            <option value="system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif">System UI</option>
+          </select>
+        </label>
+
+        <label>标题文字
+          <input id="viewTitleText" class="field" placeholder="例如：XHSPHONE">
+        </label>
+
+        <label>标题颜色
+          <input id="viewTitleColor" class="field color" type="color" value="#111111">
+        </label>
+      </div>
+    </section>
+
+    <!-- 桌面表格 -->
+    <section class="grid-wrapper desktop-only">
+      <table class="data-grid">
+        <thead>
+          <tr>
+            <th style="width:160px">电话号码</th>
+            <th style="width:120px">所属人</th>
+            <th style="width:120px">微信实名人</th>
+            <th style="width:160px">对应微信名</th>
+            <th style="width:340px">小红书名称</th>
+            <th style="width:220px">备注</th>
+            <th style="width:140px">分类</th>
+            <th style="width:220px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="gridBody"></tbody>
+      </table>
+      <div id="emptyHint" class="empty-hint hidden">
+        暂无数据，点击“新增一行”添加账号。
+      </div>
+    </section>
+
+    <!-- 手机端列表 -->
+    <section class="mobile-list mobile-only">
+      <div id="mobileList"></div>
+    </section>
   </div>
 
-  <!-- 主脚本 -->
+  <!-- Dexie (IndexedDB) -->
+  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
+  <!-- 应用逻辑 -->
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,58 +1,85 @@
+// app.js  —— 仅在“样式与交互”层面做增强；保留你原有的本地优先 + 云端快照模型
+// 兼容 Dexie v4（全局 Dexie 对象已在 index.html 通过 CDN 注入）
+// Supabase 使用 ESM（按需连接，缺失配置时自动降级本地工作）
+
+/* =========================
+ * 0. 基础配置 & 常量
+ * ========================= */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const supabase = createClient(
-  "https://tmeqccupnsvxexbrlflo.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
-);
-
-// 工具
-const $ = (q, s = document) => s.querySelector(q);
-const $$ = (q, s = document) => Array.from(s.querySelectorAll(q));
-
-// 本地存储键
 const VIEW_KEY = "xhs_view_v7";
 const CATS_KEY = "xhs_cats_v7";
+const DB_NAME = "xhs_phone_sheet_v7";
+const SUPABASE_TABLE = "xhsphone_snapshot";
+const SUPABASE_DEFAULT_KEY = "default";
 
-// 视图默认：紧凑 + 版本号
-const DEFAULT_VIEW = {
-  viewVersion: 2,
-  pad: 4,
-  colScale: 0.7,
+// 优先从 window / localStorage 读取已有配置，缺失时仍可离线工作
+const SUPABASE_URL =
+  (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
+const SUPABASE_ANON_KEY =
+  (window.SUPABASE_ANON_KEY ||
+    localStorage.getItem("xhs_supabase_anon_key") ||
+    "").trim();
+
+const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+const supabase = hasSupabase
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+// 默认视图（统一 zebra = #e2f0ff 即 222/240/255）
+const DEFAULT_VIEW = Object.freeze({
+  viewVersion: 7,
+  pad: 6,
+  colScale: 1,
   zebraOn: true,
-  zebraColor: "#f5f5f7",
+  zebraColor: "#e2f0ff",
   fontFamily:
-    '-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro SC","PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif',
+    '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
   titleText: "XHSPHONE",
   titleColor: "#111111",
-};
-
-const DEFAULT_CATS = [
-  { key: "enterprise", name: "企业号", color: "#ffd60a" },
-  { key: "olina", name: "Olina用", color: "#007aff" },
-  { key: "jasper", name: "嘉用", color: "#af52de" },
-  { key: "usable", name: "可用", color: "#34c759" },
-];
-
-// Dexie 本地数据库
-const db = new Dexie("xhs_phone_sheet_v7");
-db.version(1).stores({
-  rows: "id, order, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, updated_at",
 });
 
-const SUPABASE_TABLE = "xhsphone_snapshot";
-const SUPABASE_KEY = "default";
+// 默认分类（可在“分类设置”中调整）
+const DEFAULT_CATS = Object.freeze([
+  { id: "enterprise", name: "企业号", color: "#007aff" },
+  { id: "olina", name: "Olina用", color: "#34c759" },
+  { id: "jasper", name: "嘉用", color: "#ff9f0a" },
+  { id: "usable", name: "可用", color: "#8e8e93" },
+]);
 
-// ------- 视图 & 分类 -------
+// 全局筛选/排序状态
+const state = {
+  q: "",
+  owner: "all",
+  wxReal: "all",
+  sortBy: "order",
+  precise: false, // 精准/模糊搜索切换
+};
 
+/* =========================
+ * 1. Dexie 初始化（本地权威数据源）
+ * ========================= */
+const db = new Dexie(DB_NAME);
+db.version(1).stores({
+  rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
+});
+
+/* =========================
+ * 2. 视图配置（localStorage）
+ * ========================= */
 function readView() {
   try {
-    const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
-    if (raw.viewVersion !== DEFAULT_VIEW.viewVersion) {
-      // 版本不一致，强制使用新默认
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return { ...DEFAULT_VIEW };
+    const obj = JSON.parse(raw);
+    if (!obj || obj.viewVersion !== DEFAULT_VIEW.viewVersion) {
+      // 视图版本不匹配，覆盖为默认
+      saveView(DEFAULT_VIEW);
       return { ...DEFAULT_VIEW };
     }
-    return { ...DEFAULT_VIEW, ...raw };
+    return { ...DEFAULT_VIEW, ...obj };
   } catch {
+    saveView(DEFAULT_VIEW);
     return { ...DEFAULT_VIEW };
   }
 }
@@ -60,228 +87,114 @@ function saveView(v) {
   localStorage.setItem(VIEW_KEY, JSON.stringify(v));
 }
 function applyView(v) {
-  document.documentElement.style.setProperty("--pad", (v.pad ?? 4) + "px");
-  document.documentElement.style.setProperty(
-    "--colScale",
-    v.colScale ?? 0.7,
-  );
-  document.documentElement.style.setProperty(
-    "--zebra",
-    v.zebraColor || "#f5f5f7",
-  );
-  document.documentElement.style.setProperty(
-    "--font-main",
-    v.fontFamily || DEFAULT_VIEW.fontFamily,
-  );
+  const root = document.documentElement;
+  root.style.setProperty("--pad", `${v.pad}px`);
+  root.style.setProperty("--colScale", `${v.colScale}`);
+  root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
+  root.style.setProperty("--font-main", v.fontFamily);
 
-  const titleEl = $("#appTitle");
-  if (titleEl) {
-    titleEl.textContent = v.titleText || "XHSPHONE";
-    titleEl.style.color = v.titleColor || "#111111";
+  // 标题
+  const h1 = document.getElementById("appTitle");
+  if (h1) {
+    h1.textContent = v.titleText;
+    h1.style.color = v.titleColor;
   }
 }
 
+/* =========================
+ * 3. 分类配置（localStorage）
+ * ========================= */
 function readCats() {
   try {
-    return JSON.parse(localStorage.getItem(CATS_KEY)) || DEFAULT_CATS;
+    const raw = localStorage.getItem(CATS_KEY);
+    if (!raw) return DEFAULT_CATS.slice();
+    const obj = JSON.parse(raw);
+    if (Array.isArray(obj) && obj.length) return obj;
+    return DEFAULT_CATS.slice();
   } catch {
-    return DEFAULT_CATS;
+    return DEFAULT_CATS.slice();
   }
 }
-function saveCats(c) {
-  localStorage.setItem(CATS_KEY, JSON.stringify(c));
+function saveCats(cats) {
+  localStorage.setItem(CATS_KEY, JSON.stringify(cats));
 }
-function catColorOf(key) {
-  const c = readCats().find((x) => x.key === key);
-  return c ? c.color : null;
+function catNameOf(cats, id) {
+  const found = cats.find((c) => c.id === id);
+  return found ? found.name : "";
 }
-function catNameOf(key) {
-  const c = readCats().find((x) => x.key === key);
-  return c ? c.name : "";
+function catColorOf(cats, id) {
+  const found = cats.find((c) => c.id === id);
+  return found ? found.color : "transparent";
 }
 
-// 高亮底色：黑色等深色会更明显
-function makeHighlightColor(hex) {
-  hex = (hex || "").replace("#", "");
-  if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
-  const r = parseInt(hex.slice(0, 2), 16) || 0;
-  const g = parseInt(hex.slice(2, 4), 16) || 0;
-  const b = parseInt(hex.slice(4, 6), 16) || 0;
-  const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-  // 越黑越提高透明度一点，让颜色更明显
-  const alpha = brightness < 80 ? 0.35 : 0.18;
+/* =========================
+ * 4. 工具函数
+ * ========================= */
+const $ = (sel) => document.querySelector(sel);
+function fmtTime(ts) {
+  try {
+    const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
+    const Y = d.getFullYear();
+    const M = String(d.getMonth() + 1).padStart(2, "0");
+    const D = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    return `${Y}-${M}-${D} ${h}:${m}`;
+  } catch {
+    return "";
+  }
+}
+function uid() {
+  return (
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+  ).toUpperCase();
+}
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+function unescapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&amp;", "&");
+}
+// 将分类色转淡色背景（手机 pill）
+function makeHighlightColor(hex, alpha = 0.14) {
+  if (!hex || !hex.startsWith("#")) return "transparent";
+  const c = hex.slice(1);
+  let r, g, b;
+  if (c.length === 3) {
+    r = parseInt(c[0] + c[0], 16);
+    g = parseInt(c[1] + c[1], 16);
+    b = parseInt(c[2] + c[2], 16);
+  } else {
+    r = parseInt(c.slice(0, 2), 16);
+    g = parseInt(c.slice(2, 4), 16);
+    b = parseInt(c.slice(4, 6), 16);
+  }
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-// 云端状态 UI
-function setCloudStatus(ok, text) {
-  const dot = $("#cloudDot");
-  const tx = $("#cloudText");
-  if (dot) dot.style.background = ok ? "#34c759" : "#ff3b30";
-  if (tx) tx.textContent = text || (ok ? "Base 数据连接：已连接" : "Base 数据连接：离线");
-}
-
-// Supabase 云端：读取某个 key
-async function cloudLoad(whichKey = SUPABASE_KEY) {
-  try {
-    const { data, error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("payload")
-      .eq("key", whichKey)
-      .maybeSingle();
-    if (error) {
-      console.error("云端读取失败", error);
-      setCloudStatus(false, "Base 数据连接：读取失败");
-      alert("云端读取失败：" + (error.message || "未知错误"));
-      return null;
-    }
-    if (!data || !data.payload) {
-      setCloudStatus(true, "Base 数据连接：无数据");
-      alert("云端暂无数据");
-      return null;
-    }
-    setCloudStatus(true, "Base 数据连接：已连接");
-    return data.payload;
-  } catch (e) {
-    console.error("云端读取异常", e);
-    setCloudStatus(false, "Base 数据连接：异常");
-    alert("云端读取异常");
-    return null;
-  }
-}
-
-// Supabase 云端：保存当前快照 + 历史 5 个版本
-async function cloudSave(payload, snapshotName) {
-  const now = new Date();
-  const nowIso = now.toISOString();
-  if (snapshotName) {
-    payload.snapshot_name = snapshotName;
-    payload.snapshot_saved_at = nowIso;
-  }
-  const snapKey = `snap_${Date.now()}`;
-
-  try {
-    // 1）更新 default（最新）
-    const { error: e1 } = await supabase
-      .from(SUPABASE_TABLE)
-      .upsert({ key: SUPABASE_KEY, payload, updated_at: nowIso });
-    if (e1) throw e1;
-
-    // 2）插入历史快照
-    const { error: e2 } = await supabase
-      .from(SUPABASE_TABLE)
-      .insert({ key: snapKey, payload, updated_at: nowIso });
-    if (e2) throw e2;
-
-    // 3）只保留最近 5 个 snap_ 记录
-    const { data: snaps, error: e3 } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("key,updated_at")
-      .neq("key", SUPABASE_KEY)
-      .order("updated_at", { ascending: false });
-
-    if (e3) throw e3;
-
-    if (snaps && snaps.length > 5) {
-      const toDelete = snaps.slice(5).map((s) => s.key);
-      if (toDelete.length) {
-        await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
-      }
-    }
-
-    setCloudStatus(true, "Base 数据连接：已同步");
-    const successText = snapshotName
-      ? `云端保存成功：${snapshotName}\n（保留最近 5 个快照）`
-      : "云端保存成功（保留最近 5 个快照）";
-    alert(successText);
-    return true;
-  } catch (e) {
-    console.error("云端保存失败", e);
-    setCloudStatus(false, "Base 数据连接：保存失败");
-    alert("云端保存失败：" + (e.message || "未知错误"));
-    return false;
-  }
-}
-
-// 云端历史快照列表
-async function renderCloudHistory() {
-  const panel = $("#cloudHistoryPanel");
-  panel.innerHTML = '<div class="cloud-history-empty">正在加载云端历史...</div>';
-  try {
-    const { data, error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("key,updated_at,payload")
-      .neq("key", SUPABASE_KEY)
-      .order("updated_at", { ascending: false })
-      .limit(5);
-    if (error) throw error;
-    if (!data || !data.length) {
-      panel.innerHTML =
-        '<div class="cloud-history-empty">云端暂时没有历史快照</div>';
-      return;
-    }
-    panel.innerHTML = data
-      .map((row, idx) => {
-        const d = new Date(row.updated_at);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mm = String(d.getMinutes()).padStart(2, "0");
-        const label = `${y}-${m}-${day} ${hh}:${mm}`;
-        const name =
-          (row.payload &&
-            (row.payload.snapshot_name ||
-              row.payload.snapshot_label ||
-              row.payload.snapshotLabel)) ||
-          `快照${idx + 1}`;
-        return `<div class="cloud-history-item" data-key="${row.key}">
-          <span>${escapeHtml(name)}</span>
-          <time>${label}</time>
-        </div>`;
-      })
-      .join("");
-  } catch (e) {
-    console.error("加载历史快照失败", e);
-    panel.innerHTML =
-      '<div class="cloud-history-empty">加载云端历史失败</div>';
-  }
-}
-
-// ------- 数据读写 -------
-
-const state = {
-  q: "",
-  owner: "all",
-  wxReal: "all",
-  sortBy: "order",
-  precise: false,
-};
-
+/* =========================
+ * 5. 本地数据封装（行级）
+ * ========================= */
 async function getAllRows() {
-  return await db.rows.orderBy("order").toArray();
-}
-async function updateRow(id, patch) {
-  const row = await db.rows.get(id);
-  if (!row) return;
-  const next = { ...row, ...patch, updated_at: new Date().toISOString() };
-  await db.rows.put(next);
+  const all = await db.rows.toArray();
+  all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return all;
 }
 async function addRow() {
   const all = await getAllRows();
-  const maxOrder = all.reduce((m, r) => Math.max(m, r.order || 0), 0);
-  const id = Date.now().toString(16) + Math.random().toString(16).slice(2);
-  await db.rows.add({
-    id,
+  const maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+  const row = {
+    id: uid(),
     order: maxOrder + 1,
     phone: "",
     owner: "",
@@ -289,399 +202,751 @@ async function addRow() {
     wx_name: "",
     xhs_name: "",
     note1: "",
-    row_color: "",
-    updated_at: new Date().toISOString(),
-  });
+    row_color: "", // 存分类 id
+    updated_at: Date.now(),
+  };
+  await db.rows.add(row);
   await refreshFilters();
   await renderTable();
+}
+async function updateRow(id, patch) {
+  const row = await db.rows.get(id);
+  if (!row) return;
+  const next = { ...row, ...patch, updated_at: Date.now() };
+  await db.rows.put(next);
 }
 async function deleteRowById(id) {
   await db.rows.delete(id);
   await refreshFilters();
   await renderTable();
 }
-async function moveRow(id, dir) {
+async function moveRow(id, dir /* 'up' | 'down' */) {
+  // 在“当前筛选结果”里交换 order
   const all = await getAllRows();
-  const filtered = await applyFilters(all);
+  const filtered = applyFilters(all);
   const idx = filtered.findIndex((r) => r.id === id);
-  if (idx < 0) return;
+  if (idx === -1) return;
   const targetIdx = dir === "up" ? idx - 1 : idx + 1;
   if (targetIdx < 0 || targetIdx >= filtered.length) return;
-
   const a = filtered[idx];
   const b = filtered[targetIdx];
-  const orderA = a.order || 0;
-  const orderB = b.order || 0;
-  await db.rows.update(a.id, { order: orderB });
-  await db.rows.update(b.id, { order: orderA });
-  await refreshFilters();
+  const ao = a.order ?? 0;
+  const bo = b.order ?? 0;
+  await db.transaction("rw", db.rows, async () => {
+    await db.rows.update(a.id, { order: bo, updated_at: Date.now() });
+    await db.rows.update(b.id, { order: ao, updated_at: Date.now() });
+  });
   await renderTable();
 }
 
-// ------- 搜索 & 筛选 -------
-
+/* =========================
+ * 6. 筛选 / 搜索 / 排序
+ * ========================= */
 async function refreshFilters() {
+  const owners = new Set();
+  const wxreals = new Set();
   const all = await getAllRows();
-  const owners = [...new Set(all.map((r) => r.owner).filter(Boolean))];
-  const reals = [...new Set(all.map((r) => r.wx_real).filter(Boolean))];
+  for (const r of all) {
+    if (r.owner) owners.add(r.owner);
+    if (r.wx_real) wxreals.add(r.wx_real);
+  }
+  const ownerSel = $("#filterOwner");
+  const realSel = $("#filterWxReal");
+  const ownerVal = ownerSel.value;
+  const realVal = realSel.value;
 
-  const oSel = $("#filterOwner");
-  const wSel = $("#filterWxReal");
-  const prevO = oSel.value;
-  const prevW = wSel.value;
+  ownerSel.innerHTML = `<option value="all">所属人：全部</option>` +
+    Array.from(owners)
+      .sort((a, b) => a.localeCompare(b, "zh"))
+      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+      .join("");
+  realSel.innerHTML = `<option value="all">微信实名人：全部</option>` +
+    Array.from(wxreals)
+      .sort((a, b) => a.localeCompare(b, "zh"))
+      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+      .join("");
 
-  oSel.innerHTML =
-    '<option value="all">所属人：全部</option>' +
-    owners.map((o) => `<option value="${o}">${o}</option>`).join("");
-  wSel.innerHTML =
-    '<option value="all">微信实名人：全部</option>' +
-    reals.map((w) => `<option value="${w}">${w}</option>`).join("");
-
-  oSel.value = owners.includes(prevO) ? prevO : "all";
-  wSel.value = reals.includes(prevW) ? prevW : "all";
+  // 尽量保留原选择
+  ownerSel.value = ownerVal || "all";
+  realSel.value = realVal || "all";
 }
 
+function tokenize(s) {
+  return s
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+function matchDigitsSubstr(phone, queryDigits) {
+  const digits = String(phone || "").replace(/\D+/g, "");
+  return digits.includes(queryDigits);
+}
 function applySearchFilter(rows) {
-  const qRaw = state.q.trim();
-  if (!qRaw) return rows;
+  if (!state.q) return rows;
+  const q = state.q.trim();
+  if (!q) return rows;
 
-  const q = qRaw.toLowerCase();
-  const digits = q.replace(/\D/g, "");
-
-  return rows.filter((r) => {
-    const fields = [
-      r.phone || "",
-      r.owner || "",
-      r.wx_real || "",
-      r.wx_name || "",
-      r.xhs_name || "",
-      r.note1 || "",
-      catNameOf(r.row_color || ""),
-    ];
-    const combined = fields.join(" ").toLowerCase();
-
-    if (state.precise) {
-      if (digits) {
-        const phoneDigits = String(r.phone || "").replace(/\D/g, "");
-        return phoneDigits.includes(digits);
-      }
-      return fields.some((v) => v.toLowerCase() === q);
+  if (state.precise) {
+    // 精准模式：含数字 → 按手机号数字子串；否则要求字段全等之一
+    const hasNum = /\d/.test(q);
+    if (hasNum) {
+      const digits = q.replace(/\D+/g, "");
+      return rows.filter((r) => matchDigitsSubstr(r.phone, digits));
     } else {
-      const tokens = q.split(/\s+/).filter(Boolean);
-      if (!tokens.length) return true;
-      return tokens.every((tk) => combined.includes(tk));
+      const target = q;
+      return rows.filter(
+        (r) =>
+          r.phone === target ||
+          r.owner === target ||
+          r.wx_real === target ||
+          r.wx_name === target ||
+          r.xhs_name === target ||
+          r.note1 === target
+      );
     }
-  });
+  } else {
+    // 模糊模式：多关键词且全部命中（任一字段）
+    const tokens = tokenize(q);
+    return rows.filter((r) => {
+      const bag = [
+        r.phone,
+        r.owner,
+        r.wx_real,
+        r.wx_name,
+        r.xhs_name,
+        r.note1,
+        catNameOf(readCats(), r.row_color),
+      ]
+        .map((s) => String(s || "").toLowerCase())
+        .join(" ");
+      return tokens.every((t) => bag.includes(t.toLowerCase()));
+    });
+  }
 }
-
-async function applyFilters(all) {
-  let rows = [...all];
-
-  if (state.owner !== "all") rows = rows.filter((r) => r.owner === state.owner);
-  if (state.wxReal !== "all")
-    rows = rows.filter((r) => r.wx_real === state.wxReal);
-
-  rows = applySearchFilter(rows);
-
+function applyFilters(rows) {
+  let out = rows.slice();
+  if (state.owner !== "all") {
+    out = out.filter((r) => r.owner === state.owner);
+  }
+  if (state.wxReal !== "all") {
+    out = out.filter((r) => r.wx_real === state.wxReal);
+  }
+  out = applySearchFilter(out);
   switch (state.sortBy) {
     case "owner":
-      rows.sort((a, b) =>
-        String(a.owner || "").localeCompare(String(b.owner || ""), "zh-CN"),
-      );
+      out.sort((a, b) => (a.owner || "").localeCompare(b.owner || "", "zh"));
       break;
     case "wx_real":
-      rows.sort((a, b) =>
-        String(a.wx_real || "").localeCompare(String(b.wx_real || ""), "zh-CN"),
-      );
+      out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
       break;
     case "phone":
-      rows.sort((a, b) =>
-        String(a.phone || "").localeCompare(String(b.phone || ""), "zh-CN"),
-      );
+      out.sort((a, b) => (a.phone || "").localeCompare(b.phone || "", "zh"));
       break;
     case "xhs_name":
-      rows.sort((a, b) =>
-        String(a.xhs_name || "").localeCompare(
-          String(b.xhs_name || ""),
-          "zh-CN",
-        ),
+      out.sort((a, b) => (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh"));
+      break;
+    case "row_color": {
+      const cats = readCats();
+      out.sort((a, b) =>
+        catNameOf(cats, a.row_color).localeCompare(catNameOf(cats, b.row_color), "zh")
       );
       break;
-    case "row_color":
-      rows.sort((a, b) =>
-        catNameOf(a.row_color || "").localeCompare(
-          catNameOf(b.row_color || ""),
-          "zh-CN",
-        ),
-      );
-      break;
+    }
     default:
-      rows.sort((a, b) => (a.order || 0) - (b.order || 0));
-      break;
+      out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
-
-  return rows;
+  return out;
 }
 
-// ------- 渲染桌面表格 -------
-
+/* =========================
+ * 7. 渲染（桌面表格 + 手机版卡片）
+ * ========================= */
+function tdEditable(cls, text, field, rowId) {
+  return `<td class="${cls}" contenteditable="true" data-field="${field}" data-id="${rowId}">${escapeHtml(
+    text || ""
+  )}</td>`;
+}
+function tdSelectCat(cls, value, rowId) {
+  const cats = readCats();
+  const opts = [`<option value="">未分类</option>`]
+    .concat(
+      cats.map(
+        (c) =>
+          `<option value="${escapeHtml(c.id)}"${
+            c.id === value ? " selected" : ""
+          }>${escapeHtml(c.name)}</option>`
+      )
+    )
+    .join("");
+  // 关键：select 聚焦时把单元格背景置白，避免“隔行着色干扰下拉”
+  return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}" style="position:relative;z-index:5" onfocus="this.closest('td').style.background='#fff';" onblur="this.closest('td').style.background='';">${opts}</select></td>`;
+}
+function tdActions(rowId) {
+  // 直接展示三按钮（替代“编辑”）
+  return `<td class="col-act">
+    <div class="actions-container">
+      <button class="btn-mini ghost" data-act="up" data-id="${rowId}">上移</button>
+      <button class="btn-mini ghost" data-act="down" data-id="${rowId}">下移</button>
+      <button class="btn-mini btn-danger" data-act="del" data-id="${rowId}">删除</button>
+    </div>
+  </td>`;
+}
 function makeRowTr(r) {
-  const tr = document.createElement("tr");
-  tr.dataset.id = r.id;
-  tr.dataset.order = r.order || 0;
-
-  const catColor = r.row_color ? catColorOf(r.row_color) : null;
-  const bg = catColor ? makeHighlightColor(catColor) : "";
-
-  tr.innerHTML = `
-    <td class="col-phone" contenteditable="true" data-k="phone">${r.phone || ""}</td>
-    <td class="col-owner" contenteditable="true" data-k="owner">${r.owner || ""}</td>
-    <td class="col-real" contenteditable="true" data-k="wx_real">${r.wx_real || ""}</td>
-    <td class="col-wx" contenteditable="true" data-k="wx_name">${r.wx_name || ""}</td>
-    <td class="col-xhs" contenteditable="true" data-k="xhs_name" style="${
-      bg ? `background:${bg};` : ""
-    }">${r.xhs_name || ""}</td>
-    <td class="col-note" contenteditable="true" data-k="note1">${r.note1 || ""}</td>
-    <td class="col-cat">
-      <select data-k="row_color"></select>
-    </td>
-    <td class="col-act">
-      <div class="actions-container">
-        <button class="ghost" data-act="edit">编辑</button>
-        <div class="actions-extra">
-          <button class="ghost" data-act="up">上移</button>
-          <button class="ghost" data-act="down">下移</button>
-          <button class="ghost danger" data-act="del">删除</button>
-        </div>
-      </div>
-    </td>
-  `;
-
-  const sel = tr.querySelector("select[data-k='row_color']");
   const cats = readCats();
-  sel.innerHTML =
-    '<option value="">无</option>' +
-    cats.map((c) => `<option value="${c.key}">${c.name}</option>`).join("");
-  sel.value = r.row_color || "";
-
-  return tr;
+  const xhsBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+  return `<tr data-id="${r.id}">
+    ${tdEditable("col-phone", r.phone, "phone", r.id)}
+    ${tdEditable("col-owner", r.owner, "owner", r.id)}
+    ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
+    ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
+    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" style="background:${xhsBg}">${escapeHtml(
+      r.xhs_name || ""
+    )}</td>
+    ${tdEditable("col-note", r.note1, "note1", r.id)}
+    ${tdSelectCat("col-cat", r.row_color, r.id)}
+    ${tdActions(r.id)}
+  </tr>`;
 }
 
-// ------- 渲染手机折叠列表 -------
-
-function renderMobileList(rows) {
-  const list = $("#mobileList");
-  list.innerHTML = "";
-  const cats = readCats();
-  const view = readView();
-  const zebraOn = view.zebraOn !== false;
-  const zebraColor = view.zebraColor || "#f5f5f7";
+async function renderTable() {
+  const tbody = $("#gridBody");
+  const all = await getAllRows();
+  const rows = applyFilters(all);
 
   if (!rows.length) {
-    const empty = document.createElement("div");
-    empty.style.textAlign = "center";
-    empty.style.color = "#6e6e73";
-    empty.style.padding = "24px 8px";
-    empty.textContent = '暂无数据，点击“新增一行”添加账号';
-    list.appendChild(empty);
-    return;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击“新增一行”开始录入</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
   }
 
-  rows.forEach((row, idx) => {
-    const card = document.createElement("div");
-    card.className = "m-row";
-    const cardBg = zebraOn && idx % 2 === 1 ? zebraColor : "var(--cell)";
-    card.style.setProperty("--card-bg", cardBg);
-
-    card.innerHTML = `
-      <button type="button" class="m-row-header">
-        <div class="m-main-line">
-          <div class="m-phone">${row.phone || ""}</div>
-          <div class="m-xhs">${row.xhs_name || ""}</div>
-        </div>
-        <div class="m-meta-line">
-          <span class="m-owner-tag">${row.owner || "未设置所属人"}</span>
-          <span class="m-arrow">⌄</span>
-        </div>
-      </button>
-      <div class="m-row-details">
-        <div class="m-detail-row">
-          <div class="m-detail-label">所属人</div>
-          <div class="m-detail-value" contenteditable="true" data-k="owner">${row.owner || ""}</div>
-        </div>
-        <div class="m-detail-row">
-          <div class="m-detail-label">微信实名人</div>
-          <div class="m-detail-value" contenteditable="true" data-k="wx_real">${row.wx_real || ""}</div>
-        </div>
-        <div class="m-detail-row">
-          <div class="m-detail-label">对应微信名</div>
-          <div class="m-detail-value" contenteditable="true" data-k="wx_name">${row.wx_name || ""}</div>
-        </div>
-        <div class="m-detail-row">
-          <div class="m-detail-label">备注</div>
-          <div class="m-detail-value" contenteditable="true" data-k="note1">${row.note1 || ""}</div>
-        </div>
-        <div class="m-detail-row">
-          <div class="m-detail-label">分类</div>
-          <div class="m-detail-value">
-            <select data-k="row_color" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:15px;text-align-last:right;">
-              <option value="">无</option>
-              ${cats
-                .map(
-                  (c) =>
-                    `<option value="${c.key}" ${
-                      c.key === row.row_color ? "selected" : ""
-                    }>${c.name}</option>`,
-                )
-                .join("")}
-            </select>
-          </div>
-        </div>
-        <div class="m-actions">
-          <button class="ghost m-edit">编辑</button>
-          <div class="m-hidden-actions">
-            <button class="ghost" data-act="up">上移</button>
-            <button class="ghost" data-act="down">下移</button>
-            <button class="ghost danger" data-act="del">删除</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const header = card.querySelector(".m-row-header");
-    const details = card.querySelector(".m-row-details");
-    const arrow = card.querySelector(".m-arrow");
-    const editBtn = card.querySelector(".m-edit");
-    const hidden = card.querySelector(".m-hidden-actions");
-
-    header.addEventListener("click", () => {
-      card.classList.toggle("open");
+  // 绑定：单元格编辑
+  tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
+    td.addEventListener("focus", () => {
+      // 聚焦时把背景置白，避免隔行色影响可读性
+      td.style.background = "#fff";
     });
-
-    editBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      hidden.classList.toggle("show");
+    td.addEventListener("blur", async () => {
+      td.style.background = ""; // 还原（由 zebra 控制）
+      const id = td.getAttribute("data-id");
+      const field = td.getAttribute("data-field");
+      const val = unescapeHtml(td.textContent || "").trim();
+      await updateRow(id, { [field]: val });
+      if (field === "xhs_name" || field === "row_color" || field === "owner") {
+        // 需要刷新高亮和筛选
+        await refreshFilters();
+        await renderTable();
+      }
     });
+    // 防止回车换行
+    td.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        td.blur();
+      }
+    });
+  });
 
-    card
-      .querySelectorAll(".m-detail-value[contenteditable='true']")
-      .forEach((el) => {
-        el.addEventListener(
-          "blur",
-          async () => {
-            const k = el.dataset.k;
-            const v = el.textContent.trim();
-            await updateRow(row.id, { [k]: v });
-            await renderTable();
-          },
-          true,
-        );
-      });
-
-    const sel = card.querySelector("select[data-k='row_color']");
+  // 绑定：分类选择
+  tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
     sel.addEventListener("change", async () => {
-      await updateRow(row.id, { row_color: sel.value });
+      const id = sel.getAttribute("data-id");
+      await updateRow(id, { row_color: sel.value });
       await renderTable();
     });
+  });
 
-    hidden.querySelectorAll("button[data-act]").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const act = btn.dataset.act;
-        if (act === "del") {
-          if (!confirm("确定删除这一行？")) return;
-          await deleteRowById(row.id);
-        } else if (act === "up") {
-          await moveRow(row.id, "up");
-        } else if (act === "down") {
-          await moveRow(row.id, "down");
+  // 绑定：动作按钮
+  tbody.querySelectorAll("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      if (act === "up") {
+        await moveRow(id, "up");
+      } else if (act === "down") {
+        await moveRow(id, "down");
+      } else if (act === "del") {
+        if (confirm("确定删除该行？")) {
+          await deleteRowById(id);
+        }
+      }
+    });
+  });
+
+  // 渲染手机版
+  renderMobileList(rows);
+}
+
+function renderMobileList(rows) {
+  const container = $("#mobileList");
+  const v = readView();
+
+  if (!rows.length) {
+    container.innerHTML = `<div style="text-align:center;color:#888;padding:10px 0;">暂无数据</div>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((r, idx) => {
+      const cats = readCats();
+      const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
+      const pillBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+      const catName = catNameOf(cats, r.row_color);
+      return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
+        <button class="m-row-header" data-id="${r.id}">
+          <div class="m-main-line">
+            <span class="m-phone">${escapeHtml(r.phone || "")}</span>
+            <span class="m-xhs">${escapeHtml(r.xhs_name || "")}</span>
+            <span class="m-arrow">▾</span>
+          </div>
+          <div class="m-meta-line">
+            <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
+            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(
+              catName || "未分类"
+            )}</span>
+          </div>
+        </button>
+        <div class="m-row-details">
+          ${mobileDetail("微信实名人", r.wx_real, "wx_real", r.id)}
+          ${mobileDetail("对应微信名", r.wx_name, "wx_name", r.id)}
+          ${mobileDetail("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobileDetail("备注", r.note1, "note1", r.id)}
+          ${mobileCat(r.row_color, r.id)}
+          <div class="m-actions">
+            <div class="m-actions-main">
+              <button class="ghost m-btn-edit" data-id="${r.id}">更多</button>
+            </div>
+            <div class="m-actions-hidden" id="m-hidden-${r.id}">
+              <button class="ghost" data-mact="up" data-id="${r.id}">上移</button>
+              <button class="ghost" data-mact="down" data-id="${r.id}">下移</button>
+              <button class="btn-danger" data-mact="del" data-id="${r.id}">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  // 绑定折叠
+  container.querySelectorAll(".m-row-header").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".m-row");
+      card.classList.toggle("open");
+    });
+  });
+
+  // 绑定手机端可编辑文本
+  container
+    .querySelectorAll('.m-detail-value[contenteditable="true"]')
+    .forEach((el) => {
+      el.addEventListener("focus", () => (el.style.background = "#fff"));
+      el.addEventListener("blur", async () => {
+        el.style.background = "";
+        const id = el.getAttribute("data-id");
+        const field = el.getAttribute("data-field");
+        const val = unescapeHtml(el.textContent || "").trim();
+        await updateRow(id, { [field]: val });
+        await renderTable();
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          el.blur();
         }
       });
     });
 
-    list.appendChild(card);
+  // 绑定手机端分类
+  container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const id = sel.getAttribute("data-id");
+      await updateRow(id, { row_color: sel.value });
+      await renderTable();
+    });
+    sel.addEventListener("focus", () => {
+      const td = sel.closest(".m-detail-value");
+      if (td) td.style.background = "#fff";
+    });
+    sel.addEventListener("blur", () => {
+      const td = sel.closest(".m-detail-value");
+      if (td) td.style.background = "";
+    });
   });
+
+  // 绑定手机端“更多”/隐藏动作
+  container.querySelectorAll(".m-btn-edit").forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = b.getAttribute("data-id");
+      const box = document.getElementById(`m-hidden-${id}`);
+      if (!box) return;
+      box.classList.toggle("show");
+    });
+  });
+
+  // 绑定手机端动作三连
+  container.querySelectorAll("button[data-mact]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-mact");
+      if (act === "up") await moveRow(id, "up");
+      else if (act === "down") await moveRow(id, "down");
+      else if (act === "del") {
+        if (confirm("确定删除该行？")) await deleteRowById(id);
+      }
+    });
+  });
+
+  function mobileDetail(label, text, field, id) {
+    return `<div class="m-detail-row">
+      <div class="m-detail-label">${escapeHtml(label)}</div>
+      <div class="m-detail-value" contenteditable="true" data-field="${field}" data-id="${id}">${escapeHtml(
+      text || ""
+    )}</div>
+    </div>`;
+  }
+  function mobileCat(value, id) {
+    const cats = readCats();
+    const opts = [`<option value="">未分类</option>`]
+      .concat(
+        cats.map(
+          (c) =>
+            `<option value="${escapeHtml(c.id)}"${
+              c.id === value ? " selected" : ""
+            }>${escapeHtml(c.name)}</option>`
+        )
+      )
+      .join("");
+    return `<div class="m-detail-row">
+      <div class="m-detail-label">分类</div>
+      <div class="m-detail-value">
+        <select data-field="row_color" data-id="${id}" style="width:100%;">
+          ${opts}
+        </select>
+      </div>
+    </div>`;
+  }
 }
 
-// ------- 总渲染 -------
+/* =========================
+ * 8. CSV 导入/导出（简单版）
+ * ========================= */
+function parseCSV(text) {
+  // 简单 split，不处理引号内逗号的复杂场景（白皮书已标注限制）
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
+  if (!lines.length) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const obj = {};
+    headers.forEach((h, idx) => (obj[h] = cols[idx] || ""));
+    rows.push(obj);
+  }
+  return rows;
+}
+function toCSV(rows) {
+  const headers = [
+    "phone",
+    "owner",
+    "wx_real",
+    "wx_name",
+    "xhs_name",
+    "note1",
+    "row_color",
+    "order",
+  ];
+  const out = [headers.join(",")];
+  for (const r of rows) {
+    const line = headers
+      .map((h) => {
+        const s = String(r[h] ?? "");
+        return `"${s.replaceAll('"', '""')}"`;
+      })
+      .join(",");
+    out.push(line);
+  }
+  return out.join("\n");
+}
 
-async function renderTable() {
+/* =========================
+ * 9. Supabase 云端快照
+ *    —— 满足你的需求：**自定义名称不加时间；仅在最右侧显示时间**
+ * ========================= */
+async function cloudHealthCheck() {
+  const dot = $("#cloudDot");
+  const text = $("#cloudText");
+  if (!supabase) {
+    dot.style.background = "#ffcc00";
+    text.textContent = "Base 数据连接：未配置";
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("updated_at")
+      .eq("key", SUPABASE_DEFAULT_KEY)
+      .maybeSingle();
+    if (error) throw error;
+    dot.style.background = "#30d158";
+    text.textContent = "Base 数据连接：已连接";
+  } catch (e) {
+    dot.style.background = "#ff3b30";
+    text.textContent = "Base 数据连接：失败";
+    console.error(e);
+  }
+}
+
+async function cloudSave() {
+  if (!supabase) {
+    alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
+    return;
+  }
   const all = await getAllRows();
-  const rows = await applyFilters(all);
-  const body = $("#gridBody");
+  const cats = readCats();
+  const view = readView();
 
-  // 桌面表格
-  body.innerHTML = "";
-  if (!rows.length) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = 8;
-    td.style.textAlign = "center";
-    td.style.color = "#6e6e73";
-    td.textContent = '暂无数据，点击“新增一行”添加账号';
-    tr.appendChild(td);
-    body.appendChild(tr);
-  } else {
-    rows.forEach((r) => body.appendChild(makeRowTr(r)));
+  // 仅快照名称本身，不附加时间（右侧独立显示）
+  const label = prompt("输入快照名称（只保存名称，时间将显示在右侧）", "快照");
+  if (label == null) return;
+  const snapshotName = (label || "快照").trim();
+  const now = Date.now();
+
+  const payload = {
+    ver: 1,
+    snapshot_label: snapshotName, // 不拼时间
+    updated_at: now,
+    rows: all,
+    cats,
+    view,
+  };
+
+  // 1) 写 default
+  const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
+    key: SUPABASE_DEFAULT_KEY,
+    payload,
+    updated_at: new Date(now).toISOString(),
+  });
+  if (err1) {
+    alert("保存失败：" + err1.message);
+    return;
   }
 
-  // 手机版列表
-  renderMobileList(rows);
+  // 2) 插入历史 key='snap_时间戳'
+  const histKey = `snap_${now}`;
+  const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
+    key: histKey,
+    payload,
+    updated_at: new Date(now).toISOString(),
+  });
+  if (err2) {
+    alert("保存历史失败：" + err2.message);
+    return;
+  }
+
+  // 3) 只保留最近 5 个 snap_
+  const { data: snaps, error: err3 } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("key,updated_at")
+    .like("key", "snap_%")
+    .order("updated_at", { ascending: false });
+  if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
+    const toDelete = snaps.slice(5).map((s) => s.key);
+    if (toDelete.length) {
+      await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
+    }
+  }
+
+  alert("已保存到云端。");
+  await renderCloudHistory();
 }
 
-// ------- 分类 UI -------
+async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
+  if (!supabase) {
+    alert("未配置 Supabase，无法从云端加载。");
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("payload")
+    .eq("key", key)
+    .maybeSingle();
+  if (error || !data) {
+    alert("云端读取失败。");
+    return;
+  }
+  const payload = data.payload || {};
+  const rows = payload.rows || [];
+  const cats = payload.cats || DEFAULT_CATS;
+  const view = payload.view || DEFAULT_VIEW;
 
-function renderCatList() {
-  const cats = readCats();
-  const box = $("#catList");
-  box.innerHTML = "";
-  cats.forEach((c, idx) => {
-    const row = document.createElement("div");
-    row.className = "catRow";
-    row.innerHTML = `
-      <div class="chip">
-        <span class="colorDot" style="background:${c.color}"></span>
-        <span>${c.name}</span>
-      </div>
-      <span></span>
-      <button class="ghost" data-act="up" data-key="${c.key}" ${
-      idx === 0 ? "disabled" : ""
-    }>上移</button>
-      <button class="ghost" data-act="down" data-key="${c.key}" ${
-      idx === cats.length - 1 ? "disabled" : ""
-    }>下移</button>
-      <button class="ghost" data-act="del" data-key="${c.key}">删除</button>
-    `;
-    box.appendChild(row);
+  await db.rows.clear();
+  if (rows.length) await db.rows.bulkAdd(rows);
+
+  saveCats(cats);
+  saveView({ ...DEFAULT_VIEW, ...view });
+
+  await refreshFilters();
+  applyView(readView());
+  await renderTable();
+  alert("云端数据已加载。");
+}
+
+async function renderCloudHistory() {
+  const panel = $("#cloudHistoryPanel");
+  if (!panel) return;
+  if (!supabase) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#888;">未配置 Supabase</div>`;
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("key,payload,updated_at")
+    .like("key", "snap_%")
+    .order("updated_at", { ascending: false })
+    .limit(5);
+  if (error) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败</div>`;
+    return;
+  }
+  if (!Array.isArray(data) || !data.length) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
+    return;
+  }
+  panel.innerHTML = data
+    .map((row) => {
+      const name = (row.payload?.snapshot_label || "快照").trim(); // **名称不带时间**
+      const t = fmtTime(row.updated_at);
+      const metaCount = Array.isArray(row.payload?.rows)
+        ? `${row.payload.rows.length} 条`
+        : "";
+      return `<div class="cloud-item" data-key="${row.key}">
+        <div class="cloud-item-main">
+          <div class="cloud-item-name">${escapeHtml(name)}</div>
+          <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
+        </div>
+        <div class="cloud-item-time">${escapeHtml(t)}</div> <!-- **右侧显示时间** -->
+      </div>`;
+    })
+    .join("");
+
+  panel.querySelectorAll(".cloud-item").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-key");
+      if (!key) return;
+      if (confirm("确定用该快照覆盖本地数据？")) {
+        await cloudLoad(key);
+      }
+    });
   });
 }
 
-// ------- 事件绑定 -------
+/* =========================
+ * 10. 分类设置 UI
+ * ========================= */
+function renderCatList() {
+  const list = $("#catList");
+  const cats = readCats();
+  list.innerHTML = cats
+    .map(
+      (c, i) => `<div class="cat-row" data-id="${c.id}">
+        <span class="cat-color-preview" style="background:${escapeHtml(
+          c.color
+        )}"></span>
+        <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
+        <div class="cat-actions">
+          <button class="ghost" data-act="up" ${i === 0 ? "disabled" : ""}>上移</button>
+          <button class="ghost" data-act="down" ${
+            i === cats.length - 1 ? "disabled" : ""
+          }>下移</button>
+          <input type="color" value="${escapeHtml(c.color)}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
+          <button class="btn-danger" data-act="del">删除</button>
+        </div>
+      </div>`
+    )
+    .join("");
 
+  // 绑定：名称编辑
+  list.querySelectorAll(".cat-name").forEach((el) => {
+    el.addEventListener("blur", () => {
+      const id = el.closest(".cat-row").getAttribute("data-id");
+      const v = el.textContent.trim();
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
+        saveCats(cats);
+        renderTable();
+      }
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+
+  // 绑定：操作
+  list.querySelectorAll("[data-act]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".cat-row");
+      const id = row.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx < 0) return;
+
+      if (act === "up" && idx > 0) {
+        [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
+      } else if (act === "down" && idx < cats.length - 1) {
+        [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
+      } else if (act === "del") {
+        if (!confirm("确定删除该分类？")) return;
+        cats.splice(idx, 1);
+      } else if (act === "color") {
+        // 颜色由 <input type="color"> 直接触发 change 处理
+      }
+      saveCats(cats);
+      renderCatList();
+      renderTable();
+    });
+  });
+
+  // 绑定：颜色选择
+  list.querySelectorAll('input[type="color"][data-act="color"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      const row = el.closest(".cat-row");
+      const id = row.getAttribute("data-id");
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx < 0) return;
+      cats[idx] = { ...cats[idx], color: el.value };
+      saveCats(cats);
+      renderCatList();
+      renderTable();
+    });
+  });
+}
+
+/* =========================
+ * 11. 事件绑定 & 初始化
+ * ========================= */
 function bindEvents() {
-  const view = readView();
-  applyView(view);
-
-  $("#titleText").value = view.titleText;
-  $("#titleColor").value = view.titleColor;
-  $("#fontFamily").value = view.fontFamily;
-  $("#rowPad").value = view.pad;
-  $("#colScale").value = view.colScale;
-  $("#zebraOn").checked = view.zebraOn !== false;
-  $("#zebraColor").value = view.zebraColor;
-
-  // 搜索 + 筛选
+  // 搜索 & 模式
   $("#q").addEventListener("input", async (e) => {
-    state.q = e.target.value;
+    state.q = e.target.value || "";
     await renderTable();
   });
   $("#btnSearchMode").addEventListener("click", async () => {
     state.precise = !state.precise;
-    $("#btnSearchMode").textContent = state.precise
-      ? "当前：精准搜索"
-      : "当前：模糊搜索";
+    $("#btnSearchMode").textContent = state.precise ? "当前：精准搜索" : "当前：模糊搜索";
     await renderTable();
   });
+
+  // 筛选/排序
   $("#filterOwner").addEventListener("change", async (e) => {
     state.owner = e.target.value;
     await renderTable();
@@ -695,138 +960,86 @@ function bindEvents() {
     await renderTable();
   });
 
-  // 增删
+  // 行操作
   $("#btnAdd").addEventListener("click", addRow);
+
+  // CSV
+  $("#btnImportCSV").addEventListener("click", () => $("#csvFile").click());
+  $("#csvFile").addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const items = parseCSV(text);
+    if (!items.length) {
+      alert("CSV 为空或格式不符合简单导入要求。");
+      return;
+    }
+    const all = await getAllRows();
+    let maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+    const rows = items.map((it) => ({
+      id: uid(),
+      order: ++maxOrder,
+      phone: it.phone || "",
+      owner: it.owner || "",
+      wx_real: it.wx_real || "",
+      wx_name: it.wx_name || "",
+      xhs_name: it.xhs_name || "",
+      note1: it.note1 || "",
+      row_color: it.row_color || "",
+      updated_at: Date.now(),
+    }));
+    await db.rows.bulkAdd(rows);
+    await refreshFilters();
+    await renderTable();
+  });
+  $("#btnExportCSV").addEventListener("click", async () => {
+    const all = await getAllRows();
+    const csv = toCSV(all);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "xhsphone.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // 云端
+  $("#btnSaveCloud").addEventListener("click", cloudSave);
+  $("#btnLoadCloud").addEventListener("click", async () => {
+    const panel = $("#cloudHistoryPanel");
+    if (panel.style.display === "none") {
+      panel.style.display = "block";
+      await renderCloudHistory();
+    } else {
+      panel.style.display = "none";
+    }
+  });
+
   $("#btnClearAll").addEventListener("click", async () => {
-    if (!confirm("确定清空全部数据？此操作不可撤销。")) return;
+    if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
     await db.rows.clear();
     await refreshFilters();
     await renderTable();
   });
 
-  // CSV 导入/导出
-  $("#btnImportCSV").addEventListener("click", () => {
-    $("#csvFile").click();
-  });
-  $("#csvFile").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (!lines.length) {
-      alert("CSV 内容为空");
-      return;
-    }
-    const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-    const all = await getAllRows();
-    let orderBase = all.reduce((m, r) => Math.max(m, r.order || 0), 0);
-    const now = Date.now();
-    const rows = [];
-    for (let i = 1; i < lines.length; i++) {
-      const raw = lines[i];
-      if (!raw.trim()) continue;
-      const cols = raw.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-      const obj = {};
-      headers.forEach((h, idx) => (obj[h] = cols[idx] || ""));
-      rows.push({
-        id: (now + i).toString(16),
-        order: ++orderBase,
-        phone: obj.phone || "",
-        owner: obj.owner || "",
-        wx_real: obj.wx_real || "",
-        wx_name: obj.wx_name || "",
-        xhs_name: obj.xhs_name || "",
-        note1: obj.note1 || "",
-        row_color: obj.row_color || "",
-        updated_at: new Date().toISOString(),
-      });
-    }
-    if (rows.length) {
-      await db.rows.bulkAdd(rows);
-      await refreshFilters();
-      await renderTable();
-      alert(`已导入 ${rows.length} 行`);
-    }
-    e.target.value = "";
-  });
-  $("#btnExportCSV").addEventListener("click", async () => {
-    const all = await getAllRows();
-    const headers = [
-      "phone",
-      "owner",
-      "wx_real",
-      "wx_name",
-      "xhs_name",
-      "note1",
-      "row_color",
-    ];
-    const lines = [headers.join(",")];
-    all.forEach((r) => {
-      lines.push(
-        headers
-          .map((h) => `"${String(r[h] || "").replace(/"/g, '""')}"`)
-          .join(","),
-      );
-    });
-    const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `xhsphone-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
   // 分类设置
   $("#btnCategories").addEventListener("click", () => {
     const p = $("#panelCategories");
-    const btn = $("#btnCategories");
-    const show = p.style.display === "none";
-    p.style.display = show ? "" : "none";
-    btn.classList.toggle("active", show);
-    if (show) renderCatList();
-  });
-  $("#catColor").addEventListener("input", (e) => {
-    $("#catColorPreview").style.background = e.target.value;
+    p.style.display = p.style.display === "none" ? "block" : "none";
+    renderCatList();
   });
   $("#btnCatAdd").addEventListener("click", () => {
-    const name = $("#catName").value.trim();
-    const color = $("#catColor").value;
+    const name = ($("#catName").value || "").trim();
+    const color = ($("#catColor").value || "#007aff").trim();
     if (!name) {
-      alert("请输入分类名称");
+      alert("请填写分类名称");
       return;
     }
-    const key = name.toLowerCase().replace(/\s+/g, "_");
     const cats = readCats();
-    if (cats.some((c) => c.key === key)) {
-      alert("已存在同名分类");
-      return;
-    }
-    cats.push({ key, name, color });
+    cats.push({ id: uid(), name, color });
     saveCats(cats);
     $("#catName").value = "";
-    renderCatList();
-    renderTable();
-  });
-  $("#catList").addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const key = btn.dataset.key;
-    if (!key) return;
-    let cats = readCats();
-    const idx = cats.findIndex((c) => c.key === key);
-    if (idx < 0) return;
-    const act = btn.dataset.act;
-    if (act === "del") {
-      if (!confirm("确定删除该分类？")) return;
-      cats.splice(idx, 1);
-    } else if (act === "up" && idx > 0) {
-      [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
-    } else if (act === "down" && idx < cats.length - 1) {
-      [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
-    }
-    saveCats(cats);
     renderCatList();
     renderTable();
   });
@@ -834,67 +1047,9 @@ function bindEvents() {
   // 显示设置
   $("#btnView").addEventListener("click", () => {
     const p = $("#panelView");
-    const btn = $("#btnView");
-    const show = p.style.display === "none";
-    p.style.display = show ? "" : "none";
-    btn.classList.toggle("active", show);
-  });
-
-  $("#titleText").addEventListener("input", (e) => {
+    p.style.display = p.style.display === "none" ? "block" : "none";
+    // 同步控件初值
     const v = readView();
-    v.titleText = e.target.value || "XHSPHONE";
-    saveView(v);
-    applyView(v);
-  });
-  $("#titleColor").addEventListener("input", (e) => {
-    const v = readView();
-    v.titleColor = e.target.value || "#111111";
-    saveView(v);
-    applyView(v);
-  });
-  $("#fontFamily").addEventListener("change", (e) => {
-    const v = readView();
-    v.fontFamily = e.target.value || DEFAULT_VIEW.fontFamily;
-    saveView(v);
-    applyView(v);
-  });
-  $("#rowPad").addEventListener("input", (e) => {
-    const v = readView();
-    v.pad = parseInt(e.target.value, 10) || 4;
-    saveView(v);
-    applyView(v);
-  });
-  $("#colScale").addEventListener("input", (e) => {
-    const v = readView();
-    v.colScale = parseFloat(e.target.value) || 0.7;
-    saveView(v);
-    applyView(v);
-  });
-  $("#zebraOn").addEventListener("change", async (e) => {
-    const v = readView();
-    v.zebraOn = e.target.checked;
-    saveView(v);
-    applyView(v);
-    const body = $("#gridBody");
-    if (body) {
-      if (v.zebraOn) body.classList.add("zebra");
-      else body.classList.remove("zebra");
-    }
-    await renderTable();
-  });
-  $("#zebraColor").addEventListener("input", async (e) => {
-    const v = readView();
-    v.zebraColor = e.target.value || "#f5f5f7";
-    saveView(v);
-    applyView(v);
-    await renderTable();
-  });
-  $("#btnCompact").addEventListener("click", async () => {
-    const v = {
-      ...DEFAULT_VIEW,
-    };
-    saveView(v);
-    applyView(v);
     $("#titleText").value = v.titleText;
     $("#titleColor").value = v.titleColor;
     $("#fontFamily").value = v.fontFamily;
@@ -902,167 +1057,81 @@ function bindEvents() {
     $("#colScale").value = v.colScale;
     $("#zebraOn").checked = v.zebraOn;
     $("#zebraColor").value = v.zebraColor;
-    await renderTable();
   });
-  $("#btnResetSize").addEventListener("click", async () => {
-    const v = { ...DEFAULT_VIEW };
+
+  $("#titleText").addEventListener("input", () => {
+    const v = readView();
+    v.titleText = $("#titleText").value || "XHSPHONE";
     saveView(v);
     applyView(v);
-    $("#titleText").value = v.titleText;
-    $("#titleColor").value = v.titleColor;
-    $("#fontFamily").value = v.fontFamily;
-    $("#rowPad").value = v.pad;
-    $("#colScale").value = v.colScale;
-    $("#zebraOn").checked = v.zebraOn;
-    $("#zebraColor").value = v.zebraColor;
-    await renderTable();
+  });
+  $("#titleColor").addEventListener("input", () => {
+    const v = readView();
+    v.titleColor = $("#titleColor").value || "#111111";
+    saveView(v);
+    applyView(v);
+  });
+  $("#fontFamily").addEventListener("change", () => {
+    const v = readView();
+    v.fontFamily = $("#fontFamily").value;
+    saveView(v);
+    applyView(v);
+  });
+  $("#rowPad").addEventListener("input", () => {
+    const v = readView();
+    v.pad = Number($("#rowPad").value) || 6;
+    saveView(v);
+    applyView(v);
+  });
+  $("#colScale").addEventListener("input", () => {
+    const v = readView();
+    v.colScale = Number($("#colScale").value) || 1;
+    saveView(v);
+    applyView(v);
+  });
+  $("#zebraOn").addEventListener("change", () => {
+    const v = readView();
+    v.zebraOn = $("#zebraOn").checked;
+    saveView(v);
+    applyView(v);
+    renderTable(); // 手机卡片也要刷新 zebra
+  });
+  $("#zebraColor").addEventListener("input", () => {
+    const v = readView();
+    v.zebraColor = $("#zebraColor").value || "#e2f0ff";
+    saveView(v);
+    applyView(v);
+    renderTable();
   });
 
-  // 桌面表格 inline 编辑 + 操作
-  $("#gridBody").addEventListener(
-    "blur",
-    async (e) => {
-      const cell = e.target.closest("td[contenteditable][data-k]");
-      if (!cell) return;
-      const tr = cell.closest("tr");
-      const id = tr.dataset.id;
-      const k = cell.dataset.k;
-      const v = cell.textContent.trim();
-      await updateRow(id, { [k]: v });
-      if (["xhs_name", "row_color", "owner"].includes(k)) {
-        await renderTable();
-      }
-    },
-    true,
-  );
-  $("#gridBody").addEventListener("change", async (e) => {
-    const sel = e.target.closest("select[data-k='row_color']");
-    if (!sel) return;
-    const tr = sel.closest("tr");
-    const id = tr.dataset.id;
-    await updateRow(id, { row_color: sel.value });
-    await renderTable();
+  $("#btnCompact").addEventListener("click", () => {
+    const v = readView();
+    v.pad = 5; // 更紧凑
+    v.colScale = 0.95;
+    saveView(v);
+    applyView(v);
   });
-  $("#gridBody").addEventListener("click", async (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    const act = btn.dataset.act;
-    const tr = btn.closest("tr");
-    if (!tr) return;
-    const id = tr.dataset.id;
-
-    if (act === "edit") {
-      // 只展开当前行的额外操作
-      const extra = tr.querySelector(".actions-extra");
-      if (extra) extra.classList.toggle("show");
-      return;
-    }
-    if (act === "del") {
-      if (!confirm("确定删除这一行？")) return;
-      await deleteRowById(id);
-    } else if (act === "up") {
-      await moveRow(id, "up");
-    } else if (act === "down") {
-      await moveRow(id, "down");
-    }
-  });
-
-  // 云端保存
-  $("#btnSaveCloud").addEventListener("click", async () => {
-    const rows = await getAllRows();
-    const view = readView();
-    const payload = {
-      rows,
-      cats: readCats(),
-      view,
-      ver: 1,
-      updated_at: new Date().toISOString(),
-    };
-    const userInput = prompt("请输入本次云端快照名称（可选）", "");
-    if (userInput === null) return;
-    const trimmed = userInput.trim();
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const baseLabel = `${y}-${m}-${d} ${hh}:${mm}`;
-    const snapshotName = trimmed ? `${trimmed} ${baseLabel}` : `快照 ${baseLabel}`;
-    if (trimmed) {
-      payload.snapshot_label = trimmed;
-    } else {
-      delete payload.snapshot_label;
-    }
-    await cloudSave(payload, snapshotName);
-  });
-
-  // 云端加载：展开 / 收起历史列表
-  $("#btnLoadCloud").addEventListener("click", async () => {
-    const panel = $("#cloudHistoryPanel");
-    const show = panel.style.display === "none" || !panel.style.display;
-    if (show) {
-      panel.style.display = "block";
-      await renderCloudHistory();
-    } else {
-      panel.style.display = "none";
-    }
-    $("#btnLoadCloud").classList.toggle("active", show);
-  });
-
-  // 点击历史快照进行回溯
-  $("#cloudHistoryPanel").addEventListener("click", async (e) => {
-    const item = e.target.closest(".cloud-history-item");
-    if (!item) return;
-    const key = item.dataset.key;
-    if (!key) return;
-    if (!confirm("确定加载这个快照？当前本地数据将被覆盖。")) return;
-    $$(".cloud-history-item", $("#cloudHistoryPanel")).forEach((el) =>
-      el.classList.remove("active"),
-    );
-    item.classList.add("active");
-    const data = await cloudLoad(key);
-    if (!data) return;
-    if (Array.isArray(data.rows)) {
-      await db.rows.clear();
-      await db.rows.bulkAdd(data.rows);
-    }
-    if (Array.isArray(data.cats)) {
-      saveCats(data.cats);
-    }
-    if (data.view && typeof data.view === "object") {
-      saveView({ ...DEFAULT_VIEW, ...data.view });
-      applyView(readView());
-    }
-    await refreshFilters();
-    await renderTable();
-    alert("快照已加载到本地");
+  $("#btnResetSize").addEventListener("click", () => {
+    saveView({ ...DEFAULT_VIEW, titleText: readView().titleText, titleColor: readView().titleColor });
+    applyView(readView());
   });
 }
 
-// ------- 初始化 -------
-
+/* =========================
+ * 12. 启动
+ * ========================= */
 document.addEventListener("DOMContentLoaded", async () => {
-  bindEvents();
+  // 应用视图
   applyView(readView());
+  // 事件
+  bindEvents();
+  // 初次筛选/渲染
   await refreshFilters();
   await renderTable();
+  // 云端健康检查
+  await cloudHealthCheck();
 
-  // 检测 Supabase 连接
-  try {
-    const { error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("updated_at")
-      .limit(1)
-      .maybeSingle();
-    if (error) {
-      console.warn("云端检测失败", error);
-      setCloudStatus(false, "Base 数据连接：失败");
-    } else {
-      setCloudStatus(true, "Base 数据连接：已连接");
-    }
-  } catch (e) {
-    console.warn("云端检测异常", e);
-    setCloudStatus(false, "Base 数据连接：异常");
-  }
+  // 云端历史面板初始隐藏
+  const panel = $("#cloudHistoryPanel");
+  if (panel) panel.style.display = "none";
 });

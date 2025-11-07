@@ -1,0 +1,755 @@
+:root {
+  --bg: #f5f5f7;
+  --cell: #ffffff;
+  --cell-alt: #f9f9fb;
+  --line: #e5e5ea;
+  --muted: #6e6e73;
+  --active: #007aff;
+  --blue: #007aff;
+  --blue-press: #0051c6;
+
+  /* 行高 / 列宽 / 隔行色，由显示设置控制 */
+  --pad: 6px;
+  --colScale: 1;
+  /* 统一使用 222 / 240 / 255 */
+  --zebra: #e2f0ff;
+
+  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --w-phone: 120px;
+  --w-owner: 110px;
+  --w-real: 110px;
+  --w-wx: 130px;
+  --w-xhs: 160px;
+  --w-note: 220px;
+  --w-cat: 90px;
+  --w-actions: 110px;
+}
+
+/* 基础 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  font-family: var(--font-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  color: #111;
+}
+
+/* 容器 */
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 10px 24px;
+}
+
+/* 顶部栏 */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px 10px;
+}
+
+#appTitle {
+  font-size: 20px;
+  font-weight: 650;
+  margin: 0;
+}
+
+.cloud-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: #f2f2f7;
+  color: #111;
+}
+
+#cloudDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #30d158; /* 连接正常绿色 */
+}
+
+#cloudText {
+  white-space: nowrap;
+}
+
+/* 面板 */
+
+.panel {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+/* 工具栏 */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center; /* 垂直居中，保证文字 + 输入框对齐 */
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.toolbar:last-child {
+  margin-bottom: 0;
+}
+
+.toolbar-wrap {
+  flex-wrap: wrap;
+}
+
+.status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* 输入控件 */
+
+input,
+select,
+button {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  height: 32px; /* 更紧凑：控制整体“表格高度”落在 ~100px 范围内 */
+  background: #ffffff;
+  color: #111;
+  outline: none;
+  vertical-align: middle;
+}
+
+input::placeholder {
+  color: #b0b0b8;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  border-color: var(--active);
+  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
+}
+
+/* 下拉菜单统一白底，避免被隔行色等影响 */
+
+table select,
+.m-detail-value select {
+  background-color: #ffffff;
+}
+
+/* 文本输入宽度 */
+
+#q {
+  min-width: 220px;
+  flex: 1 1 180px;
+}
+
+/* 标签式控件 */
+
+.label-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+}
+
+/* 按钮 */
+
+button {
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.12s ease,
+    transform 0.05s ease;
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+button.ghost {
+  background: #f2f2f7;
+  border-color: transparent;
+}
+
+button.ghost:hover {
+  background: #e5e5ea;
+}
+
+button.primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: transparent;
+}
+
+button.primary:hover {
+  background: var(--blue-press);
+}
+
+/* chip */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f2f7;
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 云端快照列表 */
+
+.cloud-history-panel {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.cloud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.cloud-item + .cloud-item {
+  margin-top: 2px;
+}
+
+.cloud-item:hover {
+  background: #f2f6ff;
+}
+
+.cloud-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cloud-item-name {
+  font-weight: 500;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cloud-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 右侧时间戳（你要保留的“最右日期时间”） */
+
+.cloud-item-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 分类列表 */
+
+#catList {
+  margin-top: 6px;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 10px;
+}
+
+.cat-row:hover {
+  background: #f5f5f7;
+}
+
+.cat-name {
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+
+.cat-color-preview {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.cat-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* 桌面表格 */
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cell-alt);
+}
+
+thead tr {
+  background: var(--cell-alt);
+}
+
+th,
+td {
+  padding: var(--pad) 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 蓝色行 / 高亮时，表头保持统一浅色，不会变成奇怪灰色 */
+
+th {
+  font-weight: 500;
+  color: #555;
+}
+
+/* 隔行着色（桌面） */
+
+tbody.zebra tr:nth-child(even) td {
+  background: var(--zebra);
+}
+
+/* hover 行，再稍微加一点高亮 */
+
+tbody tr:hover td {
+  background: #e9f3ff;
+}
+
+/* 列宽 */
+
+th.col-phone,
+td.col-phone {
+  width: calc(var(--w-phone) * var(--colScale));
+}
+
+th.col-owner,
+td.col-owner {
+  width: calc(var(--w-owner) * var(--colScale));
+}
+
+th.col-real,
+td.col-real {
+  width: calc(var(--w-real) * var(--colScale));
+}
+
+th.col-wx,
+td.col-wx {
+  width: calc(var(--w-wx) * var(--colScale));
+}
+
+th.col-xhs,
+td.col-xhs {
+  width: calc(var(--w-xhs) * var(--colScale));
+}
+
+th.col-note,
+td.col-note {
+  width: calc(var(--w-note) * var(--colScale));
+}
+
+th.col-cat,
+td.col-cat {
+  width: calc(var(--w-cat) * var(--colScale));
+}
+
+th.col-act,
+td.col-act {
+  width: calc(var(--w-actions) * var(--colScale));
+}
+
+/* 表格内联编辑 */
+
+td[contenteditable="true"] {
+  cursor: text;
+}
+
+td[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  outline-offset: -2px;
+  background: #ffffff;
+}
+
+/* 分类单元格 */
+
+td.col-cat select {
+  width: 100%;
+  min-width: 80px;
+  font-size: 13px;
+  height: 28px;
+}
+
+/* 操作列（桌面） */
+
+.actions-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* 兼容旧逻辑：有“编辑” + 隐藏动作时 */
+
+.actions-extra {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.actions-extra.hidden {
+  display: none;
+}
+
+/* 三个功能按钮样式（上移/下移/删除） */
+
+.actions-container .btn-mini,
+.actions-extra .btn-mini {
+  padding: 2px 6px;
+  height: 24px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+/* 删除按钮稍微醒目一点 */
+
+.btn-danger {
+  background: #ff3b30;
+  border-color: transparent;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #e03228;
+}
+
+/* 桌面 / 手机显示切换 */
+
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+/* 手机版折叠列表卡片 */
+
+.m-row {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card-bg, #fff);
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, transform 0.1s ease;
+  color: #111;
+}
+
+.m-row:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* 卡片头：保证“手机号 + 人名”对齐，不显得太高 */
+
+.m-row-header {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 16px 18px;
+  min-height: 60px; /* 对应你说的高度从 160px 收紧到约 100px 整体视觉 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: inherit;
+}
+
+.m-row:hover .m-row-header {
+  background: #f5f7ff;
+}
+
+/* 头部主行：手机号 + 小红书名称 */
+
+.m-main-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.m-phone {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.m-xhs {
+  font-size: 14px;
+  color: #333;
+  max-width: 60%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* 头部第二行：所属人标签 + 分类 pill */
+
+.m-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.m-owner {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f2f2f7;
+  color: #333;
+}
+
+/* 分类 pill（颜色与桌面保持一致，由 JS 设置背景） */
+
+.m-cat-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(0, 122, 255, 0.09);
+}
+
+/* 下拉箭头 */
+
+.m-arrow {
+  margin-left: auto;
+  font-size: 14px;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+}
+
+.m-row.open .m-arrow {
+  transform: rotate(180deg);
+}
+
+/* 手机详情区域 */
+
+.m-row-details {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0 18px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  transition: max-height 0.2s ease, opacity 0.18s ease;
+}
+
+.m-row.open .m-row-details {
+  max-height: 360px;
+  opacity: 1;
+  padding: 10px 18px 12px;
+}
+
+.m-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.m-detail-label {
+  font-size: 12px;
+  color: var(--muted);
+  flex: 0 0 80px;
+}
+
+.m-detail-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 4px 8px;
+  background: #f7f7fa;
+}
+
+/* 手机端可编辑文本 */
+
+.m-detail-value[contenteditable="true"] {
+  cursor: text;
+}
+
+.m-detail-value[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  background: #ffffff;
+}
+
+/* 底部操作区域（手机） */
+
+.m-actions {
+  border-top: 1px solid var(--line);
+  padding: 6px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fafafa;
+}
+
+.m-actions-main {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.m-actions-hidden {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* 兼容旧版的“编辑 + 隐藏操作按钮” */
+
+.m-hidden-actions {
+  display: none;
+}
+
+.m-hidden-actions.show {
+  display: flex;
+  gap: 6px;
+}
+
+/* 手机操作按钮统一小号 */
+
+.m-actions button {
+  height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* 小屏优化 */
+
+@media (max-width: 1024px) {
+  .wrap {
+    padding: 10px 8px 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+
+  .panel {
+    border-radius: 14px;
+    padding: 8px 10px;
+  }
+
+  .topbar {
+    padding-bottom: 6px;
+  }
+
+  #appTitle {
+    font-size: 18px;
+  }
+
+  input,
+  select,
+  button {
+    font-size: 13px;
+    height: 30px;
+  }
+
+  th,
+  td {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar {
+    gap: 6px;
+  }
+
+  #q {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .cloud-status {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+
+  .m-phone {
+    font-size: 18px;
+  }
+}

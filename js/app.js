@@ -5,7 +5,7 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
 );
 
-// 工具函数
+// 工具
 const $ = (q, s = document) => s.querySelector(q);
 const $$ = (q, s = document) => Array.from(s.querySelectorAll(q));
 
@@ -13,11 +13,13 @@ const $$ = (q, s = document) => Array.from(s.querySelectorAll(q));
 const VIEW_KEY = "xhs_view_v7";
 const CATS_KEY = "xhs_cats_v7";
 
+// 视图默认：紧凑 + 版本号
 const DEFAULT_VIEW = {
-  pad: 6,
-  colScale: 1,
+  viewVersion: 2,
+  pad: 4,
+  colScale: 0.7,
   zebraOn: true,
-  zebraColor: "#eef5ff",
+  zebraColor: "#f5f5f7",
   fontFamily:
     '-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro SC","PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif',
   titleText: "XHSPHONE",
@@ -40,10 +42,16 @@ db.version(1).stores({
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_KEY = "default";
 
-// 视图与分类
+// ------- 视图 & 分类 -------
+
 function readView() {
   try {
-    return { ...DEFAULT_VIEW, ...(JSON.parse(localStorage.getItem(VIEW_KEY)) || {}) };
+    const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}");
+    if (raw.viewVersion !== DEFAULT_VIEW.viewVersion) {
+      // 版本不一致，强制使用新默认
+      return { ...DEFAULT_VIEW };
+    }
+    return { ...DEFAULT_VIEW, ...raw };
   } catch {
     return { ...DEFAULT_VIEW };
   }
@@ -52,10 +60,19 @@ function saveView(v) {
   localStorage.setItem(VIEW_KEY, JSON.stringify(v));
 }
 function applyView(v) {
-  document.documentElement.style.setProperty("--pad", (v.pad ?? 6) + "px");
-  document.documentElement.style.setProperty("--colScale", v.colScale ?? 1);
-  document.documentElement.style.setProperty("--zebra", v.zebraColor || "#eef5ff");
-  document.documentElement.style.setProperty("--font-main", v.fontFamily || DEFAULT_VIEW.fontFamily);
+  document.documentElement.style.setProperty("--pad", (v.pad ?? 4) + "px");
+  document.documentElement.style.setProperty(
+    "--colScale",
+    v.colScale ?? 0.7,
+  );
+  document.documentElement.style.setProperty(
+    "--zebra",
+    v.zebraColor || "#f5f5f7",
+  );
+  document.documentElement.style.setProperty(
+    "--font-main",
+    v.fontFamily || DEFAULT_VIEW.fontFamily,
+  );
 
   const titleEl = $("#appTitle");
   if (titleEl) {
@@ -63,6 +80,7 @@ function applyView(v) {
     titleEl.style.color = v.titleColor || "#111111";
   }
 }
+
 function readCats() {
   try {
     return JSON.parse(localStorage.getItem(CATS_KEY)) || DEFAULT_CATS;
@@ -82,23 +100,18 @@ function catNameOf(key) {
   return c ? c.name : "";
 }
 
-function hexToRgba(hex, a) {
+// 高亮底色：黑色等深色会更明显
+function makeHighlightColor(hex) {
   hex = (hex || "").replace("#", "");
   if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
-  const r = parseInt(hex.slice(0, 2), 16) || 255;
-  const g = parseInt(hex.slice(2, 4), 16) || 255;
-  const b = parseInt(hex.slice(4, 6), 16) || 255;
-  return `rgba(${r},${g},${b},${a})`;
+  const r = parseInt(hex.slice(0, 2), 16) || 0;
+  const g = parseInt(hex.slice(2, 4), 16) || 0;
+  const b = parseInt(hex.slice(4, 6), 16) || 0;
+  const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+  // 越黑越提高透明度一点，让颜色更明显
+  const alpha = brightness < 80 ? 0.35 : 0.18;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
-
-// 状态
-const state = {
-  q: "",
-  owner: "all",
-  wxReal: "all",
-  sortBy: "order",
-  precise: false, // false=模糊搜索, true=精准搜索
-};
 
 // 云端状态 UI
 function setCloudStatus(ok, text) {
@@ -108,15 +121,14 @@ function setCloudStatus(ok, text) {
   if (tx) tx.textContent = text || (ok ? "Base 数据连接：已连接" : "Base 数据连接：离线");
 }
 
-// Supabase 云端操作
-async function cloudLoad() {
+// Supabase 云端：读取某个 key
+async function cloudLoad(whichKey = SUPABASE_KEY) {
   try {
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select("payload")
-      .eq("key", SUPABASE_KEY)
+      .eq("key", whichKey)
       .maybeSingle();
-
     if (error) {
       console.error("云端读取失败", error);
       setCloudStatus(false, "Base 数据连接：读取失败");
@@ -137,34 +149,101 @@ async function cloudLoad() {
     return null;
   }
 }
-async function cloudSave(payload) {
-  try {
-    const { error } = await supabase
-      .from(SUPABASE_TABLE)
-      .upsert({
-        key: SUPABASE_KEY,
-        payload,
-        updated_at: new Date().toISOString(),
-      });
 
-    if (error) {
-      console.error("云端保存失败", error);
-      setCloudStatus(false, "Base 数据连接：保存失败");
-      alert("云端保存失败：" + (error.message || "未知错误"));
-      return false;
+// Supabase 云端：保存当前快照 + 历史 5 个版本
+async function cloudSave(payload) {
+  const nowIso = new Date().toISOString();
+  const snapKey = `snap_${Date.now()}`;
+
+  try {
+    // 1）更新 default（最新）
+    const { error: e1 } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert({ key: SUPABASE_KEY, payload, updated_at: nowIso });
+    if (e1) throw e1;
+
+    // 2）插入历史快照
+    const { error: e2 } = await supabase
+      .from(SUPABASE_TABLE)
+      .insert({ key: snapKey, payload, updated_at: nowIso });
+    if (e2) throw e2;
+
+    // 3）只保留最近 5 个 snap_ 记录
+    const { data: snaps, error: e3 } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("key,updated_at")
+      .neq("key", SUPABASE_KEY)
+      .order("updated_at", { ascending: false });
+
+    if (e3) throw e3;
+
+    if (snaps && snaps.length > 5) {
+      const toDelete = snaps.slice(5).map((s) => s.key);
+      if (toDelete.length) {
+        await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
+      }
     }
+
     setCloudStatus(true, "Base 数据连接：已同步");
-    alert("云端保存成功");
+    alert("云端保存成功（保留最近 5 个快照）");
     return true;
   } catch (e) {
-    console.error("云端保存异常", e);
-    setCloudStatus(false, "Base 数据连接：异常");
-    alert("云端保存异常");
+    console.error("云端保存失败", e);
+    setCloudStatus(false, "Base 数据连接：保存失败");
+    alert("云端保存失败：" + (e.message || "未知错误"));
     return false;
   }
 }
 
-// 数据读写
+// 云端历史快照列表
+async function renderCloudHistory() {
+  const panel = $("#cloudHistoryPanel");
+  panel.innerHTML = '<div class="cloud-history-empty">正在加载云端历史...</div>';
+  try {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("key,updated_at")
+      .neq("key", SUPABASE_KEY)
+      .order("updated_at", { ascending: false })
+      .limit(5);
+    if (error) throw error;
+    if (!data || !data.length) {
+      panel.innerHTML =
+        '<div class="cloud-history-empty">云端暂时没有历史快照</div>';
+      return;
+    }
+    panel.innerHTML = data
+      .map((row, idx) => {
+        const d = new Date(row.updated_at);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        const label = `${y}-${m}-${day} ${hh}:${mm}`;
+        return `<div class="cloud-history-item" data-key="${row.key}">
+          <span>快照${idx + 1}</span>
+          <time>${label}</time>
+        </div>`;
+      })
+      .join("");
+  } catch (e) {
+    console.error("加载历史快照失败", e);
+    panel.innerHTML =
+      '<div class="cloud-history-empty">加载云端历史失败</div>';
+  }
+}
+
+// ------- 数据读写 -------
+
+const state = {
+  q: "",
+  owner: "all",
+  wxReal: "all",
+  sortBy: "order",
+  precise: false,
+};
+
 async function getAllRows() {
   return await db.rows.orderBy("order").toArray();
 }
@@ -216,7 +295,8 @@ async function moveRow(id, dir) {
   await renderTable();
 }
 
-// 搜索 + 筛选
+// ------- 搜索 & 筛选 -------
+
 async function refreshFilters() {
   const all = await getAllRows();
   const owners = [...new Set(all.map((r) => r.owner).filter(Boolean))];
@@ -227,9 +307,11 @@ async function refreshFilters() {
   const prevO = oSel.value;
   const prevW = wSel.value;
 
-  oSel.innerHTML = '<option value="all">所属人：全部</option>' +
+  oSel.innerHTML =
+    '<option value="all">所属人：全部</option>' +
     owners.map((o) => `<option value="${o}">${o}</option>`).join("");
-  wSel.innerHTML = '<option value="all">微信实名人：全部</option>' +
+  wSel.innerHTML =
+    '<option value="all">微信实名人：全部</option>' +
     reals.map((w) => `<option value="${w}">${w}</option>`).join("");
 
   oSel.value = owners.includes(prevO) ? prevO : "all";
@@ -256,15 +338,12 @@ function applySearchFilter(rows) {
     const combined = fields.join(" ").toLowerCase();
 
     if (state.precise) {
-      // 精准搜索：如果是数字，则精确匹配手机号里的数字串
       if (digits) {
         const phoneDigits = String(r.phone || "").replace(/\D/g, "");
         return phoneDigits.includes(digits);
       }
-      // 文字精确：要求某个字段与关键字完全相等（忽略大小写）
       return fields.some((v) => v.toLowerCase() === q);
     } else {
-      // 模糊搜索：普通“包含”，支持多关键词（空格分隔，所有词都要出现）
       const tokens = q.split(/\s+/).filter(Boolean);
       if (!tokens.length) return true;
       return tokens.every((tk) => combined.includes(tk));
@@ -276,7 +355,8 @@ async function applyFilters(all) {
   let rows = [...all];
 
   if (state.owner !== "all") rows = rows.filter((r) => r.owner === state.owner);
-  if (state.wxReal !== "all") rows = rows.filter((r) => r.wx_real === state.wxReal);
+  if (state.wxReal !== "all")
+    rows = rows.filter((r) => r.wx_real === state.wxReal);
 
   rows = applySearchFilter(rows);
 
@@ -298,7 +378,10 @@ async function applyFilters(all) {
       break;
     case "xhs_name":
       rows.sort((a, b) =>
-        String(a.xhs_name || "").localeCompare(String(b.xhs_name || ""), "zh-CN"),
+        String(a.xhs_name || "").localeCompare(
+          String(b.xhs_name || ""),
+          "zh-CN",
+        ),
       );
       break;
     case "row_color":
@@ -317,15 +400,15 @@ async function applyFilters(all) {
   return rows;
 }
 
-// 渲染桌面表格
+// ------- 渲染桌面表格 -------
+
 function makeRowTr(r) {
   const tr = document.createElement("tr");
   tr.dataset.id = r.id;
   tr.dataset.order = r.order || 0;
 
-  const bg = r.row_color
-    ? hexToRgba(catColorOf(r.row_color) || "#ffffff", 0.18)
-    : "";
+  const catColor = r.row_color ? catColorOf(r.row_color) : null;
+  const bg = catColor ? makeHighlightColor(catColor) : "";
 
   tr.innerHTML = `
     <td class="col-phone" contenteditable="true" data-k="phone">${r.phone || ""}</td>
@@ -361,7 +444,8 @@ function makeRowTr(r) {
   return tr;
 }
 
-// 渲染手机折叠列表
+// ------- 渲染手机折叠列表 -------
+
 function renderMobileList(rows) {
   const list = $("#mobileList");
   list.innerHTML = "";
@@ -380,7 +464,6 @@ function renderMobileList(rows) {
   rows.forEach((row) => {
     const card = document.createElement("div");
     card.className = "m-row";
-    const cat = cats.find((c) => c.key === row.row_color);
 
     card.innerHTML = `
       <button type="button" class="m-row-header">
@@ -452,7 +535,6 @@ function renderMobileList(rows) {
       hidden.classList.toggle("show");
     });
 
-    // 内联编辑
     card
       .querySelectorAll(".m-detail-value[contenteditable='true']")
       .forEach((el) => {
@@ -468,14 +550,12 @@ function renderMobileList(rows) {
         );
       });
 
-    // 分类选择
     const sel = card.querySelector("select[data-k='row_color']");
     sel.addEventListener("change", async () => {
       await updateRow(row.id, { row_color: sel.value });
       await renderTable();
     });
 
-    // 操作按钮
     hidden.querySelectorAll("button[data-act]").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -495,7 +575,8 @@ function renderMobileList(rows) {
   });
 }
 
-// 总渲染
+// ------- 总渲染 -------
+
 async function renderTable() {
   const all = await getAllRows();
   const rows = await applyFilters(all);
@@ -520,7 +601,8 @@ async function renderTable() {
   renderMobileList(rows);
 }
 
-// 分类 UI
+// ------- 分类 UI -------
+
 function renderCatList() {
   const cats = readCats();
   const box = $("#catList");
@@ -546,12 +628,12 @@ function renderCatList() {
   });
 }
 
-// 事件绑定
+// ------- 事件绑定 -------
+
 function bindEvents() {
   const view = readView();
   applyView(view);
 
-  // 初始化显示设置控件
   $("#titleText").value = view.titleText;
   $("#titleColor").value = view.titleColor;
   $("#fontFamily").value = view.fontFamily;
@@ -585,7 +667,7 @@ function bindEvents() {
     await renderTable();
   });
 
-  // 增删改
+  // 增删
   $("#btnAdd").addEventListener("click", addRow);
   $("#btnClearAll").addEventListener("click", async () => {
     if (!confirm("确定清空全部数据？此操作不可撤销。")) return;
@@ -748,16 +830,15 @@ function bindEvents() {
     saveView(v);
     applyView(v);
   });
-
   $("#rowPad").addEventListener("input", (e) => {
     const v = readView();
-    v.pad = parseInt(e.target.value, 10) || 6;
+    v.pad = parseInt(e.target.value, 10) || 4;
     saveView(v);
     applyView(v);
   });
   $("#colScale").addEventListener("input", (e) => {
     const v = readView();
-    v.colScale = parseFloat(e.target.value) || 1;
+    v.colScale = parseFloat(e.target.value) || 0.7;
     saveView(v);
     applyView(v);
   });
@@ -774,20 +855,19 @@ function bindEvents() {
   });
   $("#zebraColor").addEventListener("input", (e) => {
     const v = readView();
-    v.zebraColor = e.target.value || "#eef5ff";
+    v.zebraColor = e.target.value || "#f5f5f7";
     saveView(v);
     applyView(v);
   });
   $("#btnCompact").addEventListener("click", () => {
     const v = {
-      ...readView(),
-      pad: 4,
-      colScale: 0.9,
-      zebraOn: true,
-      zebraColor: "#f5f5f7",
+      ...DEFAULT_VIEW,
     };
     saveView(v);
     applyView(v);
+    $("#titleText").value = v.titleText;
+    $("#titleColor").value = v.titleColor;
+    $("#fontFamily").value = v.fontFamily;
     $("#rowPad").value = v.pad;
     $("#colScale").value = v.colScale;
     $("#zebraOn").checked = v.zebraOn;
@@ -806,7 +886,7 @@ function bindEvents() {
     $("#zebraColor").value = v.zebraColor;
   });
 
-  // 桌面表格事件（inline 编辑 + 操作）
+  // 桌面表格 inline 编辑 + 操作
   $("#gridBody").addEventListener(
     "blur",
     async (e) => {
@@ -817,7 +897,7 @@ function bindEvents() {
       const k = cell.dataset.k;
       const v = cell.textContent.trim();
       await updateRow(id, { [k]: v });
-      if (["xhs_name", "row_color"].includes(k)) {
+      if (["xhs_name", "row_color", "owner"].includes(k)) {
         await renderTable();
       }
     },
@@ -840,7 +920,7 @@ function bindEvents() {
     const id = tr.dataset.id;
 
     if (act === "edit") {
-      // 只展开/收起同一行的菜单
+      // 只展开当前行的额外操作
       const extra = tr.querySelector(".actions-extra");
       if (extra) extra.classList.toggle("show");
       return;
@@ -855,7 +935,7 @@ function bindEvents() {
     }
   });
 
-  // 云端按钮
+  // 云端保存
   $("#btnSaveCloud").addEventListener("click", async () => {
     const rows = await getAllRows();
     const payload = {
@@ -867,8 +947,27 @@ function bindEvents() {
     };
     await cloudSave(payload);
   });
+
+  // 云端加载：展开 / 收起历史列表
   $("#btnLoadCloud").addEventListener("click", async () => {
-    const data = await cloudLoad();
+    const panel = $("#cloudHistoryPanel");
+    const show = panel.style.display === "none" || !panel.style.display;
+    if (show) {
+      panel.style.display = "block";
+      await renderCloudHistory();
+    } else {
+      panel.style.display = "none";
+    }
+  });
+
+  // 点击历史快照进行回溯
+  $("#cloudHistoryPanel").addEventListener("click", async (e) => {
+    const item = e.target.closest(".cloud-history-item");
+    if (!item) return;
+    const key = item.dataset.key;
+    if (!key) return;
+    if (!confirm("确定加载这个快照？当前本地数据将被覆盖。")) return;
+    const data = await cloudLoad(key);
     if (!data) return;
     if (Array.isArray(data.rows)) {
       await db.rows.clear();
@@ -883,15 +982,15 @@ function bindEvents() {
     }
     await refreshFilters();
     await renderTable();
-    alert("云端数据已加载到本地");
+    alert("快照已加载到本地");
   });
 }
 
-// 初始化
+// ------- 初始化 -------
+
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
-  const view = readView();
-  applyView(view);
+  applyView(readView());
   await refreshFilters();
   await renderTable();
 

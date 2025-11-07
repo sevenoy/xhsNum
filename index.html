@@ -19,14 +19,12 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=20251017">
 <link rel="shortcut icon" href="favicon.ico?v=20251017">
 
-<!-- ✅ PWA Manifest（如果你有就解开下一行；文件放根目录） -->
-<!-- <link rel="manifest" href="site.webmanifest?v=20251017"> -->
+<!-- ✅ PWA 清单（如果你不需要可以先保留不动） -->
+<link rel="manifest" href="site.webmanifest">
 
-<!-- ✅ 启用 PWA & iOS 全屏 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="XHSPHONE">
-<meta name="theme-color" content="#ffffff">
 
 <style>
 :root{
@@ -34,11 +32,11 @@
   --cell:#fff;--cell-alt:#f5f5f7;
   --pad:6px;--colScale:1;--zebra:#eef5ff;
   --w-phone:160px;--w-owner:120px;--w-real:120px;--w-wx:160px;--w-xhs:340px;--w-note:220px;--w-cat:140px;
-  --w-actions:220px;
+  --w-actions:220px;      /* 扩宽避免遮挡分类下拉 */
   --active:#3478F7;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",Helvetica,Arial,"PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro SC","PingFang SC","Noto Sans CJK SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
 .wrap{max-width:1280px;margin:0 auto;padding:12px}
 h1{font-size:18px;font-weight:700;margin:0 0 8px}
 .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
@@ -48,15 +46,14 @@ button{background:var(--blue);border:none;color:#fff;padding:0 12px;cursor:point
 button.ghost{background:#f2f2f7;color:#000;border:1px solid var(--line)}
 button:active{background:var(--blue-press)}
 button.ghost.active{background:var(--active);color:#fff;border-color:var(--active)}
-button:disabled{opacity:.5;cursor:not-allowed}
 .badge{font-variant-numeric:tabular-nums;border:1px solid var(--line);border-radius:999px;padding:4px 8px;color:var(--muted)}
 .panel{background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
 table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
 th,td{padding:var(--pad) 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 thead th{position:sticky;top:0;background:#f9f9fb;font-weight:600;z-index:2}
-tbody.zebra tr:nth-child(even) td{background:var(--zebra)}
-td[contenteditable='true']{background:transparent;outline:none}
-td[contenteditable='true']:focus{background:var(--cell-alt);outline:1px solid var(--line)}
+tbody.zebra tr:nth-child(even) td{ background: var(--zebra); }
+td[contenteditable='true']{background:transparent; outline:none}
+td[contenteditable='true']:focus{background:var(--cell-alt); outline:1px solid var(--line)}
 .status{font-size:12px;color:var(--muted);margin-top:6px;white-space:pre-wrap}
 .rgbaChip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;height:32px}
 .colorDot{width:14px;height:14px;border-radius:4px;border:1px solid #c9c9ce;display:inline-block}
@@ -67,34 +64,25 @@ th.col-wx,    td.col-wx{    width: calc(var(--w-wx)    * var(--colScale)); }
 th.col-xhs,   td.col-xhs{   width: calc(var(--w-xhs)   * var(--colScale)); }
 th.col-note,  td.col-note{  width: calc(var(--w-note)  * var(--colScale)); }
 th.col-cat,   td.col-cat{   width: calc(var(--w-cat)   * var(--colScale)); }
-th.col-act,   td.col-act{   width: calc(var(--w-actions)* var(--colScale)); }
-td.col-act{ position:relative; overflow:visible; }
-
-/* 操作条：默认隐藏；行处于编辑态才显示 */
-.edit-bar{
-  display:none; position:absolute; right:8px; top:50%; transform:translateY(-50%);
-  gap:6px; background:#f2f2f7; border-radius:12px; padding:6px;
-  box-shadow:0 6px 14px rgba(0,0,0,.08); z-index:20;
+th.col-act,   td.col-act{   width: calc(var(--w-actions) * var(--colScale)); }
+#gridBody td select{width:100%;border:none;background:transparent;font:inherit;padding:0 4px;outline:none}
+#cloudStatus{display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line);padding:4px 8px;font-size:12px;color:var(--muted)}
+#cloudDot{width:10px;height:10px;border-radius:999px;background:#d9534f;display:inline-block}
+#statusText b{color:#111}
+#panelCategories .toolbar{margin-bottom:4px}
+#catList{display:flex;flex-direction:column;gap:6px}
+.catRow{display:grid;grid-template-columns:auto 1fr repeat(3,max-content);gap:8px;align-items:center}
+.catRow .rgbaChip{height:auto}
+.catRow button{height:28px;font-size:12px;padding:0 10px}
+@media (max-width:768px){
+  th,td{font-size:13px}
+  .wrap{padding:8px}
 }
-.row-editing .edit-bar{ display:flex; }
-
-/* 分类面板：Grid 对齐按钮 */
-.cat-row{
-  display:grid; grid-template-columns:auto 1fr repeat(5,max-content);
-  align-items:center; column-gap:12px; row-gap:10px;
+@media (max-width:480px){
+  .toolbar{gap:6px}
+  input,select,button{height:30px;font-size:13px}
+  #grid{font-size:13px}
 }
-.cat-row .namePill{
-  display:inline-flex;align-items:center;gap:8px;
-  border:1px solid var(--line);border-radius:12px;padding:6px 10px;background:#fff
-}
-.cat-row .spacer{height:1px}
-
-/* 顶部状态徽章 */
-#verifyStatus.badge, #cloudStatus{
-  display:inline-flex; align-items:center; height:28px; line-height:28px;
-  padding:0 12px; border-radius:999px; white-space:nowrap; vertical-align:middle;
-}
-#cloudStatus #cloudDot{ width:8px; height:8px; border-radius:50%; margin-right:6px; background:#aaa; }
 @media (max-width:420px){
   #verifyStatus.badge, #cloudStatus{ height:26px; line-height:26px; padding:0 10px; font-size:12px; }
 }
@@ -106,7 +94,10 @@ td.col-act{ position:relative; overflow:visible; }
 <div class="wrap">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <div><h1>XHSPHONE</h1></div>
-    <div><span id="verifyStatus" class="badge">未验证</span> <span id="cloudStatus" class="badge"><i id="cloudDot"></i><span id="cloudText">离线</span></span></div>
+    <div>
+      <span id="verifyStatus" class="badge">未验证</span>
+      <span id="cloudStatus"><i id="cloudDot"></i><span id="cloudText">离线</span></span>
+    </div>
   </div>
 
   <div class="panel">
@@ -123,7 +114,7 @@ td.col-act{ position:relative; overflow:visible; }
         <option value="row_color">排序：分类</option>
       </select>
 
-      <!-- 顶部按钮：统一四字；导出JSON隐藏但保留 -->
+      <!-- 顶部按钮 -->
       <button id="btnAdd">新增一行</button>
       <button id="btnImportCSV">导入数据</button>
       <button id="btnSaveCloud" class="ghost">保存云端</button>
@@ -134,29 +125,29 @@ td.col-act{ position:relative; overflow:visible; }
       <button id="btnClearAll" class="ghost">清空全部</button>
       <button id="btnCategories" class="ghost">分类设置</button>
       <button id="btnView" class="ghost">显示尺寸</button>
-      <!-- 改名为“日志”，并新增“刷新”按钮 -->
-      <button id="btnDebug" class="ghost">日志</button>
-      <button id="btnReload" class="ghost">刷新</button>
+      <button id="btnDebug" class="ghost">显示日志</button>
     </div>
     <div class="status" id="statusText">本地模式：不联网 · 支持 CSV 导入 / JSON 导出</div>
   </div>
 
   <div class="panel" style="overflow:auto;max-height:92vh">
-    <div class="table-wrap"><table id="grid">
-      <thead>
-        <tr>
-          <th class="col-phone">电话号码</th>
-          <th class="col-owner">所属人</th>
-          <th class="col-real">微信实名人</th>
-          <th class="col-wx">对应微信名</th>
-          <th class="col-xhs">小红书名称</th>
-          <th class="col-note">备注</th>
-          <th class="col-cat">分类</th>
-          <th class="col-act">操作</th>
-        </tr>
-      </thead>
-      <tbody id="gridBody" class="zebra"></tbody>
-    </table></div>
+    <div class="table-wrap">
+      <table id="grid">
+        <thead>
+          <tr>
+            <th class="col-phone">电话号码</th>
+            <th class="col-owner">所属人</th>
+            <th class="col-real">微信实名人</th>
+            <th class="col-wx">对应微信名</th>
+            <th class="col-xhs">小红书名称</th>
+            <th class="col-note">备注</th>
+            <th class="col-cat">分类</th>
+            <th class="col-act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="gridBody" class="zebra"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- 分类设置 -->
@@ -189,56 +180,49 @@ td.col-act{ position:relative; overflow:visible; }
   </div>
 </div>
 
-<!-- Dexie -->
+<!-- Supabase ESM 客户端：提供 window.supabaseClient 全局实例 -->
+<script type="module">
+  import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+  window.supabaseClient = createClient(
+    "https://tmeqccupnsvxexbrlflo.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
+  );
+</script>
+
+<!-- Dexie（本地 IndexedDB）-->
 <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
 
 <script>
 (() => {
-  /* 配置 */
+  /* 配置（原来的 WORKER_URL 已废弃，云端改用 Supabase） */
   const WORKER_URL = 'https://xhsphone.sevenoy.workers.dev';
   const ACCESS_KEY  = 'xhs_ZO6dI5#yXGgLkubH_rzMZC@wyY%h6J-kc7XN4E^O';
-
-  /* ✅ 白名单控制 */
-  const WHITE_LOCAL_KEY   = 'xhs_whitelist_v1';
-  const WHITE_SESSION_KEY = 'xhs_whitelist_sess_v1';
-  function whiteOK(){
-    try{
-      return sessionStorage.getItem(WHITE_SESSION_KEY)==='1'
-          || localStorage.getItem(WHITE_LOCAL_KEY)==='1';
-    }catch{ return false; }
-  }
-  function assertWhite(showMsg=true){
-    if(whiteOK()) return true;
-    if(showMsg) alert('需要通过白名单验证后，才能进行“保存云端 / 云端加载”。');
-    return false;
-  }
-  function updateCloudButtons(){
-    const ok = whiteOK();
-    ['btnSaveCloud','btnLoadCloud'].forEach(id=>{
-      const b=document.getElementById(id); if(!b) return;
-      b.disabled = !ok;
-      b.title = ok ? '' : '请先点击左上角“未验证”完成白名单验证';
-    });
-  }
 
   /* 工具 */
   const $  = (q, s=document)=>s.querySelector(q);
   const $$ = (q, s=document)=>Array.from(s.querySelectorAll(q));
-  function hexToRgba(hex, a){ hex=(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(x=>x+x).join(''); const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16); return `rgba(${r},${g},${b},${a})`; }
+  function hexToRgba(hex, a){
+    hex=(hex||'').replace('#','');
+    if(hex.length===3) hex=hex.split('').map(x=>x+x).join('');
+    const r=parseInt(hex.slice(0,2),16)||255;
+    const g=parseInt(hex.slice(2,4),16)||255;
+    const b=parseInt(hex.slice(4,6),16)||255;
+    return `rgba(${r},${g},${b},${a})`;
+  }
 
   /* 视图 */
   const readView=()=>{ try{ return JSON.parse(localStorage.getItem('view_v6'))||{} }catch{ return {} } };
   const saveView=(v)=>localStorage.setItem('view_v6', JSON.stringify(v));
   function applyView(v){
     document.documentElement.style.setProperty('--pad', (v.pad??6)+'px');
-    document.documentElement.style.setProperty('--colScale', v.colScale??1);
+    document.documentElement.style.setProperty('--colScale', (v.colScale??1));
     document.documentElement.style.setProperty('--zebra', v.zebraColor||'#eef5ff');
-    const body=$('#gridBody');
-    (v.zebraOn===false?body.classList.remove('zebra'):body.classList.add('zebra'));
-    $('#rowPad').value = v.pad??6;
-    $('#colScale').value = v.colScale??1;
-    $('#zebraOn').checked = !(v.zebraOn===false);
-    $('#zebraColor').value = v.zebraColor||'#eef5ff';
+    const zebra = $('#gridBody');
+    if (zebra){
+      if (v.zebraOn!==false) zebra.classList.add('zebra');
+      else zebra.classList.remove('zebra');
+    }
   }
 
   /* 分类 */
@@ -253,403 +237,674 @@ td.col-act{ position:relative; overflow:visible; }
   const catColorOf=(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.color:null; };
   const catNameOf =(key)=>{ const c=readCats().find(x=>x.key===key); return c?c.name:''; };
 
-  /* DB */
+  /* 本地 DB */
   const dbLocal=new Dexie('xhs_phone_sheet_v6');
-  dbLocal.version(2).stores({ rows:'id, order, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, updated_at' });
+  dbLocal.version(2).stores({
+    rows:'id, order, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, updated_at'
+  });
 
   /* 行渲染 */
   function makeRowTr(r){
-    const tr=document.createElement('tr'); tr.dataset.id=r.id; tr.dataset.order=r.order||0;
+    const tr=document.createElement('tr');
+    tr.dataset.id=r.id;
+    tr.dataset.order=r.order||0;
     const bg = r.row_color ? hexToRgba(catColorOf(r.row_color)||'#ffffff', .18) : '';
-    tr.innerHTML=`
+    tr.innerHTML = `
       <td class="col-phone" contenteditable="true" data-k="phone">${r.phone||''}</td>
       <td class="col-owner" contenteditable="true" data-k="owner">${r.owner||''}</td>
       <td class="col-real"  contenteditable="true" data-k="wx_real">${r.wx_real||''}</td>
       <td class="col-wx"    contenteditable="true" data-k="wx_name">${r.wx_name||''}</td>
       <td class="col-xhs"   contenteditable="true" data-k="xhs_name" style="${bg?`background:${bg};`:''}">${r.xhs_name||''}</td>
       <td class="col-note"  contenteditable="true" data-k="note1">${r.note1||''}</td>
-      <td class="col-cat"><select data-k="row_color"></select></td>
+      <td class="col-cat">
+        <select data-k="row_color"></select>
+      </td>
       <td class="col-act">
-        <button data-act="toggleEdit" class="ghost">编辑</button>
-        <div class="edit-bar">
+        <div style="display:flex;gap:6px">
           <button data-act="up" class="ghost">上移</button>
           <button data-act="down" class="ghost">下移</button>
           <button data-act="del" class="ghost">删除</button>
         </div>
       </td>`;
+    const sel = tr.querySelector('select[data-k="row_color"]');
+    const cats = readCats();
+    sel.innerHTML = `<option value="">无</option>` + cats.map(c=>`<option value="${c.key}">${c.name}</option>`).join('');
+    sel.value = r.row_color || '';
     return tr;
   }
 
-  /* 渲染/过滤/排序 */
+  /* 渲染 / 过滤 / 排序 */
+  let state = {
+    q:'',
+    owner:'all',
+    wxReal:'all',
+    sortBy:'order'
+  };
+
+  async function getAllRows(){
+    return await dbLocal.rows.orderBy('order').toArray();
+  }
+
+  function applyFilters(all){
+    let rows = [...all];
+    if (state.owner !== 'all') rows = rows.filter(r=>r.owner===state.owner);
+    if (state.wxReal !== 'all') rows = rows.filter(r=>r.wx_real===state.wxReal);
+    if (state.q){
+      const q = state.q.toLowerCase();
+      rows = rows.filter(r=>{
+        return Object.values(r).some(v=>String(v||'').toLowerCase().includes(q)) ||
+               (r.row_color && catNameOf(r.row_color).toLowerCase().includes(q));
+      });
+    }
+    switch(state.sortBy){
+      case 'owner': rows.sort((a,b)=>String(a.owner||'').localeCompare(String(b.owner||''),'zh-CN')); break;
+      case 'wx_real': rows.sort((a,b)=>String(a.wx_real||'').localeCompare(String(b.wx_real||''),'zh-CN')); break;
+      case 'phone': rows.sort((a,b)=>String(a.phone||'').localeCompare(String(b.phone||''),'zh-CN')); break;
+      case 'xhs_name': rows.sort((a,b)=>String(a.xhs_name||'').localeCompare(String(b.xhs_name||''),'zh-CN')); break;
+      case 'row_color': rows.sort((a,b)=>catNameOf(a.row_color||'').localeCompare(catNameOf(b.row_color||''),'zh-CN')); break;
+      default: rows.sort((a,b)=>(a.order||0)-(b.order||0)); break;
+    }
+    return rows;
+  }
+
   async function refreshFilters(){
-    const all=await dbLocal.rows.toArray();
+    const all = await getAllRows();
     const owners=[...new Set(all.map(r=>r.owner).filter(Boolean))];
     const reals=[...new Set(all.map(r=>r.wx_real).filter(Boolean))];
+
     const oSel=$('#filterOwner'); const saveO=oSel.value;
-    oSel.innerHTML='<option value="all">所属人：全部</option>'+owners.map(v=>`<option value="${v}">${v}</option>`).join(''); oSel.value=owners.includes(saveO)?saveO:'all';
+    oSel.innerHTML='<option value="all">所属人：全部</option>'+owners.map(v=>`<option value="${v}">${v}</option>`).join('');
+    oSel.value = owners.includes(saveO)?saveO:'all';
+
     const wSel=$('#filterWxReal'); const saveW=wSel.value;
-    wSel.innerHTML='<option value="all">微信实名人：全部</option>'+reals.map(v=>`<option value="${v}">${v}</option>`).join(''); wSel.value=reals.includes(saveW)?saveW:'all';
-  }
-  async function ensureCatOptions(){
-    const cats=readCats();
-    const opts=['<option value="">无</option>'].concat(cats.map(c=>`<option value="${c.key}">${c.name}</option>`)).join('');
-    $$('#gridBody select[data-k="row_color"]').forEach(sel=>{ const cur=sel.value; sel.innerHTML=opts; sel.value=cur; });
-  }
-  async function render(){
-    const kw=($('#q').value||'').trim().toLowerCase();
-    const fOwner=$('#filterOwner').value; const fWx=$('#filterWxReal').value;
-    const sortBy=$('#sortBy').value;
-    let all=await dbLocal.rows.toArray();
-
-    all=all.filter(r=>{
-      if(fOwner!=='all' && (r.owner||'')!==fOwner) return false;
-      if(fWx!=='all' && (r.wx_real||'')!==fWx) return false;
-      if(!kw) return true;
-      const t=[r.phone,r.owner,r.wx_real,r.wx_name,r.xhs_name,r.note1,catNameOf(r.row_color)].join(' ').toLowerCase();
-      return t.includes(kw);
-    });
-
-    const collator=new Intl.Collator('zh-Hans-CN',{numeric:true,sensitivity:'base'});
-    if(sortBy==='order') all.sort((a,b)=> (a.order||0)-(b.order||0));
-    else all.sort((a,b)=> collator.compare(String(a[sortBy]||''), String(b[sortBy]||'')));
-
-    const body=$('#gridBody'); body.innerHTML='';
-    all.forEach(r=> body.appendChild(makeRowTr(r)));
-    await ensureCatOptions();
-    $$('#gridBody tr').forEach(tr=>{ const id=tr.dataset.id; dbLocal.rows.get(id).then(r=>{ const sel=tr.querySelector('select[data-k="row_color"]'); if(sel) sel.value=r && r.row_color ? r.row_color : ''; }); });
-    refreshFilters();
+    wSel.innerHTML='<option value="all">微信实名人：全部</option>'+reals.map(v=>`<option value="${v}">${v}</option>`).join('');
+    wSel.value = reals.includes(saveW)?saveW:'all';
   }
 
-  /* 顺序与 CRUD */
-  async function reindexOrders(){
-    const list=await dbLocal.rows.orderBy('order').toArray();
-    await dbLocal.transaction('rw', dbLocal.rows, async ()=>{
-      for(let i=0;i<list.length;i++){
-        await dbLocal.rows.update(list[i].id,{order:i+1,updated_at:new Date().toISOString()});
-      }
-    });
-  }
-  async function addRowLocalAt(index){
-    const total=await dbLocal.rows.count();
-    const list=await dbLocal.rows.orderBy('order').toArray();
-    const order = (index<=0)? 0.5 : (index>=total? (total+0.5) : ( (list[index-1]?.order||0) + 0.5 ));
-    const r={ id:crypto.randomUUID(), order, phone:'', owner:'', wx_real:'', wx_name:'', xhs_name:'', note1:'', row_color:'', created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
-    await dbLocal.rows.put(r); await reindexOrders(); await render();
-  }
-  async function addRowLocal(){ const total=await dbLocal.rows.count(); await addRowLocalAt(total); }
-  async function updateCellLocal(id,key,value){ const r=await dbLocal.rows.get(id); if(!r) return; const patch={}; patch[key]=value; patch.updated_at=new Date().toISOString(); await dbLocal.rows.update(id, patch); await render(); }
-  async function deleteRowLocal(id){ await dbLocal.rows.delete(id); await render(); }
-  async function moveRow(id, dir){
-    const all=await dbLocal.rows.orderBy('order').toArray();
-    const idx=all.findIndex(x=>x.id===id); if(idx<0) return;
-    const tgt=dir==='up'? idx-1:idx+1; if(tgt<0||tgt>=all.length) return;
-    const a=all[idx], b=all[tgt];
-    await dbLocal.rows.update(a.id,{order:b.order,updated_at:new Date().toISOString()});
-    await dbLocal.rows.update(b.id,{order:a.order,updated_at:new Date().toISOString()});
-    await render();
-  }
-
-  /* CSV */
-  function parseCSV(text, delim){ const rows=[]; let cur='', inQ=false, row=[]; for(let i=0;i<text.length;i++){ const ch=text[i], next=text[i+1]; if(ch=='"'){ if(inQ && next=='"'){ cur+='"'; i++; } else inQ=!inQ; } else if(ch===delim && !inQ){ row.push(cur); cur=''; } else if((ch=='\n'||ch=='\r') && !inQ){ if(cur!==''||row.length){ row.push(cur); rows.push(row); row=[]; cur=''; } if(ch=='\r' && next=='\n'){ i++; } } else { cur+=ch; } } if(cur!==''||row.length){ row.push(cur); rows.push(row); } return rows; }
-  function detectDelimiter(text){ const sample=text.slice(0,10000); const cand=[',','\t',';','|']; const cnt={',':0,'\t':0,';':0,'|':0}; let inQ=false; for(let i=0;i<sample.length;i++){ const ch=sample[i]; if(ch=='"'){ inQ=!inQ; continue; } if(!inQ && cnt.hasOwnProperty(ch)) cnt[ch]++; } let best=',',max=-1; for(const k of cand){ if(cnt[k]>max){ max=cnt[k]; best=k; } } return best; }
-  function mapHeader(h){ const t=(h||'').toLowerCase().trim(); const table={ phone:['电话号码','电话','手机号','phone','mobile','号码'], owner:['所属人','owner','归属','持有人'], wx_real:['微信实名人','实名人','wx_real','微信实名'], wx_name:['对应微信名','微信名','wx_name'], xhs_name:['小红书名称','小红书名','xhs','xhs_name'], note1:['备注','备注1','note','note1'], row_color:['分类','颜色','row_color','color','类别'] }; for(const k in table){ if(table[k].some(x=>t.includes(x))) return k; } return null; }
-  async function importCSVText(text){
-    const delim=detectDelimiter(text); const rows=parseCSV(text, delim);
-    let headerRow=0; for(let i=0;i<Math.min(rows.length,20);i++){ const j=(rows[i]||[]).join(' ').toLowerCase(); if(j.includes('电话')||j.includes('phone')||j.includes('小红书')||j.includes('备注')){ headerRow=i; break; } }
-    if(headerRow>0){ rows.splice(0, headerRow); }
-    const headers=(rows[0]||[]).map(mapHeader);
-    if(!headers.some(h=>h==='phone')){ alert('没有找到“电话号码/phone”的表头'); return; }
-    const count=await dbLocal.rows.count();
-    const existingRows = await dbLocal.rows.toArray();
-    const normPhone = (p)=>String(p||'').replace(/\D+/g,'');
-    const existed = new Set(existingRows.map(r=>normPhone(r.phone)));
-    const seen = new Set();
-    let skipped=0; const data=[];
-    for(let i=1;i<rows.length;i++){
-      const r=rows[i]||[]; if(r.every(c=>String(c||'').trim()==='')) continue;
-      const obj={ id:crypto.randomUUID(), order:count+i, created_at:new Date().toISOString(), updated_at:new Date().toISOString() };
-      headers.forEach((k,idx)=>{ if(!k) return; const raw=(r[idx]===undefined?'':String(r[idx])); const v=raw.trim(); const low=v.toLowerCase(); obj[k]=(low==='nan'||low==='null'||low==='-'?'':v); });
-      const key = normPhone(obj.phone);
-      if (key && (existed.has(key) || seen.has(key))) { skipped++; } else { if (key) seen.add(key); data.push(obj); }
+  async function renderTable(){
+    const all = await getAllRows();
+    const body = $('#gridBody');
+    const rows = await applyFilters(all);
+    body.innerHTML='';
+    if (!rows.length){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan=8;
+      td.style.textAlign='center';
+      td.style.color='#6e6e73';
+      td.textContent='暂无数据，点击“新增一行”添加账号';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
     }
-    if(!data.length){ alert('没有可导入的数据'); return; }
-    await dbLocal.rows.bulkPut(data); await render();
-    alert('本地已导入 '+data.length+' 行，跳过重复 '+skipped+' 行（按电话号码去重）');
-  }
-
-  /* 面板开关 & 新增三选项 */
-  function togglePanel(btnEl, panelEl){
-    const show = panelEl.style.display==='none';
-    ['panelCategories','panelView','panelDebug'].forEach(id=>{
-      const p = document.getElementById(id);
-      const b = (id==='panelCategories')? $('#btnCategories') : (id==='panelView')? $('#btnView') : $('#btnDebug');
-      if(p && p!==panelEl){ p.style.display='none'; if(b) b.classList.remove('active'); }
-    });
-    panelEl.style.display = show?'block':'none';
-    if(btnEl){ btnEl.classList.toggle('active', show); }
-  }
-  function setupAddMenu(){
-    const btn = $('#btnAdd'); if(!btn) return;
-    if (document.getElementById('addMenu')) return;
-    const menu = document.createElement('div');
-    Object.assign(menu,{ id:'addMenu' });
-    Object.assign(menu.style,{
-      position:'absolute', zIndex:'10', display:'none', background:'#fff', border:'1px solid var(--line)',
-      borderRadius:'10px', boxShadow:'0 10px 24px rgba(0,0,0,.08)', padding:'8px'
-    });
-    menu.innerHTML=`
-      <div style="display:flex;flex-direction:column;gap:6px;min-width:136px">
-        <button class="ghost" data-pos="top">首行新增</button>
-        <button class="ghost" data-pos="mid">中间新增</button>
-        <button class="ghost" data-pos="bottom">末行新增</button>
-      </div>`;
-    document.body.appendChild(menu);
-
-    const place = ()=>{
-      const r=btn.getBoundingClientRect();
-      menu.style.left = (window.scrollX + r.left)+'px';
-      menu.style.top  = (window.scrollY + r.bottom + 6)+'px';
-    };
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation(); place();
-      menu.style.display = (menu.style.display==='none')?'block':'none';
-    });
-    document.addEventListener('click', ()=>{ menu.style.display='none'; });
-
-    menu.addEventListener('click', async (e)=>{
-      const b = e.target.closest('button[data-pos]'); if(!b) return;
-      const total = await dbLocal.rows.count();
-      if(b.dataset.pos==='top') await addRowLocalAt(0);
-      else if(b.dataset.pos==='bottom') await addRowLocalAt(total);
-      else { const mid=Math.floor(total/2); await addRowLocalAt(mid); }
-      menu.style.display='none';
+    rows.forEach(r=>{
+      const tr = makeRowTr(r);
+      body.appendChild(tr);
     });
   }
 
-  /* 云端（带白名单校验） */
-  function setCloudStatus(ok, text){ const d=$('#cloudDot'), t=$('#cloudText'); if(d) d.style.background=ok?'#20c997':'#d9534f'; if(t) t.textContent=text||(ok?'云端已连接':'离线'); }
-  async function timedFetch(url, opts, ms){ const ctl=new AbortController(); const timer=setTimeout(()=>ctl.abort(), ms||12000); try{ const r=await fetch(url,{signal:ctl.signal,...(opts||{})}); clearTimeout(timer); return r; }catch(e){ clearTimeout(timer); throw e; } }
-  async function secureFetch(url, opts){ const headers=Object.assign({}, (opts&&opts.headers)||{}, {'X-Access-Key': ACCESS_KEY}); try{ return await timedFetch(url, {...(opts||{}), headers}, 12000); }catch(e){ setCloudStatus(false,'网络异常'); throw e; } }
+  async function updateRow(id, patch){
+    const row = await dbLocal.rows.get(id);
+    if (!row) return;
+    const next = {...row, ...patch, updated_at:new Date().toISOString()};
+    await dbLocal.rows.put(next);
+  }
 
+  async function addRow(){
+    const all = await getAllRows();
+    const maxOrder = all.reduce((m,r)=>Math.max(m, r.order||0), 0);
+    const id = Date.now().toString() + Math.random().toString(16).slice(2);
+    await dbLocal.rows.add({
+      id,
+      order:maxOrder+1,
+      phone:'',
+      owner:'',
+      wx_real:'',
+      wx_name:'',
+      xhs_name:'',
+      note1:'',
+      row_color:'',
+      updated_at:new Date().toISOString()
+    });
+    await refreshFilters();
+    await renderTable();
+  }
+
+  async function deleteRowById(id){
+    await dbLocal.rows.delete(id);
+    await refreshFilters();
+    await renderTable();
+  }
+
+  async function moveRow(id, dir){
+    const all = await getAllRows();
+    const list = await applyFilters(all);
+    const idx = list.findIndex(r=>r.id===id);
+    if (idx<0) return;
+    const targetIdx = dir==='up'?idx-1:idx+1;
+    if (targetIdx<0 || targetIdx>=list.length) return;
+    const a = list[idx];
+    const b = list[targetIdx];
+    const oldOrderA = a.order||0;
+    const oldOrderB = b.order||0;
+    await dbLocal.rows.update(a.id, {order: oldOrderB});
+    await dbLocal.rows.update(b.id, {order: oldOrderA});
+    await refreshFilters();
+    await renderTable();
+  }
+
+  /* CSV 导入导出（简易） */
+  function parseCSV(text){
+    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    if (!lines.length) return [];
+    const headers = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
+    return lines.slice(1).map(line=>{
+      const cols = line.split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+      const obj={};
+      headers.forEach((h,i)=>{ obj[h]=cols[i]||''; });
+      return obj;
+    });
+  }
+
+  function toCSV(rows){
+    const headers=['phone','owner','wx_real','wx_name','xhs_name','note1','row_color'];
+    const lines=[headers.join(',')];
+    rows.forEach(r=>{
+      lines.push(headers.map(h=>`"${(r[h]||'').replace(/"/g,'""')}"`).join(','));
+    });
+    return lines.join('\n');
+  }
+
+  /* 云端（Supabase 版本） */
+  const SUPABASE_TABLE = 'xhsphone_snapshot';
+  const SUPABASE_KEY = 'default';
+
+  function setCloudStatus(ok, text){
+    const d = $('#cloudDot'), t = $('#cloudText');
+    if (d) d.style.background = ok ? '#34c759' : '#d9534f';
+    if (t) t.textContent = text || (ok ? '云端已连接' : '离线');
+  }
+
+  // 从 Supabase 读取 { rows, cats, view } 快照
   window.cloudLoad = async function(){
-    if(!whiteOK()){ alert('需要通过白名单验证后才能从云端加载。'); return null; }
     try{
-      const rsp=await secureFetch(WORKER_URL,{method:'GET',cache:'no-store'});
-      if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'读取失败');
-        alert('云端读取失败：'+rsp.status+(txt?(' '+txt):'')); return null; }
-      const data=await rsp.json(); setCloudStatus(true,'云端已连接'); alert('已从云端读取'); return data;
-    }catch(e){ alert('云端读取异常'); return null; }
-  };
-  window.cloudSave = async function(payload){
-    if(!whiteOK()){ alert('需要通过白名单验证后才能保存到云端。'); return false; }
-    try{
-      const rsp=await secureFetch(WORKER_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      if(!rsp.ok){ const txt=await rsp.text().catch(()=> ''); setCloudStatus(false,'保存失败');
-        alert('云端保存失败：'+rsp.status+(txt?(' '+txt):'')); return false; }
-      setCloudStatus(true,'已同步'); alert('云端保存成功'); return true;
-    }catch(e){ alert('云端保存异常'); return false; }
+      const client = window.supabaseClient;
+      if (!client){
+        setCloudStatus(false, '未初始化');
+        alert('Supabase 客户端未就绪');
+        return null;
+      }
+      const { data, error } = await client
+        .from(SUPABASE_TABLE)
+        .select('payload')
+        .eq('key', SUPABASE_KEY)
+        .maybeSingle();
+
+      if (error){
+        console.error('云端读取失败:', error);
+        setCloudStatus(false, '读取失败');
+        alert('云端读取失败：' + (error.message || '未知错误'));
+        return null;
+      }
+      if (!data || !data.payload){
+        setCloudStatus(true, '无云端数据');
+        alert('云端暂无数据');
+        return null;
+      }
+      setCloudStatus(true, '云端已连接');
+      return data.payload; // { rows, cats, view }
+    }catch(e){
+      console.error('云端读取异常:', e);
+      setCloudStatus(false, '网络异常');
+      alert('云端读取异常');
+      return null;
+    }
   };
 
-  /* 验证徽章 */
+  // 保存 { rows, cats, view } 到 Supabase
+  window.cloudSave = async function(payload){
+    try{
+      const client = window.supabaseClient;
+      if (!client){
+        setCloudStatus(false, '未初始化');
+        alert('Supabase 客户端未就绪');
+        return false;
+      }
+      const { error } = await client
+        .from(SUPABASE_TABLE)
+        .upsert({
+          key: SUPABASE_KEY,
+          payload,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error){
+        console.error('云端保存失败:', error);
+        setCloudStatus(false, '保存失败');
+        alert('云端保存失败：' + (error.message || '未知错误'));
+        return false;
+      }
+      setCloudStatus(true, '已同步');
+      alert('云端保存成功');
+      return true;
+    }catch(e){
+      console.error('云端保存异常:', e);
+      setCloudStatus(false, '网络异常');
+      alert('云端保存异常');
+      return false;
+    }
+  };
+
+  /* 验证徽章（本地白名单） */
   (function(){
-    function buf2hex(buffer){ const bytes = new Uint8Array(buffer); return Array.prototype.map.call(bytes, x => ('00' + x.toString(16)).slice(-2)).join(''); }
-    async function sha256hex(str){ const enc = new TextEncoder(); const data = enc.encode(str); const hash = await crypto.subtle.digest('SHA-256', data); return buf2hex(hash); }
+    function buf2hex(buffer){
+      const bytes = new Uint8Array(buffer);
+      return Array.prototype.map.call(bytes, x => ('00' + x.toString(16)).slice(-2)).join('');
+    }
+    async function sha256hex(str){
+      const enc = new TextEncoder();
+      const data = enc.encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      return buf2hex(hash);
+    }
     const PWD_SHA256 = '5bcbba0a49881aa3b1147bd26a19c94a71fde15a844c942515b107b399d6a4db';
     const WH_LOCAL_KEY = 'xhs_whitelist_v1';
     const WH_SESSION_KEY = 'xhs_whitelist_sess_v1';
-    function findBadge(){ let el=$('#verifyStatus'); if(el) return el; return Array.from(document.querySelectorAll('span,button,div')).find(n=>['未验证','已验证白名单'].includes((n.textContent||'').trim()))||null; }
-    function isWhite(){ return sessionStorage.getItem(WH_SESSION_KEY)==='1' || localStorage.getItem(WH_LOCAL_KEY)==='1'; }
-    function setWhite(){ try{ sessionStorage.setItem(WH_SESSION_KEY,'1'); }catch(e){} try{ localStorage.setItem(WH_LOCAL_KEY,'1'); }catch(e){} }
-    function refresh(el){ if(!el) return; el.textContent=isWhite()?'已验证白名单':'未验证'; el.style.cursor='pointer'; el.title='点击输入密码加入白名单'; }
-    function setup(){ const el=findBadge(); if(!el||el.__ok) return; el.__ok=true; refresh(el); el.addEventListener('click', async()=>{ const p=prompt('请输入访问密码：'); if(!p) return; const ok=(await sha256hex(p.trim()))===PWD_SHA256; if(ok){ setWhite(); alert('验证成功，本设备加入白名单'); }else{ alert('密码错误'); } refresh(el); updateCloudButtons(); }); }
-    document.addEventListener('DOMContentLoaded', ()=>{ setup(); setTimeout(()=>{ setup(); updateCloudButtons(); }, 700); });
+    function findBadge(){
+      let el=$('#verifyStatus');
+      if(el) return el;
+      const badges=$$('.badge');
+      return badges.find(n=>['未验证','已验证白名单'].includes((n.textContent||'').trim()))||null;
+    }
+    function isWhite(){
+      return sessionStorage.getItem(WH_SESSION_KEY)==='1' || localStorage.getItem(WH_LOCAL_KEY)==='1';
+    }
+    function setWhite(){
+      try{ sessionStorage.setItem(WH_SESSION_KEY,'1'); }catch(e){}
+      try{ localStorage.setItem(WH_LOCAL_KEY,'1'); }catch(e){}
+    }
+    function refresh(el){
+      if (!el) return;
+      if (isWhite()){
+        el.textContent='已验证白名单';
+        el.style.color='#34c759';
+        el.style.borderColor='#34c759';
+      }else{
+        el.textContent='未验证';
+        el.style.color='#ff3b30';
+        el.style.borderColor='#ff3b30';
+      }
+    }
+    function setup(){
+      const el=findBadge();
+      if(!el||el.__ok) return;
+      el.__ok=true;
+      refresh(el);
+      el.style.cursor='pointer';
+      el.title='点击输入密码加入白名单';
+      el.addEventListener('click', async ()=>{
+        const pwd = prompt('请输入白名单密码：');
+        if(!pwd) return;
+        const h = await sha256hex(pwd.trim());
+        if (h===PWD_SHA256){
+          setWhite();
+          refresh(el);
+          alert('验证成功，本设备加入白名单');
+        }else{
+          alert('密码错误');
+        }
+      });
+    }
+    document.addEventListener('DOMContentLoaded', ()=>{
+      setup();
+      setTimeout(setup,700);
+    });
   })();
 
   /* 分类 UI */
   function renderCatList(){
-    const cats=readCats(), box=$('#catList'); box.innerHTML='';
+    const cats=readCats(), box=$('#catList');
+    box.innerHTML='';
     cats.forEach((c,idx)=>{
-      const row=document.createElement('div'); row.className='cat-row';
+      const row=document.createElement('div');
+      row.className='catRow';
       row.innerHTML=`
-        <span class="namePill"><span class="colorDot" style="background:${c.color}"></span>${c.name}</span>
-        <span class="spacer"></span>
-        <button class="ghost" data-act="up"        data-i="${idx}">上移</button>
-        <button class="ghost" data-act="down"      data-i="${idx}">下移</button>
-        <button class="ghost" data-act="editName"  data-i="${idx}">改名</button>
-        <button class="ghost" data-act="editColor" data-i="${idx}">改颜色</button>
-        <button class="ghost" data-act="del"       data-i="${idx}">删除</button>`;
+        <div class="rgbaChip">
+          <span class="colorDot" style="background:${c.color}"></span>
+          <span>${c.name}</span>
+        </div>
+        <span></span>
+        <button class="ghost" data-act="up" data-key="${c.key}" ${idx===0?'disabled':''}>上移</button>
+        <button class="ghost" data-act="down" data-key="${c.key}" ${idx===cats.length-1?'disabled':''}>下移</button>
+        <button class="ghost" data-act="del" data-key="${c.key}">删除</button>
+      `;
       box.appendChild(row);
     });
   }
-  function bindCategoryEvents(){
-    const nameI=$('#catName'), colorI=$('#catColor'), preview=$('#catColorPreview')||colorI;
-    if(colorI && preview){ colorI.addEventListener('input',()=>{ preview.style.background=colorI.value||'#ccc'; }); }
-    const btnAdd=$('#btnCatAdd');
-    if(btnAdd && !btnAdd.__wired){
-      btnAdd.__wired=true;
-      const add=()=>{
-        const name=(nameI&&nameI.value||'').trim(); const color=(colorI&&colorI.value)||'#cccccc';
-        if(!name){ if(nameI) nameI.focus(); return; }
-        const cats=readCats();
-        const base=(name.toLowerCase().replace(/\s+/g,'_').replace(/[^\w\-]+/g,'').slice(0,24) || 'cat');
-        let key=base, n=1; while(cats.some(x=>x.key===key)) key=base+'_'+(++n);
-        cats.push({key,name,color}); saveCats(cats);
-        if(nameI) nameI.value='';
-        renderCatList(); ensureCatOptions();
-      };
-      btnAdd.addEventListener('click', add);
-      if(nameI){ nameI.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } }); }
-    }
-    const list=$('#catList');
-    if(list && !list.__wired){
-      list.__wired=true;
-      list.addEventListener('click',(e)=>{
-        const b=e.target.closest('button[data-act]'); if(!b) return;
-        const i=parseInt(b.dataset.i,10); const act=b.dataset.act;
-        const cats=readCats(); if(isNaN(i)||i<0||i>=cats.length) return;
-        if(act==='up' && i>0){ [cats[i-1],cats[i]]=[cats[i],cats[i-1]]; saveCats(cats); renderCatList(); ensureCatOptions(); return; }
-        if(act==='down' && i<cats.length-1){ [cats[i+1],cats[i]]=[cats[i],cats[i+1]]; saveCats(cats); renderCatList(); ensureCatOptions(); return; }
-        if(act==='editName'){
-          const nn=prompt('分类名称', cats[i].name);
-          if(nn!==null){ cats[i].name=(nn||'').trim()||cats[i].name; saveCats(cats); renderCatList(); ensureCatOptions(); }
-          return;
-        }
-        if(act==='del'){
-          if(confirm(`删除分类：${cats[i].name}？`)){
-            const delKey=cats[i].key; cats.splice(i,1); saveCats(cats);
-            $$('select[data-k="row_color"]').forEach(sel=>{ if(sel.value===delKey) sel.value=''; });
-            renderCatList(); ensureCatOptions();
-          }
-          return;
-        }
-      });
-    }
-  }
 
-  /* 事件绑定 */
-  document.addEventListener('DOMContentLoaded', async function(){
-    const view = readView(); applyView(view);
+  function bindEvents(){
+    const qInput = $('#q');
+    const ownerSel = $('#filterOwner');
+    const realSel = $('#filterWxReal');
+    const sortSel = $('#sortBy');
 
-    /* —— 搜索 / 排序 / 筛选 —— */
-    $('#q').addEventListener('input', render);
-    $('#filterOwner').addEventListener('change', render);
-    $('#filterWxReal').addEventListener('change', render);
-    $('#sortBy').addEventListener('change', render);
+    qInput.addEventListener('input', async (e)=>{
+      state.q = e.target.value.trim();
+      await renderTable();
+    });
+    ownerSel.addEventListener('change', async (e)=>{
+      state.owner = e.target.value;
+      await renderTable();
+    });
+    realSel.addEventListener('change', async (e)=>{
+      state.wxReal = e.target.value;
+      await renderTable();
+    });
+    sortSel.addEventListener('change', async (e)=>{
+      state.sortBy = e.target.value;
+      await renderTable();
+    });
 
-    /* —— 清空全部 —— */
+    $('#btnAdd').addEventListener('click', addRow);
+
     $('#btnClearAll').addEventListener('click', async ()=>{
       if(!confirm('确定清空全部数据？此操作不可撤销。')) return;
-      await dbLocal.rows.clear(); await render(); alert('已清空全部数据');
+      await dbLocal.rows.clear();
+      await refreshFilters();
+      await renderTable();
     });
 
-    /* 视图控件 */
-    $('#rowPad').oninput =(e)=>{ view.pad=parseInt(e.target.value,10); applyView(view); saveView(view); };
-    $('#colScale').oninput=(e)=>{ view.colScale=parseFloat(e.target.value); applyView(view); saveView(view); };
-    $('#zebraOn').onchange=(e)=>{ view.zebraOn=e.target.checked; applyView(view); saveView(view); };
-    $('#zebraColor').oninput=(e)=>{ view.zebraColor=e.target.value; applyView(view); saveView(view); };
-
-    /* CSV */
-    $('#btnImportCSV').onclick=()=> $('#csvFile').click();
-    $('#csvFile').onchange=async (e)=>{ const f=e.target.files && e.target.files[0]; if(!f) return; const text=await f.text(); await importCSVText(text); e.target.value=''; };
-
-    /* 新增三选项 */
-    setupAddMenu();
-
-    /* 顶部面板按钮高亮 */
-    $('#btnCategories').onclick=()=> togglePanel($('#btnCategories'), $('#panelCategories'));
-    $('#btnView').onclick=()=> togglePanel($('#btnView'), $('#panelView'));
-    $('#btnDebug').onclick=()=> togglePanel($('#btnDebug'), $('#panelDebug'));
-
-    /* 表格委托（含互斥编辑 3 行） */
-    $('#gridBody').addEventListener('blur', async (e)=>{ const td=e.target.closest('[contenteditable="true"]'); if(!td) return; const tr=e.target.closest('tr'); const id=tr.dataset.id; const key=td.dataset.k; const val=td.innerText.trim(); await updateCellLocal(id, key, val); }, true);
-    $('#gridBody').addEventListener('change', async (e)=>{ const sel=e.target.closest('select[data-k]'); if(!sel) return; const tr=sel.closest('tr'); await updateCellLocal(tr.dataset.id, sel.dataset.k, sel.value); });
-    $('#gridBody').addEventListener('click', async (e)=>{
-      const btn=e.target.closest('button[data-act]'); if(!btn) return;
-      const tr=btn.closest('tr'); const id=tr.dataset.id; const act=btn.dataset.act;
-      if(act==='toggleEdit'){
-        const was=tr.classList.contains('row-editing');
-        $$('#gridBody tr.row-editing').forEach(el=>{ if(el!==tr) el.classList.remove('row-editing'); });
-        tr.classList.toggle('row-editing', !was);
+    $('#btnImportCSV').addEventListener('click', ()=>{
+      $('#csvFile').click();
+    });
+    $('#csvFile').addEventListener('change', async e=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const arr = parseCSV(text);
+      if (!arr.length){
+        alert('CSV 内容为空或解析失败');
         return;
       }
-      if(act==='del'){ if(confirm('确认删除该行？')) await deleteRowLocal(id); return; }
-      if(act==='up'){ await moveRow(id,'up'); return; }
-      if(act==='down'){ await moveRow(id,'down'); return; }
+      const all = await getAllRows();
+      let orderBase = all.reduce((m,r)=>Math.max(m, r.order||0), 0);
+      const now = Date.now();
+      const rows = arr.map((r,idx)=>({
+        id: (now+idx).toString(16),
+        order: ++orderBase,
+        phone:r.phone||'',
+        owner:r.owner||'',
+        wx_real:r.wx_real||'',
+        wx_name:r.wx_name||'',
+        xhs_name:r.xhs_name||'',
+        note1:r.note1||'',
+        row_color:r.row_color||'',
+        updated_at:new Date().toISOString()
+      }));
+      await dbLocal.rows.bulkAdd(rows);
+      await refreshFilters();
+      await renderTable();
+      alert(`已导入 ${rows.length} 行`);
+      e.target.value='';
     });
 
-    await dbLocal.open(); await render();
+    $('#btnExportCSV').addEventListener('click', async ()=>{
+      const all = await getAllRows();
+      const csv = toCSV(all);
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `xhsphone-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      alert('已导出 CSV');
+    });
 
-    /* 分类区 */
-    renderCatList(); bindCategoryEvents();
+    $('#btnExport').addEventListener('click', async ()=>{
+      const rows = await getAllRows();
+      const payload = {
+        rows,
+        cats: readCats(),
+        view: readView(),
+        ver:1,
+        updated_at:new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `xhsphone-backup-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      alert('已导出 JSON');
+    });
 
-    /* 云端按钮（白名单检查与确认） */
-    const s=$('#btnSaveCloud'), l=$('#btnLoadCloud'), exp=$('#btnExportCSV');
+    $('#btnCategories').addEventListener('click', ()=>{
+      const p = $('#panelCategories');
+      const btn = $('#btnCategories');
+      const show = p.style.display === 'none';
+      p.style.display = show ? '' : 'none';
+      btn.classList.toggle('active', show);
+      if (show) renderCatList();
+    });
 
-    if(s && !s.__w){
-      s.__w=true;
-      s.addEventListener('click', async()=>{
-        if(!assertWhite(true)) return;
-        if(!confirm('确定将当前“本地数据”保存到云端？\n此操作会覆盖云端数据。')) return;
-        try{
-          const rows=await dbLocal.rows.toArray();
-          const cats=JSON.parse(localStorage.getItem('cats_v6')||'[]');
-          const view=JSON.parse(localStorage.getItem('view_v6')||'{}');
-          const payload={rows,cats,view,ver:1,updated_at:new Date().toISOString()};
-          await cloudSave(payload);
-        }catch{ alert('准备保存数据失败'); }
-      });
-    }
+    $('#btnView').addEventListener('click', ()=>{
+      const p = $('#panelView');
+      const btn = $('#btnView');
+      const show = p.style.display === 'none';
+      p.style.display = show ? '' : 'none';
+      btn.classList.toggle('active', show);
+    });
 
-    if(l && !l.__w){
-      l.__w=true;
-      l.addEventListener('click', async()=>{
-        if(!assertWhite(true)) return;
-        if(!confirm('确定从云端加载并覆盖本地数据？\n此操作不可撤销。')) return;
-        const data=await cloudLoad();
-        if(data){
-          try{
-            await dbLocal.rows.clear();
-            if(Array.isArray(data.rows)&&data.rows.length) await dbLocal.rows.bulkPut(data.rows);
-            if(Array.isArray(data.cats)) localStorage.setItem('cats_v6', JSON.stringify(data.cats));
-            if(data.view&&typeof data.view==='object') localStorage.setItem('view_v6', JSON.stringify(data.view));
-            await render(); alert('已应用云端数据');
-          }catch{ alert('写入本地失败'); }
-        }
-      });
-    }
+    $('#btnDebug').addEventListener('click', ()=>{
+      const p = $('#panelDebug');
+      const btn = $('#btnDebug');
+      const show = p.style.display === 'none';
+      p.style.display = show ? '' : 'none';
+      btn.classList.toggle('active', show);
+    });
 
-    if(exp && !exp.__w){
-      exp.__w=true;
-      exp.addEventListener('click', async()=>{
-        try{
-          const rows = await dbLocal.rows.toArray();
-          const cols=['phone','owner','wx_real','wx_name','xhs_name','note1','row_color'];
-          const esc=v=>{const s=(v==null?'':String(v)).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s;};
-          const lines=[cols.join(',')];
-          rows.forEach(r=>lines.push(cols.map(k=>esc(r[k]||'')).join(',')));
-          const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
-          const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='xhs-phones-'+Date.now()+'.csv'; a.click();
-          alert('已导出 CSV');
-        }catch{ alert('导出失败'); }
-      });
-    }
+    /* 分类表单 */
+    $('#catColor').addEventListener('input', e=>{
+      $('#catColorPreview').style.background = e.target.value;
+    });
+    $('#btnCatAdd').addEventListener('click', ()=>{
+      const name = $('#catName').value.trim();
+      const color = $('#catColor').value;
+      if (!name){
+        alert('请输入分类名称');
+        return;
+      }
+      const key = name.toLowerCase().replace(/\s+/g,'_');
+      const cats = readCats();
+      if (cats.some(c=>c.key===key)){
+        alert('已存在同名分类');
+        return;
+      }
+      cats.push({key,name,color});
+      saveCats(cats);
+      $('#catName').value='';
+      renderCatList();
+      renderTable();
+    });
+    $('#catList').addEventListener('click', e=>{
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const key = btn.dataset.key;
+      if (!key) return;
+      let cats = readCats();
+      const idx = cats.findIndex(c=>c.key===key);
+      if (idx<0) return;
+      const act = btn.dataset.act;
+      if (act==='del'){
+        if (!confirm('确定删除该分类？')) return;
+        cats.splice(idx,1);
+      }else if (act==='up' && idx>0){
+        [cats[idx-1], cats[idx]] = [cats[idx], cats[idx-1]];
+      }else if (act==='down' && idx<cats.length-1){
+        [cats[idx+1], cats[idx]] = [cats[idx], cats[idx+1]];
+      }
+      saveCats(cats);
+      renderCatList();
+      renderTable();
+    });
 
-    /* 刷新按钮：强制加时间戳绕过缓存 */
-    $('#btnReload').onclick = () => {
-      const u = new URL(location.href);
-      u.searchParams.set('t', Date.now());
-      location.replace(u.toString());
-    };
+    /* 表格内事件 */
+    $('#gridBody').addEventListener('blur', async e=>{
+      const cell = e.target.closest('td[contenteditable][data-k]');
+      if (!cell) return;
+      const tr = cell.closest('tr');
+      const id = tr.dataset.id;
+      const k = cell.dataset.k;
+      const v = cell.textContent.trim();
+      await updateRow(id, {[k]:v});
+      if (k==='row_color' || k==='xhs_name'){
+        await renderTable();
+      }
+    }, true);
 
-    /* 首次进入根据验证状态置灰/启用云端按钮 */
-    updateCloudButtons();
+    $('#gridBody').addEventListener('change', async e=>{
+      const sel = e.target.closest('select[data-k="row_color"]');
+      if (!sel) return;
+      const tr = sel.closest('tr');
+      const id = tr.dataset.id;
+      await updateRow(id, {row_color: sel.value});
+      await renderTable();
+    });
 
-    /* 连通性 */
-    (async ()=>{
+    $('#gridBody').addEventListener('click', async e=>{
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const tr = btn.closest('tr');
+      const id = tr.dataset.id;
+      const act = btn.dataset.act;
+      if (act==='del'){
+        if (!confirm('确定删除这一行？')) return;
+        await deleteRowById(id);
+      }else if (act==='up'){
+        await moveRow(id, 'up');
+      }else if (act==='down'){
+        await moveRow(id, 'down');
+      }
+    });
+
+    /* 视图控制 */
+    const view = readView();
+    $('#rowPad').value = view.pad ?? 6;
+    $('#colScale').value = view.colScale ?? 1;
+    $('#zebraOn').checked = view.zebraOn !== false;
+    $('#zebraColor').value = view.zebraColor || '#eef5ff';
+
+    $('#rowPad').addEventListener('input', e=>{
+      const v = readView();
+      v.pad = parseInt(e.target.value,10)||6;
+      saveView(v);
+      applyView(v);
+    });
+    $('#colScale').addEventListener('input', e=>{
+      const v = readView();
+      v.colScale = parseFloat(e.target.value)||1;
+      saveView(v);
+      applyView(v);
+    });
+    $('#zebraOn').addEventListener('change', e=>{
+      const v = readView();
+      v.zebraOn = e.target.checked;
+      saveView(v);
+      applyView(v);
+    });
+    $('#zebraColor').addEventListener('input', e=>{
+      const v = readView();
+      v.zebraColor = e.target.value;
+      saveView(v);
+      applyView(v);
+    });
+    $('#btnCompact').addEventListener('click', ()=>{
+      const v = {pad:4,colScale:0.9,zebraOn:true,zebraColor:'#f5f5f7'};
+      saveView(v);
+      applyView(v);
+      $('#rowPad').value=v.pad;
+      $('#colScale').value=v.colScale;
+      $('#zebraOn').checked=v.zebraOn;
+      $('#zebraColor').value=v.zebraColor;
+    });
+    $('#btnResetSize').addEventListener('click', ()=>{
+      const v = {pad:6,colScale:1,zebraOn:true,zebraColor:'#eef5ff'};
+      saveView(v);
+      applyView(v);
+      $('#rowPad').value=v.pad;
+      $('#colScale').value=v.colScale;
+      $('#zebraOn').checked=v.zebraOn;
+      $('#zebraColor').value=v.zebraColor;
+    });
+
+    /* 云端按钮绑定 */
+    $('#btnSaveCloud').addEventListener('click', async ()=>{
+      const rows = await getAllRows();
+      const payload = {
+        rows,
+        cats: readCats(),
+        view: readView(),
+        ver:1,
+        updated_at:new Date().toISOString()
+      };
+      await window.cloudSave(payload);
+    });
+
+    $('#btnLoadCloud').addEventListener('click', async ()=>{
+      const data = await window.cloudLoad();
+      if (!data) return;
+      if (Array.isArray(data.rows)){
+        await dbLocal.rows.clear();
+        await dbLocal.rows.bulkAdd(data.rows);
+      }
+      if (Array.isArray(data.cats)){
+        saveCats(data.cats);
+      }
+      if (data.view && typeof data.view==='object'){
+        saveView(data.view);
+        applyView(data.view);
+        $('#rowPad').value = data.view.pad ?? 6;
+        $('#colScale').value = data.view.colScale ?? 1;
+        $('#zebraOn').checked = data.view.zebraOn !== false;
+        $('#zebraColor').value = data.view.zebraColor || '#eef5ff';
+      }
+      await refreshFilters();
+      await renderTable();
+      alert('云端数据已加载到本地');
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    applyView(readView());
+    await refreshFilters();
+    await renderTable();
+    bindEvents();
+
+    /* 连通性（Supabase 检测） */
+    (async () => {
       try{
-        const r=await fetch(WORKER_URL,{method:'GET',headers:{'X-Access-Key':ACCESS_KEY},cache:'no-store'});
-        setCloudStatus(r.ok, r.ok?'云端已连接':'连接失败');
-      }catch{ setCloudStatus(false,'离线'); }
+        const client = window.supabaseClient;
+        if (!client){
+          setCloudStatus(false, '未初始化');
+          return;
+        }
+        const { error } = await client
+          .from(SUPABASE_TABLE)
+          .select('updated_at')
+          .limit(1)
+          .maybeSingle();
+        if (error){
+          console.warn('云端检测失败:', error);
+          setCloudStatus(false, '连接失败');
+        }else{
+          setCloudStatus(true, '云端已连接');
+        }
+      }catch(e){
+        console.warn('云端检测异常:', e);
+        setCloudStatus(false, '离线');
+      }
     })();
   });
 })();

@@ -13,6 +13,20 @@ const DB_NAME = "xhs_phone_sheet_v7";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
+// ✅ 自动写入你自己的 Supabase 配置（如果本地还没有的话）
+if (!localStorage.getItem("xhs_supabase_url")) {
+  localStorage.setItem(
+    "xhs_supabase_url",
+    "https://tmeqccupnsvxexbrlflo.supabase.co"
+  );
+}
+if (!localStorage.getItem("xhs_supabase_anon_key")) {
+  localStorage.setItem(
+    "xhs_supabase_anon_key",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
+  );
+}
+
 // 优先从 window / localStorage 读取已有配置，缺失时仍可离线工作
 const SUPABASE_URL =
   (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
@@ -255,12 +269,14 @@ async function refreshFilters() {
   const ownerVal = ownerSel.value;
   const realVal = realSel.value;
 
-  ownerSel.innerHTML = `<option value="all">所属人：全部</option>` +
+  ownerSel.innerHTML =
+    `<option value="all">所属人：全部</option>` +
     Array.from(owners)
       .sort((a, b) => a.localeCompare(b, "zh"))
       .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
       .join("");
-  realSel.innerHTML = `<option value="all">微信实名人：全部</option>` +
+  realSel.innerHTML =
+    `<option value="all">微信实名人：全部</option>` +
     Array.from(wxreals)
       .sort((a, b) => a.localeCompare(b, "zh"))
       .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
@@ -348,7 +364,10 @@ function applyFilters(rows) {
     case "row_color": {
       const cats = readCats();
       out.sort((a, b) =>
-        catNameOf(cats, a.row_color).localeCompare(catNameOf(cats, b.row_color), "zh")
+        catNameOf(cats, a.row_color).localeCompare(
+          catNameOf(cats, b.row_color),
+          "zh"
+        )
       );
       break;
     }
@@ -600,8 +619,8 @@ function renderMobileList(rows) {
     return `<div class="m-detail-row">
       <div class="m-detail-label">${escapeHtml(label)}</div>
       <div class="m-detail-value" contenteditable="true" data-field="${field}" data-id="${id}">${escapeHtml(
-      text || ""
-    )}</div>
+        text || ""
+      )}</div>
     </div>`;
   }
   function mobileCat(value, id) {
@@ -670,7 +689,7 @@ function toCSV(rows) {
 
 /* =========================
  * 9. Supabase 云端快照
- *    —— 满足你的需求：**自定义名称不加时间；仅在最右侧显示时间**
+ *    —— 满足你的需求：自定义名称不加时间；仅在最右侧显示时间
  * ========================= */
 async function cloudHealthCheck() {
   const dot = $("#cloudDot");
@@ -817,7 +836,7 @@ async function renderCloudHistory() {
   }
   panel.innerHTML = data
     .map((row) => {
-      const name = (row.payload?.snapshot_label || "快照").trim(); // **名称不带时间**
+      const name = (row.payload?.snapshot_label || "快照").trim(); // 名称不带时间
       const t = fmtTime(row.updated_at);
       const metaCount = Array.isArray(row.payload?.rows)
         ? `${row.payload.rows.length} 条`
@@ -827,7 +846,7 @@ async function renderCloudHistory() {
           <div class="cloud-item-name">${escapeHtml(name)}</div>
           <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
         </div>
-        <div class="cloud-item-time">${escapeHtml(t)}</div> <!-- **右侧显示时间** -->
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
       </div>`;
     })
     .join("");
@@ -861,7 +880,9 @@ function renderCatList() {
           <button class="ghost" data-act="down" ${
             i === cats.length - 1 ? "disabled" : ""
           }>下移</button>
-          <input type="color" value="${escapeHtml(c.color)}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
+          <input type="color" value="${escapeHtml(
+            c.color
+          )}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
           <button class="btn-danger" data-act="del">删除</button>
         </div>
       </div>`
@@ -916,19 +937,21 @@ function renderCatList() {
   });
 
   // 绑定：颜色选择
-  list.querySelectorAll('input[type="color"][data-act="color"]').forEach((el) => {
-    el.addEventListener("change", () => {
-      const row = el.closest(".cat-row");
-      const id = row.getAttribute("data-id");
-      const cats = readCats();
-      const idx = cats.findIndex((x) => x.id === id);
-      if (idx < 0) return;
-      cats[idx] = { ...cats[idx], color: el.value };
-      saveCats(cats);
-      renderCatList();
-      renderTable();
+  list
+    .querySelectorAll('input[type="color"][data-act="color"]')
+    .forEach((el) => {
+      el.addEventListener("change", () => {
+        const row = el.closest(".cat-row");
+        const id = row.getAttribute("data-id");
+        const cats = readCats();
+        const idx = cats.findIndex((x) => x.id === id);
+        if (idx < 0) return;
+        cats[idx] = { ...cats[idx], color: el.value };
+        saveCats(cats);
+        renderCatList();
+        renderTable();
+      });
     });
-  });
 }
 
 /* =========================
@@ -942,7 +965,9 @@ function bindEvents() {
   });
   $("#btnSearchMode").addEventListener("click", async () => {
     state.precise = !state.precise;
-    $("#btnSearchMode").textContent = state.precise ? "当前：精准搜索" : "当前：模糊搜索";
+    $("#btnSearchMode").textContent = state.precise
+      ? "当前：精准搜索"
+      : "当前：模糊搜索";
     await renderTable();
   });
 
@@ -1112,7 +1137,11 @@ function bindEvents() {
     applyView(v);
   });
   $("#btnResetSize").addEventListener("click", () => {
-    saveView({ ...DEFAULT_VIEW, titleText: readView().titleText, titleColor: readView().titleColor });
+    saveView({
+      ...DEFAULT_VIEW,
+      titleText: readView().titleText,
+      titleColor: readView().titleColor,
+    });
     applyView(readView());
   });
 }

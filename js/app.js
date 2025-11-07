@@ -131,7 +131,7 @@ function catColorOf(cats, id) {
  * 4. 工具函数
  * ========================= */
 const $ = (sel) => document.querySelector(sel);
-function fmtTime(ts) {
+ffunction fmtTime(ts) {
   try {
     const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
     const Y = d.getFullYear();
@@ -144,6 +144,14 @@ function fmtTime(ts) {
     return "";
   }
 }
+
+// ⭐ 新增：把快照名称里尾部的“日期 时间”砍掉
+function stripSnapshotTime(name) {
+  if (!name) return "";
+  // 匹配：任意空格 + 2025-11-08 02:53 这种结构在末尾
+  return String(name).replace(/\s*\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/, "");
+}
+
 function uid() {
   return (
     Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -817,7 +825,8 @@ async function renderCloudHistory() {
   }
   panel.innerHTML = data
     .map((row) => {
-      const name = (row.payload?.snapshot_label || "快照").trim(); // **名称不带时间**
+      const rawName = (row.payload?.snapshot_label || "快照").trim();
+      const name = stripSnapshotTime(rawName).trim();   // ⭐ 老快照也把末尾时间剥掉
       const t = fmtTime(row.updated_at);
       const metaCount = Array.isArray(row.payload?.rows)
         ? `${row.payload.rows.length} 条`
@@ -827,10 +836,11 @@ async function renderCloudHistory() {
           <div class="cloud-item-name">${escapeHtml(name)}</div>
           <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
         </div>
-        <div class="cloud-item-time">${escapeHtml(t)}</div> <!-- **右侧显示时间** -->
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
       </div>`;
     })
     .join("");
+
 
   panel.querySelectorAll(".cloud-item").forEach((el) => {
     el.addEventListener("click", async () => {

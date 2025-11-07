@@ -8,8 +8,8 @@
   --cell: #fff;
   --cell-alt: #f5f5f7;
   --zebra: #f5f5f7;
-  --pad: 4px;          /* 默认：紧凑 */
-  --colScale: 0.7;     /* 默认：最小列宽（紧凑） */
+  --pad: 4px;          /* 默认紧凑行高 */
+  --colScale: 0.7;     /* 默认紧凑列宽 */
   --w-phone: 160px;
   --w-owner: 120px;
   --w-real: 120px;
@@ -23,6 +23,8 @@
     "PingFang SC", "Noto Sans CJK SC", "Hiragino Sans GB", "Microsoft YaHei",
     sans-serif;
 }
+
+/* 重置与基础 */
 
 * {
   box-sizing: border-box;
@@ -43,6 +45,7 @@ body {
 }
 
 /* 顶部栏 */
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -71,7 +74,8 @@ body {
   background: #d0d0d0;
 }
 
-/* 通用面板与工具栏 */
+/* 面板 & 工具栏 */
+
 .panel {
   background: var(--cell);
   border: 1px solid var(--line);
@@ -95,7 +99,8 @@ body {
   margin-top: 4px;
 }
 
-/* 云端历史下拉 */
+/* 云端历史快照下拉 */
+
 .cloud-history-panel {
   margin-top: 4px;
   padding: 6px;
@@ -126,6 +131,7 @@ body {
 }
 
 /* 控件 */
+
 input,
 select,
 button {
@@ -162,7 +168,16 @@ button.ghost.active {
   border-color: var(--active);
 }
 
+/* 云端按钮：高亮同分类设置 */
+
+.btn-cloud.ghost.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
 /* Chip / 分类输入 */
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -180,7 +195,8 @@ button.ghost.active {
   display: inline-block;
 }
 
-/* 样式设置 label */
+/* 显示设置 label */
+
 .label-inline {
   display: inline-flex;
   align-items: center;
@@ -188,6 +204,7 @@ button.ghost.active {
 }
 
 /* 表格 */
+
 .table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -222,6 +239,7 @@ tbody.zebra tr:nth-child(even) td {
 }
 
 /* 列宽 */
+
 th.col-phone,
 td.col-phone {
   width: calc(var(--w-phone) * var(--colScale));
@@ -256,6 +274,7 @@ td.col-act {
 }
 
 /* 可编辑单元格 */
+
 td[contenteditable="true"] {
   outline: none;
 }
@@ -264,7 +283,8 @@ td[contenteditable="true"]:focus {
   outline: 1px solid var(--line);
 }
 
-/* 操作列：编辑 + 展开菜单（同一格内展开） */
+/* 操作列：编辑 + 展开菜单 */
+
 .actions-container {
   display: flex;
   flex-direction: column;
@@ -284,8 +304,13 @@ td[contenteditable="true"]:focus {
   font-size: 12px;
   border-radius: 999px;
 }
+.actions-extra .danger {
+  border-color: #ff3b30;
+  color: #ff3b30;
+}
 
 /* 分类列表 */
+
 #catList {
   display: flex;
   flex-direction: column;
@@ -304,6 +329,7 @@ td[contenteditable="true"]:focus {
 }
 
 /* 手机/桌面切换 */
+
 .desktop-only {
   display: block;
 }
@@ -323,30 +349,37 @@ td[contenteditable="true"]:focus {
   }
 }
 
-/* 手机版折叠列表卡片 */
-.m-row {
-  border: 1px solid var(--line);
+/* 手机版折叠列表整体 */
+
+.mobile-list {
   border-radius: 14px;
-  background: #fff;
-  margin-bottom: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* 每项高度加倍 + 隔行色作用于整体卡片 */
+
+.m-row {
+  border-bottom: 1px solid var(--line);
+  background: #fff;
   transition: box-shadow 0.2s ease, transform 0.1s ease;
+}
+.m-row:nth-child(even) {
+  background: var(--zebra);
 }
 .m-row-header {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 10px 12px;
+  padding: 16px 12px; /* 高度约为原来的2倍 */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 8px;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 .m-row:hover .m-row-header {
-  background: #f5f5f7;
+  background: rgba(0, 0, 0, 0.03);
 }
 .m-main-line {
   display: flex;
@@ -355,8 +388,9 @@ td[contenteditable="true"]:focus {
   gap: 8px;
 }
 .m-phone {
-  font-weight: 600;
-  font-size: 15px;
+  font-weight: 700;
+  color: #000000;
+  font-size: 16px;
 }
 .m-xhs {
   font-size: 14px;
@@ -364,10 +398,18 @@ td[contenteditable="true"]:focus {
   text-align: right;
   flex: 1;
 }
+.m-owner-line {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px; /* 与上方列表项拉开间距，避免视觉重叠 */
+}
 .m-owner-tag {
   font-size: 12px;
   color: #555;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: #f2f2f7;
 }
@@ -378,7 +420,8 @@ td[contenteditable="true"]:focus {
   transition: transform 0.2s ease;
 }
 
-/* 下拉详情 */
+/* 下拉详情（模拟“详情弹窗”） */
+
 .m-row-details {
   max-height: 0;
   opacity: 0;
@@ -389,31 +432,43 @@ td[contenteditable="true"]:focus {
     padding-top 0.25s ease, padding-bottom 0.25s ease;
 }
 .m-row.open .m-row-details {
-  max-height: 360px;
+  max-height: 420px;
   opacity: 1;
-  padding: 8px 12px 10px;
+  padding: 10px 12px 12px;
 }
 .m-row.open .m-arrow {
   transform: rotate(180deg);
 }
 
+/* 详情布局：左 label 右 value，右对齐，宽度统一 */
+
 .m-detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
   gap: 8px;
   margin-bottom: 6px;
   font-size: 13px;
 }
 .m-detail-label {
-  min-width: 72px;
   color: var(--muted);
+  text-align: left;
 }
+.m-detail-value,
+.m-detail-value textarea,
+.m-detail-value select {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+/* 可编辑字段统一为“输入框样式”，与分类下拉框宽度一致 */
+
 .m-detail-value[contenteditable="true"] {
-  flex: 1;
-  padding: 4px 6px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 10px;
   border: 1px solid transparent;
+  min-height: 26px;
 }
 .m-detail-value[contenteditable="true"]:focus {
   outline: none;
@@ -421,9 +476,33 @@ td[contenteditable="true"]:focus {
   background: #f5f5f7;
 }
 
+.m-detail-value select {
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+/* 备注：单一大文本框，默认2行高度 */
+
+.m-note {
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  min-height: calc(1.4em * 2);
+  line-height: 1.4;
+}
+.m-note:focus {
+  outline: none;
+  border-color: var(--blue);
+  background: #f5f5f7;
+}
+
 /* 手机详情操作按钮 */
+
 .m-actions {
-  margin-top: 6px;
+  margin-top: 8px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -448,6 +527,7 @@ td[contenteditable="true"]:focus {
 }
 
 /* 小屏优化 */
+
 @media (max-width: 480px) {
   input,
   select,

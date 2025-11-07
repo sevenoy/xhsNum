@@ -13,7 +13,7 @@ const DB_NAME = "xhs_phone_sheet_v7";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
-// ✅ 自动写入你自己的 Supabase 配置（如果本地还没有的话）
+// ✅ 如果本地还没有 Supabase 配置，则自动写入你这次提供的项目参数
 if (!localStorage.getItem("xhs_supabase_url")) {
   localStorage.setItem(
     "xhs_supabase_url",
@@ -34,6 +34,12 @@ const SUPABASE_ANON_KEY =
   (window.SUPABASE_ANON_KEY ||
     localStorage.getItem("xhs_supabase_anon_key") ||
     "").trim();
+
+const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+const supabase = hasSupabase
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
 
 const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 const supabase = hasSupabase

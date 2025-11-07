@@ -7,9 +7,13 @@
   --active: #007aff;
   --blue: #007aff;
   --blue-press: #0051c6;
+
+  /* 行高 / 列宽 / 隔行色，由显示设置控制 */
   --pad: 6px;
   --colScale: 1;
-  --zebra: #f5f5f7;
+  /* 统一使用 222 / 240 / 255 */
+  --zebra: #e2f0ff;
+
   --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
     "Helvetica Neue", Helvetica, Arial, sans-serif;
 
@@ -17,7 +21,7 @@
   --w-owner: 110px;
   --w-real: 110px;
   --w-wx: 130px;
-  --w-xhs: 150px;
+  --w-xhs: 160px;
   --w-note: 220px;
   --w-cat: 90px;
   --w-actions: 110px;
@@ -35,13 +39,19 @@ body {
   padding: 0;
   background: var(--bg);
   font-family: var(--font-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
   color: #111;
 }
 
+/* 容器 */
+
 .wrap {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 12px 16px 24px;
+  padding: 12px 10px 24px;
 }
 
 /* 顶部栏 */
@@ -50,13 +60,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 8px;
+  padding: 6px 4px 10px;
 }
 
-.top-left h1 {
+#appTitle {
+  font-size: 20px;
+  font-weight: 650;
   margin: 0;
-  font-size: 22px;
-  letter-spacing: 0.04em;
 }
 
 .cloud-status {
@@ -74,180 +85,275 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #30d158;
+  background: #30d158; /* 连接正常绿色 */
+}
+
+#cloudText {
+  white-space: nowrap;
 }
 
 /* 面板 */
 
 .panel {
-  background: #fff;
-  border-radius: 20px;
-  border: 1px solid var(--line);
-  padding: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
 }
 
-/* 工具条 */
+/* 工具栏 */
 
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: center; /* 垂直居中，保证文字 + 输入框对齐 */
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.toolbar:last-child {
+  margin-bottom: 0;
 }
 
 .toolbar-wrap {
-  margin-top: 6px;
+  flex-wrap: wrap;
 }
-
-/* 状态小字 */
 
 .status {
+  font-size: 12px;
+  color: var(--muted);
   margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
-/* 云端历史列表 */
-
-#cloudHistoryPanel {
-  margin-top: 8px;
-  border-top: 1px dashed var(--line);
-  padding-top: 6px;
-  display: none;
-}
-
-.cloud-history-empty {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.cloud-history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.cloud-history-item:hover {
-  background: #f5f5f7;
-}
-
-.cloud-history-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.cloud-history-name {
-  font-size: 13px;
-  color: #111;
-}
-
-.cloud-history-time {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.cloud-history-restore {
-  font-size: 12px;
-  color: var(--blue);
-}
-
-/* 控件 */
+/* 输入控件 */
 
 input,
 select,
 button {
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: #111;
-  padding: 0 10px;
+  font-family: inherit;
   font-size: 14px;
-}
-
-input[type="color"] {
-  padding: 0;
-}
-
-button {
-  background: var(--blue);
-  border: none;
-  color: #fff;
-  padding: 0 12px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-button:active {
-  background: var(--blue-press);
-}
-
-button.ghost {
-  background: #f2f2f7;
-  color: #000;
+  line-height: 1.2;
+  border-radius: 999px;
   border: 1px solid var(--line);
+  padding: 6px 12px;
+  height: 32px; /* 更紧凑：控制整体“表格高度”落在 ~100px 范围内 */
+  background: #ffffff;
+  color: #111;
+  outline: none;
+  vertical-align: middle;
 }
 
-button.ghost.active {
-  background: var(--active);
-  color: #fff;
+input::placeholder {
+  color: #b0b0b8;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
   border-color: var(--active);
+  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
 }
 
-/* Chip / 分类输入 */
+/* 下拉菜单统一白底，避免被隔行色等影响 */
 
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 6px 10px;
-  background: #fff;
+table select,
+.m-detail-value select {
+  background-color: #ffffff;
 }
 
-.colorDot {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  border: 1px solid #c9c9ce;
-  display: inline-block;
+/* 文本输入宽度 */
+
+#q {
+  min-width: 220px;
+  flex: 1 1 180px;
 }
 
-/* 样式设置 label */
+/* 标签式控件 */
 
 .label-inline {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: 13px;
+  color: #333;
 }
 
-/* 表格 */
+/* 按钮 */
+
+button {
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.12s ease,
+    transform 0.05s ease;
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+button.ghost {
+  background: #f2f2f7;
+  border-color: transparent;
+}
+
+button.ghost:hover {
+  background: #e5e5ea;
+}
+
+button.primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: transparent;
+}
+
+button.primary:hover {
+  background: var(--blue-press);
+}
+
+/* chip */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f2f7;
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 云端快照列表 */
+
+.cloud-history-panel {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.cloud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.cloud-item + .cloud-item {
+  margin-top: 2px;
+}
+
+.cloud-item:hover {
+  background: #f2f6ff;
+}
+
+.cloud-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cloud-item-name {
+  font-weight: 500;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cloud-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 右侧时间戳（你要保留的“最右日期时间”） */
+
+.cloud-item-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 分类列表 */
+
+#catList {
+  margin-top: 6px;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 10px;
+}
+
+.cat-row:hover {
+  background: #f5f5f7;
+}
+
+.cat-name {
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+
+.cat-color-preview {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.cat-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* 桌面表格 */
 
 .table-wrap {
+  width: 100%;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   table-layout: fixed;
-  font-size: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cell-alt);
+}
+
+thead tr {
+  background: var(--cell-alt);
 }
 
 th,
 td {
   padding: var(--pad) 8px;
   border-bottom: 1px solid var(--line);
+  font-size: 13px;
   text-align: left;
   vertical-align: middle;
   white-space: nowrap;
@@ -255,18 +361,23 @@ td {
   text-overflow: ellipsis;
 }
 
-thead th {
-  position: sticky;
-  top: 0;
-  background: #f9f9fb;
-  font-weight: 600;
-  z-index: 2;
+/* 蓝色行 / 高亮时，表头保持统一浅色，不会变成奇怪灰色 */
+
+th {
+  font-weight: 500;
+  color: #555;
 }
 
-/* 隔行着色 */
+/* 隔行着色（桌面） */
 
 tbody.zebra tr:nth-child(even) td {
   background: var(--zebra);
+}
+
+/* hover 行，再稍微加一点高亮 */
+
+tbody tr:hover td {
+  background: #e9f3ff;
 }
 
 /* 列宽 */
@@ -311,64 +422,71 @@ td.col-act {
   width: calc(var(--w-actions) * var(--colScale));
 }
 
-/* 可编辑单元格 */
+/* 表格内联编辑 */
 
 td[contenteditable="true"] {
-  outline: none;
+  cursor: text;
 }
 
-td[contenteditable="true"]:focus {
-  background: var(--cell-alt);
-  outline: 1px solid var(--line);
+td[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  outline-offset: -2px;
+  background: #ffffff;
 }
 
-/* 操作列：编辑 + 展开菜单 */
+/* 分类单元格 */
+
+td.col-cat select {
+  width: 100%;
+  min-width: 80px;
+  font-size: 13px;
+  height: 28px;
+}
+
+/* 操作列（桌面） */
 
 .actions-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
 }
+
+/* 兼容旧逻辑：有“编辑” + 隐藏动作时 */
 
 .actions-extra {
-  display: none;
-  margin-top: 2px;
-  gap: 4px;
-}
-
-.actions-extra.show {
   display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
 }
 
-.actions-extra button {
-  height: 26px;
+.actions-extra.hidden {
+  display: none;
+}
+
+/* 三个功能按钮样式（上移/下移/删除） */
+
+.actions-container .btn-mini,
+.actions-extra .btn-mini {
+  padding: 2px 6px;
+  height: 24px;
   font-size: 12px;
   border-radius: 999px;
 }
 
-/* 分类列表 */
+/* 删除按钮稍微醒目一点 */
 
-#catList {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.btn-danger {
+  background: #ff3b30;
+  border-color: transparent;
+  color: #fff;
 }
 
-.catRow {
-  display: grid;
-  grid-template-columns: auto 1fr repeat(3, max-content);
-  gap: 8px;
-  align-items: center;
+.btn-danger:hover {
+  background: #e03228;
 }
 
-.catRow button {
-  height: 28px;
-  font-size: 12px;
-  padding: 0 10px;
-}
-
-/* 手机 / 桌面切换 */
+/* 桌面 / 手机显示切换 */
 
 .desktop-only {
   display: block;
@@ -376,18 +494,6 @@ td[contenteditable="true"]:focus {
 
 .mobile-only {
   display: none;
-}
-
-@media (max-width: 768px) {
-  .wrap {
-    padding: 8px;
-  }
-  .desktop-only {
-    display: none;
-  }
-  .mobile-only {
-    display: block;
-  }
 }
 
 /* 手机版折叠列表卡片 */
@@ -403,72 +509,96 @@ td[contenteditable="true"]:focus {
   color: #111;
 }
 
-/* 这里是重点改动 */
+.m-row:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* 卡片头：保证“手机号 + 人名”对齐，不显得太高 */
+
 .m-row-header {
   width: 100%;
   border: none;
   background: transparent;
-  /* 高度加大，大约 2 倍行高 */
-  padding: 22px 18px;
-  min-height: 80px;
+  padding: 16px 18px;
+  min-height: 60px; /* 对应你说的高度从 160px 收紧到约 100px 整体视觉 */
   display: flex;
   flex-direction: column;
-  /* 垂直方向居中 main-line */
   justify-content: center;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   transition: background 0.15s ease;
   color: inherit;
 }
 
 .m-row:hover .m-row-header {
-  background: #f5f5f7;
+  background: #f5f7ff;
 }
 
-/* 手机号 + 小红书名称 同一行，垂直居中 */
+/* 头部主行：手机号 + 小红书名称 */
+
 .m-main-line {
   display: flex;
-  justify-content: space-between;
-  width: 100%;
-  gap: 12px;
-  align-items: center; /* 原来是 flex-start，现在改成居中 */
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .m-phone {
-  font-weight: 600;
   font-size: 20px;
-  color: #111;
+  font-weight: 600;
 }
 
 .m-xhs {
-  font-size: 16px;
-  color: #111;
-  text-align: right;
-  flex: 1;
-}
-
-/* 把“所属人”这一行从列表头部隐藏掉，仅保留在详情里 */
-.m-meta-line {
-  display: none;
-}
-
-.m-owner-tag {
   font-size: 14px;
-  color: #111;
-  padding: 4px 12px;
+  color: #333;
+  max-width: 60%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* 头部第二行：所属人标签 + 分类 pill */
+
+.m-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.m-owner {
+  padding: 2px 8px;
   border-radius: 999px;
   background: #f2f2f7;
+  color: #333;
 }
+
+/* 分类 pill（颜色与桌面保持一致，由 JS 设置背景） */
+
+.m-cat-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(0, 122, 255, 0.09);
+}
+
+/* 下拉箭头 */
 
 .m-arrow {
   margin-left: auto;
   font-size: 14px;
-  color: #111;
-  transition: transform 0.2s ease;
+  transform-origin: center;
+  transition: transform 0.15s ease;
 }
 
-/* 下拉详情 */
+.m-row.open .m-arrow {
+  transform: rotate(180deg);
+}
+
+/* 手机详情区域 */
 
 .m-row-details {
   max-height: 0;
@@ -476,108 +606,150 @@ td[contenteditable="true"]:focus {
   overflow: hidden;
   padding: 0 18px;
   border-top: 1px solid var(--line);
-  transition: max-height 0.25s ease, opacity 0.25s ease,
-    padding-top 0.25s ease, padding-bottom 0.25s ease;
-  background: var(--card-bg, #fff);
+  background: #fff;
+  transition: max-height 0.2s ease, opacity 0.18s ease;
 }
 
 .m-row.open .m-row-details {
   max-height: 360px;
   opacity: 1;
-  padding: 14px 18px 18px;
+  padding: 10px 18px 12px;
 }
-
-.m-row.open .m-arrow {
-  transform: rotate(180deg);
-}
-
-/* 手机详情表单 */
 
 .m-detail-row {
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
-  gap: 12px;
-  margin-bottom: 10px;
-  font-size: 15px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .m-detail-label {
-  min-width: 88px;
-  text-align: right;
-  line-height: 1.6;
-  color: #111;
-  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  flex: 0 0 80px;
 }
+
+.m-detail-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 4px 8px;
+  background: #f7f7fa;
+}
+
+/* 手机端可编辑文本 */
 
 .m-detail-value[contenteditable="true"] {
-  flex: 1;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: rgba(0, 0, 0, 0.04);
-  color: #111;
+  cursor: text;
 }
 
-.m-detail-value[contenteditable="true"]:focus {
-  outline: none;
-  border-color: var(--blue);
-  background: #f0f4ff;
+.m-detail-value[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  background: #ffffff;
 }
 
-.m-detail-value[data-k="note1"] {
-  min-height: 3.4em;
-}
-
-/* 手机详情操作按钮 */
+/* 底部操作区域（手机） */
 
 .m-actions {
-  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding: 6px 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
-  width: 100%;
+  gap: 4px;
+  background: #fafafa;
 }
 
-.m-actions button {
-  height: 42px;
-  font-size: 15px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: #fff;
-  width: 100%;
-  text-align: right;
-  padding-right: 16px;
+.m-actions-main {
+  display: flex;
+  justify-content: flex-end;
 }
 
-.m-actions .danger {
-  border-color: #ff3b30;
-  color: #ff3b30;
+.m-actions-hidden {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
+
+/* 兼容旧版的“编辑 + 隐藏操作按钮” */
 
 .m-hidden-actions {
   display: none;
-  gap: 8px;
-  flex-direction: column;
-  width: 100%;
 }
 
 .m-hidden-actions.show {
   display: flex;
+  gap: 6px;
+}
+
+/* 手机操作按钮统一小号 */
+
+.m-actions button {
+  height: 26px;
+  padding: 2px 8px;
+  font-size: 12px;
 }
 
 /* 小屏优化 */
 
-@media (max-width: 480px) {
+@media (max-width: 1024px) {
+  .wrap {
+    padding: 10px 8px 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+
+  .panel {
+    border-radius: 14px;
+    padding: 8px 10px;
+  }
+
+  .topbar {
+    padding-bottom: 6px;
+  }
+
+  #appTitle {
+    font-size: 18px;
+  }
+
   input,
   select,
   button {
     font-size: 13px;
     height: 30px;
   }
+
   th,
   td {
     font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar {
+    gap: 6px;
+  }
+
+  #q {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .cloud-status {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+
+  .m-phone {
+    font-size: 18px;
   }
 }

@@ -493,58 +493,26 @@ function makeRowTr(r) {
 }
 
 async function renderTable() {
+  console.log("🎨 renderTable 被调用");
   const tbody = $("#gridBody");
   const all = await getAllRows();
+  console.log(`📊 总共 ${all.length} 行数据`);
   const rows = applyFilters(all);
+  console.log(`📊 过滤后 ${rows.length} 行数据`);
 
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
   } else {
+    console.log("🔧 开始生成 HTML");
     tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
+    console.log("✅ HTML 生成完成");
+    
+    // 验证 select 元素
+    const selects = tbody.querySelectorAll('select[data-field="row_color"]');
+    console.log(`🔍 表格中共有 ${selects.length} 个分类选择器`);
   }
 
-  // ✅ 桌面端可编辑单元格事件
-  tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
-    td.addEventListener("focus", () => {
-      if (td.classList.contains("col-xhs")) {
-        const id = td.getAttribute("data-id");
-        const row = rows.find((r) => r.id === id);
-        if (row) td.textContent = row.xhs_name || "";
-      }
-    });
-    
-    td.addEventListener("blur", async () => {
-      const id = td.getAttribute("data-id");
-      const field = td.getAttribute("data-field");
-      const val = unescapeHtml(td.textContent || "").trim();
-      
-      // ✅ 先更新数据库
-      const row = await db.rows.get(id);
-      if (row) {
-        const patch = {};
-        patch[field] = val;
-        patch.updated_at = Date.now();
-        await db.rows.put({ ...row, ...patch });
-      }
-      
-      // ✅ 如果是所属人或微信实名人，刷新筛选器
-      if (field === "owner" || field === "wx_real") {
-        await refreshFilters();
-      }
-      
-      // ✅ 重新渲染
-      await renderTable();
-    });
-    
-    td.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        td.blur();
-      }
-    });
-  });
-
-  // ✅ 注意：事件委托已在 bindEvents() 中设置，这里不需要重复绑定
+  // ✅ 注意：所有事件都通过 bindEvents() 中的事件委托处理，这里不需要绑定任何事件
   
   renderMobileList(rows);
 }
@@ -596,44 +564,7 @@ function renderMobileList(rows) {
     })
     .join("");
 
-  container.querySelectorAll(".m-row-header").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const card = btn.closest(".m-row");
-      card.classList.toggle("open");
-    });
-  });
-
-  container
-    .querySelectorAll('.m-detail-value[contenteditable="true"]')
-    .forEach((el) => {
-      el.addEventListener("blur", async () => {
-        const id = el.getAttribute("data-id");
-        const field = el.getAttribute("data-field");
-        const val = unescapeHtml(el.textContent || "").trim();
-        
-        const row = await db.rows.get(id);
-        if (row) {
-          const patch = {};
-          patch[field] = val;
-          patch.updated_at = Date.now();
-          await db.rows.put({ ...row, ...patch });
-        }
-        
-        if (field === "owner" || field === "wx_real") {
-          await refreshFilters();
-        }
-        await renderTable();
-      });
-      
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          el.blur();
-        }
-      });
-    });
-
-  // ✅ 注意：移动端事件委托已在 bindEvents() 中设置，这里不需要重复绑定
+  // ✅ 注意：所有移动端事件都通过 bindEvents() 中的事件委托处理，这里不需要绑定任何事件
 
   function mobileDetail(label, text, field, id) {
     return `<div class="m-detail-row">
@@ -976,10 +907,72 @@ function bindEvents() {
   // ✅✅✅ 关键：使用事件委托在 tbody 上监听，避免重复绑定
   const gridBody = $("#gridBody");
   
+  // 监听 contenteditable 元素的 focus 事件（事件委托）
+  gridBody.addEventListener("focus", (e) => {
+    const td = e.target.closest('td[contenteditable="true"]');
+    if (!td) return;
+    
+    // 如果是小红书名称列，显示完整文本
+    if (td.classList.contains("col-xhs")) {
+      const id = td.getAttribute("data-id");
+      // 从数据库获取完整文本
+      db.rows.get(id).then(row => {
+        if (row) td.textContent = row.xhs_name || "";
+      });
+    }
+  }, true); // 使用捕获阶段
+  
+  // 监听 contenteditable 元素的 blur 事件（事件委托）
+  gridBody.addEventListener("blur", async (e) => {
+    const td = e.target.closest('td[contenteditable="true"]');
+    if (!td) return;
+    
+    const id = td.getAttribute("data-id");
+    const field = td.getAttribute("data-field");
+    const val = td.textContent.trim();
+    
+    console.log(`📝 blur 事件: field=${field}, value=${val}`);
+    
+    // 更新数据库
+    const row = await db.rows.get(id);
+    if (row) {
+      const patch = {};
+      patch[field] = val;
+      patch.updated_at = Date.now();
+      await db.rows.put({ ...row, ...patch });
+    }
+    
+    // 如果是所属人或微信实名人，刷新筛选器
+    if (field === "owner" || field === "wx_real") {
+      await refreshFilters();
+    }
+    
+    // 重新渲染
+    await renderTable();
+  }, true); // 使用捕获阶段
+  
+  // 监听 contenteditable 元素的 keydown 事件（事件委托）
+  gridBody.addEventListener("keydown", (e) => {
+    const td = e.target.closest('td[contenteditable="true"]');
+    if (!td) return;
+    
+    if (e.key === "Enter") {
+      e.preventDefault();
+      td.blur();
+    }
+  });
+  
   // 监听分类选择器的 change 事件（事件委托）
   gridBody.addEventListener("change", async (e) => {
+    console.log("🔔 change 事件触发，目标：", e.target.tagName, e.target);
+    
     const sel = e.target.closest('select[data-field="row_color"]');
-    if (!sel) return;
+    console.log("🔍 找到的 select 元素：", sel);
+    
+    if (!sel) {
+      console.log("❌ 未找到匹配的 select 元素");
+      return;
+    }
     
     const id = sel.getAttribute("data-id");
     const newColor = sel.value;
@@ -987,16 +980,23 @@ function bindEvents() {
     
     // 更新数据库
     const row = await db.rows.get(id);
+    console.log("📖 读取的行数据：", row);
+    
     if (row) {
-      await db.rows.put({ 
+      const updated = { 
         ...row, 
         row_color: newColor, 
         updated_at: Date.now() 
-      });
+      };
+      console.log("💾 准备更新数据库：", updated);
+      await db.rows.put(updated);
+      console.log("✅ 数据库更新成功");
     }
     
     // 重新渲染整个表格
+    console.log("🎨 开始重新渲染表格");
     await renderTable();
+    console.log("✅ 渲染完成");
   });
   
   // 监听操作按钮的 click 事件（事件委托）
@@ -1021,6 +1021,76 @@ function bindEvents() {
   // ✅✅✅ 移动端事件委托
   const mobileList = $("#mobileList");
   
+  // 监听移动端卡片头部的点击（展开/折叠）
+  mobileList.addEventListener("click", (e) => {
+    const header = e.target.closest(".m-row-header");
+    if (header) {
+      const card = header.closest(".m-row");
+      if (card) {
+        card.classList.toggle("open");
+      }
+      return;
+    }
+    
+    // 处理操作按钮
+    const btn = e.target.closest("button[data-mact]");
+    if (btn) {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-mact");
+      
+      if (act === "up") {
+        moveRow(id, "up");
+      } else if (act === "down") {
+        moveRow(id, "down");
+      } else if (act === "del") {
+        if (confirm("确定删除该行？")) {
+          deleteRowById(id);
+        }
+      }
+    }
+  });
+  
+  // 监听移动端 contenteditable 元素的 blur 事件
+  mobileList.addEventListener("blur", async (e) => {
+    const el = e.target.closest('.m-detail-value[contenteditable="true"]');
+    if (!el) return;
+    
+    const id = el.getAttribute("data-id");
+    const field = el.getAttribute("data-field");
+    const val = el.textContent.trim();
+    
+    console.log(`📝 移动端 blur 事件: field=${field}, value=${val}`);
+    
+    // 更新数据库
+    const row = await db.rows.get(id);
+    if (row) {
+      const patch = {};
+      patch[field] = val;
+      patch.updated_at = Date.now();
+      await db.rows.put({ ...row, ...patch });
+    }
+    
+    // 如果是所属人或微信实名人，刷新筛选器
+    if (field === "owner" || field === "wx_real") {
+      await refreshFilters();
+    }
+    
+    // 重新渲染
+    await renderTable();
+  }, true); // 使用捕获阶段
+  
+  // 监听移动端 contenteditable 元素的 keydown 事件
+  mobileList.addEventListener("keydown", (e) => {
+    const el = e.target.closest('.m-detail-value[contenteditable="true"]');
+    if (!el) return;
+    
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      el.blur();
+    }
+  });
+  
   // 监听移动端分类选择器的 change 事件（事件委托）
   mobileList.addEventListener("change", async (e) => {
     const sel = e.target.closest('select[data-field="row_color"]');
@@ -1042,26 +1112,6 @@ function bindEvents() {
     
     // 重新渲染整个表格
     await renderTable();
-  });
-  
-  // 监听移动端操作按钮的 click 事件（事件委托）
-  mobileList.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button[data-mact]");
-    if (!btn) return;
-    
-    e.stopPropagation();
-    const id = btn.getAttribute("data-id");
-    const act = btn.getAttribute("data-mact");
-    
-    if (act === "up") {
-      await moveRow(id, "up");
-    } else if (act === "down") {
-      await moveRow(id, "down");
-    } else if (act === "del") {
-      if (confirm("确定删除该行？")) {
-        await deleteRowById(id);
-      }
-    }
   });
   
   $("#q").addEventListener("input", async (e) => {

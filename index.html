@@ -61,7 +61,7 @@
       <div class="toolbar">
         <button id="btnAdd" class="primary function-btn" data-function="add">新增一行</button>
         <button id="btnImportCSV" class="ghost function-btn" data-function="import">导入数据</button>
-        <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none" />
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
         <button id="btnExportCSV" class="ghost function-btn" data-function="export">导出数据</button>
         <button id="btnSaveCloud" class="ghost function-btn" data-function="saveCloud">保存云端</button>
         <button id="btnLoadCloud" class="ghost function-btn" data-function="loadCloud">云端加载</button>
@@ -71,7 +71,7 @@
       </div>
 
       <!-- 云端历史快照下拉 -->
-      <div id="cloudHistoryPanel" class="cloud-history-panel" style="display:none"></div>
+      <div id="cloudHistoryPanel" class="cloud-history-panel"></div>
 
       <div class="status" id="statusText">
         本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本）。
@@ -79,8 +79,8 @@
     </div>
 
     <!-- 分类设置面板 -->
-    <div class="panel" id="panelCategories" style="display:none">
-      <div class="toolbar" style="align-items:flex-start">
+    <div class="panel panel-hidden" id="panelCategories">
+      <div class="toolbar toolbar-start">
         <div class="chip">
           <span class="colorDot" id="catColorPreview"></span>
           <input id="catName" placeholder="分类名称，例如：Olina用" />
@@ -92,7 +92,7 @@
     </div>
 
     <!-- 显示设置面板 -->
-    <div class="panel" id="panelView" style="display:none">
+    <div class="panel panel-hidden" id="panelView">
       <div class="toolbar toolbar-wrap">
         <label class="label-inline">
           标题文字
@@ -144,7 +144,7 @@
     </div>
 
     <!-- 数据面板 -->
-    <div class="panel" style="overflow:auto;max-height:92vh">
+    <div class="panel panel-scroll">
       <!-- 桌面版表格 -->
       <div class="table-wrap desktop-only">
         <table id="grid">

@@ -80,7 +80,7 @@ const state = {
   wxReal: "all",
   sortBy: "order",
   precise: false,
-  activeFunction: null, // ✅ 当前激活的功能按钮
+  activeFunction: null,
 };
 
 /* =========================
@@ -204,19 +204,14 @@ function unescapeHtml(s) {
     .replaceAll("&amp;", "&");
 }
 
-function makeHighlightColor(hex, alpha = 0.14) {
-  if (!hex || !hex.startsWith("#")) return "transparent";
-  const c = hex.slice(1);
-  let r, g, b;
-  if (c.length === 3) {
-    r = parseInt(c[0] + c[0], 16);
-    g = parseInt(c[1] + c[1], 16);
-    b = parseInt(c[2] + c[2], 16);
-  } else {
-    r = parseInt(c.slice(0, 2), 16);
-    g = parseInt(c.slice(2, 4), 16);
-    b = parseInt(c.slice(4, 6), 16);
-  }
+// ✅ 使用原始版本的 hexToRgba 函数
+function hexToRgba(hex, alpha) {
+  if (!hex) return "transparent";
+  hex = (hex || "").replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
@@ -232,30 +227,24 @@ function truncateText(text, maxChars = 10) {
  * 4.5. 功能按钮激活状态管理
  * ========================= */
 
-// ✅ 设置当前激活的功能按钮
 function setActiveFunction(functionName) {
   state.activeFunction = functionName;
-  
-  // 移除所有按钮的激活状态
-  document.querySelectorAll('.function-btn').forEach(btn => {
-    btn.classList.remove('active');
+  document.querySelectorAll(".function-btn").forEach((btn) => {
+    btn.classList.remove("active");
   });
-  
-  // 为当前按钮添加激活状态
   if (functionName) {
     const btn = document.querySelector(`[data-function="${functionName}"]`);
     if (btn) {
-      btn.classList.add('active');
+      btn.classList.add("active");
       console.log(`✅ 激活功能按钮: ${functionName}`);
     }
   }
 }
 
-// ✅ 清除所有按钮激活状态
 function clearActiveFunction() {
   state.activeFunction = null;
-  document.querySelectorAll('.function-btn').forEach(btn => {
-    btn.classList.remove('active');
+  document.querySelectorAll(".function-btn").forEach((btn) => {
+    btn.classList.remove("active");
   });
 }
 
@@ -289,11 +278,14 @@ async function addRow() {
   await renderTable();
 }
 
+// ✅ 简化 updateRow，参考原始版本
 async function updateRow(id, patch) {
   const row = await db.rows.get(id);
   if (!row) return;
   const next = { ...row, ...patch, updated_at: Date.now() };
   await db.rows.put(next);
+  // ✅ 关键：直接重新渲染，不要手动更新UI
+  await renderTable();
 }
 
 async function deleteRowById(id) {
@@ -482,18 +474,17 @@ function tdActions(rowId) {
 
 function makeRowTr(r) {
   const cats = readCats();
-  const xhsBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
-  // ✅ 小红书名称显示截断文本
+  // ✅ 使用原始版本的背景色计算方式
+  const bg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "";
   const xhsDisplay = truncateText(r.xhs_name, 10);
+  
   return `<tr data-id="${r.id}">
     ${tdEditable("col-phone", r.phone, "phone", r.id)}
     ${tdEditable("col-owner", r.owner, "owner", r.id)}
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
-    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${
-      r.id
-    }" 
-        style="background:${xhsBg}; text-align:right;" 
+    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" 
+        style="${bg ? `background:${bg};` : ""} text-align:right;" 
         title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
     ${tdEditable("col-note", r.note1, "note1", r.id)}
     ${tdSelectCat("col-cat", r.row_color, r.id)}
@@ -515,23 +506,36 @@ async function renderTable() {
   // ✅ 桌面端可编辑单元格事件
   tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
     td.addEventListener("focus", () => {
-      // ✅ 编辑时显示完整文本
       if (td.classList.contains("col-xhs")) {
         const id = td.getAttribute("data-id");
         const row = rows.find((r) => r.id === id);
         if (row) td.textContent = row.xhs_name || "";
       }
     });
+    
     td.addEventListener("blur", async () => {
       const id = td.getAttribute("data-id");
       const field = td.getAttribute("data-field");
       const val = unescapeHtml(td.textContent || "").trim();
-      await updateRow(id, { [field]: val });
+      
+      // ✅ 先更新数据库
+      const row = await db.rows.get(id);
+      if (row) {
+        const patch = {};
+        patch[field] = val;
+        patch.updated_at = Date.now();
+        await db.rows.put({ ...row, ...patch });
+      }
+      
+      // ✅ 如果是所属人或微信实名人，刷新筛选器
       if (field === "owner" || field === "wx_real") {
         await refreshFilters();
       }
+      
+      // ✅ 重新渲染
       await renderTable();
     });
+    
     td.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -540,30 +544,25 @@ async function renderTable() {
     });
   });
 
-  // ✅✅✅ 修复分类选择器改变事件 - 立即更新背景色
+  // ✅✅✅ 关键修复：使用简单的事件委托，参考原始版本
   tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
-    // 添加点击事件调试
-    sel.addEventListener("click", (e) => {
-      console.log("✅ 分类选择器被点击", e.target);
-    });
-    
     sel.addEventListener("change", async (e) => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
       console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
       
-      await updateRow(id, { row_color: newColor });
-      
-      // ✅ 立即更新对应行的小红书名称背景色
-      const row = sel.closest("tr");
-      const xhsCell = row?.querySelector(".col-xhs");
-      if (xhsCell) {
-        const cats = readCats();
-        const xhsBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
-        xhsCell.style.background = xhsBg;
-        xhsCell.style.transition = "background 0.3s ease";
-        console.log(`✅ 更新背景色: ${xhsBg}`);
+      // ✅ 更新数据库
+      const row = await db.rows.get(id);
+      if (row) {
+        await db.rows.put({ 
+          ...row, 
+          row_color: newColor, 
+          updated_at: Date.now() 
+        });
       }
+      
+      // ✅ 重新渲染整个表格（让背景色自动更新）
+      await renderTable();
     });
   });
 
@@ -594,28 +593,27 @@ function renderMobileList(rows) {
     container.innerHTML = `<div style="text-align:center;color:#888;padding:10px 0;">暂无数据</div>`;
     return;
   }
+  
+  const cats = readCats();
+  
   container.innerHTML = rows
     .map((r, idx) => {
-      const cats = readCats();
       const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
-      const pillBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+      // ✅ 使用 hexToRgba 计算pill背景色
+      const pillBg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "rgba(0, 122, 255, 0.09)";
       const catName = catNameOf(cats, r.row_color);
-      // ✅ 移动端小红书名称截断显示
       const xhsDisplay = truncateText(r.xhs_name, 10);
+      
       return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
         <button class="m-row-header" data-id="${r.id}">
           <div class="m-main-line">
             <span class="m-phone">${escapeHtml(r.phone || "")}</span>
-            <span class="m-xhs" title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(
-        xhsDisplay
-      )}</span>
+            <span class="m-xhs" title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</span>
             <span class="m-arrow">▾</span>
           </div>
           <div class="m-meta-line">
             <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
-            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(
-        catName || "未分类"
-      )}</span>
+            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(catName || "未分类")}</span>
           </div>
         </button>
         <div class="m-row-details">
@@ -648,12 +646,21 @@ function renderMobileList(rows) {
         const id = el.getAttribute("data-id");
         const field = el.getAttribute("data-field");
         const val = unescapeHtml(el.textContent || "").trim();
-        await updateRow(id, { [field]: val });
+        
+        const row = await db.rows.get(id);
+        if (row) {
+          const patch = {};
+          patch[field] = val;
+          patch.updated_at = Date.now();
+          await db.rows.put({ ...row, ...patch });
+        }
+        
         if (field === "owner" || field === "wx_real") {
           await refreshFilters();
         }
         await renderTable();
       });
+      
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -662,31 +669,24 @@ function renderMobileList(rows) {
       });
     });
 
-  // ✅✅✅ 修复移动端分类选择器 - 立即更新背景色
+  // ✅✅✅ 移动端分类选择器：简单处理
   container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
-    // 添加点击事件调试
-    sel.addEventListener("click", (e) => {
-      console.log("✅ 移动端分类选择器被点击", e.target);
-    });
-    
     sel.addEventListener("change", async (e) => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
       console.log(`✅ 移动端分类改变: ID=${id}, 新分类=${newColor}`);
       
-      await updateRow(id, { row_color: newColor });
-      
-      // ✅ 立即更新对应卡片的分类pill背景色和文本
-      const card = sel.closest(".m-row");
-      const pill = card?.querySelector(".m-cat-pill");
-      if (pill) {
-        const cats = readCats();
-        const pillBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
-        pill.style.background = pillBg;
-        pill.style.transition = "background 0.3s ease";
-        pill.textContent = catNameOf(cats, newColor) || "未分类";
-        console.log(`✅ 更新pill背景色: ${pillBg}`);
+      const row = await db.rows.get(id);
+      if (row) {
+        await db.rows.put({ 
+          ...row, 
+          row_color: newColor, 
+          updated_at: Date.now() 
+        });
       }
+      
+      // ✅ 重新渲染整个表格
+      await renderTable();
     });
   });
 
@@ -1046,7 +1046,6 @@ function bindEvents() {
     await renderTable();
   });
 
-  // ✅ 为功能按钮添加激活状态管理
   $("#btnSearchMode").addEventListener("click", async () => {
     setActiveFunction("search");
     state.precise = !state.precise;
@@ -1264,7 +1263,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await refreshFilters();
   await renderTable();
   
-  // ✅ 先初始化 Supabase，再检查连接状态
   await initSupabase();
   
   const panel = $("#cloudHistoryPanel");

@@ -204,17 +204,6 @@ function unescapeHtml(s) {
     .replaceAll("&amp;", "&");
 }
 
-// ✅ 使用原始版本的 hexToRgba 函数
-function hexToRgba(hex, alpha) {
-  if (!hex) return "transparent";
-  hex = (hex || "").replace("#", "");
-  if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 // ✅ 截断字符串显示前10个字符
 function truncateText(text, maxChars = 10) {
   if (!text) return "";
@@ -462,18 +451,16 @@ function tdActions(rowId) {
 }
 
 function makeRowTr(r) {
-  const cats = readCats();
-  const bg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "";
   const xhsDisplay = truncateText(r.xhs_name, 10);
+  // ✅ 使用 data-cat 属性代替内联样式（遵循 frontend.mdc 规则）
+  const catAttr = r.row_color ? `data-cat="${escapeHtml(r.row_color)}"` : "";
   
   return `<tr data-id="${r.id}">
     ${tdEditable("col-phone", r.phone, "phone", r.id)}
     ${tdEditable("col-owner", r.owner, "owner", r.id)}
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
-    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" 
-        style="${bg ? `background:${bg};` : ""} text-align:right;" 
-        title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
+    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" ${catAttr} title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
     ${tdEditable("col-note", r.note1, "note1", r.id)}
     ${tdSelectCat("col-cat", r.row_color, r.id)}
     ${tdActions(r.id)}
@@ -486,7 +473,7 @@ async function renderTable() {
   const rows = applyFilters(all);
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">暂无数据，点击"新增一行"开始录入</td></tr>`;
   } else {
     tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
   }
@@ -499,7 +486,7 @@ function renderMobileList(rows) {
   const v = readView();
 
   if (!rows.length) {
-    container.innerHTML = `<div style="text-align:center;color:#888;padding:10px 0;">暂无数据</div>`;
+    container.innerHTML = `<div class="empty-state">暂无数据</div>`;
     return;
   }
   
@@ -507,12 +494,12 @@ function renderMobileList(rows) {
   
   container.innerHTML = rows
     .map((r, idx) => {
-      const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
-      const pillBg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "rgba(0, 122, 255, 0.09)";
+      const zebraClass = v.zebraOn && idx % 2 === 1 ? "zebra-even" : "";
+      const catAttr = r.row_color ? `data-cat="${escapeHtml(r.row_color)}"` : "";
       const catName = catNameOf(cats, r.row_color);
       const xhsDisplay = truncateText(r.xhs_name, 10);
       
-      return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
+      return `<div class="m-row ${zebraClass}" data-id="${r.id}">
         <button class="m-row-header" data-id="${r.id}">
           <div class="m-main-line">
             <span class="m-phone">${escapeHtml(r.phone || "")}</span>
@@ -521,7 +508,7 @@ function renderMobileList(rows) {
           </div>
           <div class="m-meta-line">
             <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
-            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(catName || "未分类")}</span>
+            <span class="m-cat-pill" ${catAttr}>${escapeHtml(catName || "未分类")}</span>
           </div>
         </button>
         <div class="m-row-details">
@@ -564,7 +551,7 @@ function renderMobileList(rows) {
     return `<div class="m-detail-row">
       <div class="m-detail-label">分类</div>
       <div class="m-detail-value">
-        <select data-field="row_color" data-id="${id}" style="width:100%;">
+        <select data-field="row_color" data-id="${id}">
           ${opts}
         </select>
       </div>
@@ -737,8 +724,7 @@ async function renderCloudHistory() {
   const panel = $("#cloudHistoryPanel");
   if (!panel) return;
   if (!supabase) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#888;">未配置 Supabase</div>`;
+    panel.innerHTML = `<div class="cloud-msg">未配置 Supabase</div>`;
     return;
   }
   const { data, error } = await supabase
@@ -748,13 +734,11 @@ async function renderCloudHistory() {
     .order("updated_at", { ascending: false })
     .limit(5);
   if (error) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败</div>`;
+    panel.innerHTML = `<div class="cloud-msg error">加载历史失败</div>`;
     return;
   }
   if (!Array.isArray(data) || !data.length) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
+    panel.innerHTML = `<div class="cloud-msg">暂无历史快照</div>`;
     return;
   }
   panel.innerHTML = data
@@ -795,23 +779,25 @@ function renderCatList() {
   list.innerHTML = cats
     .map(
       (c, i) => `<div class="cat-row" data-id="${c.id}">
-        <span class="cat-color-preview" style="background:${escapeHtml(
-          c.color
-        )}"></span>
+        <span class="cat-color-preview" data-color="${escapeHtml(c.color)}"></span>
         <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
         <div class="cat-actions">
           <button class="ghost" data-act="up" ${i === 0 ? "disabled" : ""}>上移</button>
           <button class="ghost" data-act="down" ${
             i === cats.length - 1 ? "disabled" : ""
           }>下移</button>
-          <input type="color" value="${escapeHtml(
-            c.color
-          )}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
+          <input type="color" value="${escapeHtml(c.color)}" data-act="color" class="cat-color-input">
           <button class="btn-danger" data-act="del">删除</button>
         </div>
       </div>`
     )
     .join("");
+
+  // 使用CSS变量设置颜色预览
+  list.querySelectorAll(".cat-color-preview").forEach((el) => {
+    const color = el.getAttribute("data-color");
+    if (color) el.style.background = color;
+  });
 
   list.querySelectorAll(".cat-name").forEach((el) => {
     el.addEventListener("blur", () => {
@@ -918,7 +904,7 @@ function bindEvents() {
     }
   }, true);
   
-  // ✅✅✅ 桌面端：监听分类选择器的 change 事件
+  // ✅✅✅ 桌面端：监听分类选择器的 change 事件（关键修复）
   gridBody.addEventListener("change", async (e) => {
     const sel = e.target.closest('select[data-field="row_color"]');
     if (!sel) return;
@@ -936,7 +922,15 @@ function bindEvents() {
       updated_at: Date.now()
     });
     
-    await renderTable();
+    // ✅ 立即更新对应单元格的 data-cat 属性
+    const xhsCell = tr.querySelector(".col-xhs");
+    if (xhsCell) {
+      if (newColor) {
+        xhsCell.setAttribute("data-cat", newColor);
+      } else {
+        xhsCell.removeAttribute("data-cat");
+      }
+    }
   });
   
   // ✅✅✅ 桌面端：监听操作按钮的 click 事件
@@ -1005,11 +999,12 @@ function bindEvents() {
     await renderTable();
   }, true);
   
-  // ✅✅✅ 移动端：监听分类选择器的 change 事件
+  // ✅✅✅ 移动端：监听分类选择器的 change 事件（关键修复）
   mobileList.addEventListener("change", async (e) => {
     const sel = e.target.closest('select[data-field="row_color"]');
     if (!sel) return;
     
+    const card = sel.closest(".m-row");
     const id = sel.getAttribute("data-id");
     const newColor = sel.value;
     
@@ -1022,7 +1017,18 @@ function bindEvents() {
       updated_at: Date.now()
     });
     
-    await renderTable();
+    // ✅ 立即更新对应 pill 的 data-cat 属性
+    const pill = card.querySelector(".m-cat-pill");
+    if (pill) {
+      if (newColor) {
+        pill.setAttribute("data-cat", newColor);
+        const cats = readCats();
+        pill.textContent = catNameOf(cats, newColor) || "未分类";
+      } else {
+        pill.removeAttribute("data-cat");
+        pill.textContent = "未分类";
+      }
+    }
   });
 
   // 搜索
@@ -1123,11 +1129,11 @@ function bindEvents() {
   $("#btnLoadCloud").addEventListener("click", async () => {
     setActiveFunction("loadCloud");
     const panel = $("#cloudHistoryPanel");
-    if (panel.style.display === "none") {
-      panel.style.display = "block";
-      await renderCloudHistory();
+    if (panel.classList.contains("show")) {
+      panel.classList.remove("show");
     } else {
-      panel.style.display = "none";
+      panel.classList.add("show");
+      await renderCloudHistory();
     }
   });
 
@@ -1144,8 +1150,10 @@ function bindEvents() {
   $("#btnCategories").addEventListener("click", () => {
     setActiveFunction("categories");
     const p = $("#panelCategories");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    renderCatList();
+    p.classList.toggle("panel-hidden");
+    if (!p.classList.contains("panel-hidden")) {
+      renderCatList();
+    }
   });
 
   // 新增分类
@@ -1168,15 +1176,17 @@ function bindEvents() {
   $("#btnView").addEventListener("click", () => {
     setActiveFunction("view");
     const p = $("#panelView");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    const v = readView();
-    $("#titleText").value = v.titleText;
-    $("#titleColor").value = v.titleColor;
-    $("#fontFamily").value = v.fontFamily;
-    $("#rowPad").value = v.pad;
-    $("#colScale").value = v.colScale;
-    $("#zebraOn").checked = v.zebraOn;
-    $("#zebraColor").value = v.zebraColor;
+    p.classList.toggle("panel-hidden");
+    if (!p.classList.contains("panel-hidden")) {
+      const v = readView();
+      $("#titleText").value = v.titleText;
+      $("#titleColor").value = v.titleColor;
+      $("#fontFamily").value = v.fontFamily;
+      $("#rowPad").value = v.pad;
+      $("#colScale").value = v.colScale;
+      $("#zebraOn").checked = v.zebraOn;
+      $("#zebraColor").value = v.zebraColor;
+    }
   });
 
   // 视图设置控件
@@ -1261,7 +1271,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   await renderTable();
   
   await initSupabase();
-  
-  const panel = $("#cloudHistoryPanel");
-  if (panel) panel.style.display = "none";
 });

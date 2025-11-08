@@ -436,7 +436,7 @@ td[contenteditable="true"] {
 td[contenteditable="true"]:focus-visible {
   outline: 2px solid rgba(0, 122, 255, 0.35);
   outline-offset: -2px;
-  background: #ffffff;
+  background: #ffffff !important;
 }
 
 /* 分类单元格 */
@@ -533,6 +533,8 @@ td.col-cat select {
   cursor: pointer;
   transition: background 0.15s ease;
   color: inherit;
+  height: auto;
+  border-radius: 0;
 }
 
 .m-row:hover .m-row-header {
@@ -665,10 +667,10 @@ td.col-cat select {
 
 .m-detail-value[contenteditable="true"]:focus-visible {
   outline: 2px solid rgba(0, 122, 255, 0.35);
-  background: #ffffff;
+  background: #ffffff !important;
 }
 
-/* 底部操作区域（手机）- ✅ 移除"更多功能"按钮，直接显示操作按钮 */
+/* 底部操作区域（手机）*/
 
 .m-actions {
   border-top: 1px solid var(--line);
@@ -747,3 +749,5 @@ td.col-cat select {
     font-size: 18px;
   }
 }
+
+

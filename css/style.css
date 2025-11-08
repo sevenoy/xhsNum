@@ -107,6 +107,11 @@ body {
   margin-bottom: 10px;
 }
 
+.panel-scroll {
+  overflow: auto;
+  max-height: 92vh;
+}
+
 /* 工具栏 */
 
 .toolbar {
@@ -123,6 +128,10 @@ body {
 
 .toolbar-wrap {
   flex-wrap: wrap;
+}
+
+.toolbar-start {
+  align-items: flex-start;
 }
 
 .status {
@@ -160,11 +169,16 @@ button:focus-visible {
   box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
 }
 
+input[type="file"] {
+  display: none;
+}
+
 /* 下拉菜单统一白底 */
 
 table select,
 .m-detail-value select {
   background-color: #ffffff;
+  width: 100%;
 }
 
 /* 文本输入宽度 */
@@ -276,6 +290,11 @@ button.primary:active {
   max-height: 220px;
   overflow-y: auto;
   font-size: 13px;
+  display: none;
+}
+
+.cloud-history-panel.show {
+  display: block;
 }
 
 .cloud-item {
@@ -323,6 +342,21 @@ button.primary:active {
   white-space: nowrap;
 }
 
+.cloud-msg {
+  padding: 8px 10px;
+  color: #888;
+}
+
+.cloud-msg.error {
+  color: #ff3b30;
+}
+
+/* 面板显示控制 */
+
+.panel-hidden {
+  display: none;
+}
+
 /* 分类列表 */
 
 #catList {
@@ -357,6 +391,13 @@ button.primary:active {
 .cat-actions {
   display: inline-flex;
   gap: 4px;
+}
+
+.cat-color-input {
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #e5e5ea;
+  padding: 0 2px;
 }
 
 /* 桌面表格 */
@@ -461,6 +502,23 @@ td.col-act {
   width: calc(var(--w-actions) * var(--colScale));
 }
 
+/* ✅ 按分类设置小红书名称背景色（移除内联样式） */
+td.col-xhs[data-cat="enterprise"] {
+  background: rgba(0, 122, 255, 0.18) !important;
+}
+
+td.col-xhs[data-cat="olina"] {
+  background: rgba(52, 199, 89, 0.18) !important;
+}
+
+td.col-xhs[data-cat="jasper"] {
+  background: rgba(255, 159, 10, 0.18) !important;
+}
+
+td.col-xhs[data-cat="usable"] {
+  background: rgba(142, 142, 147, 0.18) !important;
+}
+
 /* 表格内联编辑 */
 
 td[contenteditable="true"] {
@@ -537,6 +595,14 @@ td.col-cat select:focus {
   background: #d9363e;
 }
 
+/* 空状态提示 */
+
+.empty-state {
+  text-align: center;
+  color: #888;
+  padding: 14px 0;
+}
+
 /* 桌面 / 手机显示切换 */
 
 .desktop-only {
@@ -552,12 +618,16 @@ td.col-cat select:focus {
 .m-row {
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: var(--card-bg, #fff);
+  background: #fff;
   margin-bottom: 12px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: box-shadow 0.2s ease, transform 0.1s ease;
   color: #111;
+}
+
+.m-row.zebra-even {
+  background: var(--zebra);
 }
 
 .m-row:hover {
@@ -643,6 +713,22 @@ td.col-cat select:focus {
   font-size: 12px;
   background: rgba(0, 122, 255, 0.09);
   transition: background 0.3s ease;
+}
+
+.m-cat-pill[data-cat="enterprise"] {
+  background: rgba(0, 122, 255, 0.18);
+}
+
+.m-cat-pill[data-cat="olina"] {
+  background: rgba(52, 199, 89, 0.18);
+}
+
+.m-cat-pill[data-cat="jasper"] {
+  background: rgba(255, 159, 10, 0.18);
+}
+
+.m-cat-pill[data-cat="usable"] {
+  background: rgba(142, 142, 147, 0.18);
 }
 
 /* 下拉箭头 */

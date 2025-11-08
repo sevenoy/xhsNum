@@ -40,7 +40,7 @@
     <div class="panel">
       <div class="toolbar">
         <input id="q" placeholder="搜索：任意关键词" />
-        <button id="btnSearchMode" class="ghost">当前：模糊搜索</button>
+        <button id="btnSearchMode" class="ghost function-btn" data-function="search">当前：模糊搜索</button>
 
         <select id="filterOwner">
           <option value="all">所属人：全部</option>
@@ -59,15 +59,15 @@
       </div>
 
       <div class="toolbar">
-        <button id="btnAdd">新增一行</button>
-        <button id="btnImportCSV" class="ghost">导入数据</button>
+        <button id="btnAdd" class="primary function-btn" data-function="add">新增一行</button>
+        <button id="btnImportCSV" class="ghost function-btn" data-function="import">导入数据</button>
         <input id="csvFile" type="file" accept=".csv,text/csv" style="display:none" />
-        <button id="btnExportCSV" class="ghost">导出数据</button>
-        <button id="btnSaveCloud" class="ghost">保存云端</button>
-        <button id="btnLoadCloud" class="ghost">云端加载</button>
-        <button id="btnClearAll" class="ghost">清空全部</button>
-        <button id="btnCategories" class="ghost">分类设置</button>
-        <button id="btnView" class="ghost">显示设置</button>
+        <button id="btnExportCSV" class="ghost function-btn" data-function="export">导出数据</button>
+        <button id="btnSaveCloud" class="ghost function-btn" data-function="saveCloud">保存云端</button>
+        <button id="btnLoadCloud" class="ghost function-btn" data-function="loadCloud">云端加载</button>
+        <button id="btnClearAll" class="ghost function-btn" data-function="clear">清空全部</button>
+        <button id="btnCategories" class="ghost function-btn" data-function="categories">分类设置</button>
+        <button id="btnView" class="ghost function-btn" data-function="view">显示设置</button>
       </div>
 
       <!-- 云端历史快照下拉 -->
@@ -173,6 +173,3 @@
   <script type="module" src="./js/app.js"></script>
 </body>
 </html>
-
-
-

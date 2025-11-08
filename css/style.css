@@ -1,35 +1,14 @@
 :root {
-  --bg: #f5f5f7;
-  --cell: #ffffff;
-  --cell-alt: #f9f9fb;
-  --line: #e5e5ea;
-  --muted: #6e6e73;
-  --active: #007aff;
-  --blue: #007aff;
-  --blue-press: #0051c6;
-
-  /* 行高 / 列宽 / 隔行色，由显示设置控制 */
   --pad: 6px;
   --colScale: 1;
-  /* 统一使用 222 / 240 / 255 */
-  --zebra: #e2f0ff;
-
-  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
-    "Helvetica Neue", Helvetica, Arial, sans-serif;
-
-  --w-phone: 120px;
-  --w-owner: 110px;
-  --w-real: 110px;
-  --w-wx: 130px;
-  --w-xhs: 160px;
-  --w-note: 220px;
-  --w-cat: 90px;
-  --w-actions: 110px;
+  --zebra: transparent;
+  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial,
+    sans-serif;
 }
 
-/* 基础 */
-
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -37,183 +16,216 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
-  font-family: var(--font-main);
-  -webkit-font-smoothing: antialiased;
+  height: 100%;
 }
 
 body {
-  color: #111;
+  font-family: var(--font-main);
+  font-size: 14px;
+  color: #111111;
+  background: #f2f2f7;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 容器 */
-
 .wrap {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 12px 10px 24px;
+  padding: 10px 10px 40px;
 }
 
 /* 顶部栏 */
 
 .topbar {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 6px 4px 10px;
+  align-items: center;
+  padding: 6px 4px 12px;
 }
 
-#appTitle {
-  font-size: 20px;
-  font-weight: 650;
+.top-left h1 {
   margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.top-right {
+  display: flex;
+  align-items: center;
 }
 
 .cloud-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 13px;
   background: #f2f2f7;
-  color: #111;
+  border: 1px solid #e5e5ea;
+  font-size: 12px;
+  color: #3c3c43;
 }
 
 #cloudDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #30d158; /* 连接正常绿色 */
+  background: #ffcc00;
 }
 
-#cloudText {
-  white-space: nowrap;
-}
-
-/* 面板 */
+/* Panel & Toolbar */
 
 .panel {
   background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 10px 10px 8px;
   margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
-
-/* 工具栏 */
 
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center; /* 垂直居中，保证文字 + 输入框对齐 */
+  flex-wrap: nowrap;
   gap: 8px;
-  margin-bottom: 6px;
-}
-
-.toolbar:last-child {
-  margin-bottom: 0;
+  align-items: center;
+  margin-bottom: 8px;
 }
 
 .toolbar-wrap {
   flex-wrap: wrap;
 }
 
-.status {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-/* 输入控件 */
-
-input,
-select,
-button {
+.toolbar input[type="text"],
+.toolbar input[type="search"],
+.toolbar input[type="color"],
+.toolbar input[type="range"],
+.toolbar select,
+.toolbar input#q {
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.2;
+  font-size: 13px;
+}
+
+.toolbar input#q {
+  flex: 1 1 auto;
+  min-width: 140px;
+  padding: 6px 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  padding: 6px 12px;
-  height: 32px; /* 更紧凑：控制整体“表格高度”落在 ~100px 范围内 */
-  background: #ffffff;
-  color: #111;
+  border: 1px solid #d1d1d6;
   outline: none;
-  vertical-align: middle;
 }
 
-input::placeholder {
-  color: #b0b0b8;
-}
-
-input:focus,
-select:focus,
-button:focus-visible {
-  border-color: var(--active);
+.toolbar input#q:focus {
+  border-color: #007aff;
   box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
 }
 
-/* 下拉菜单统一白底，避免被隔行色等影响 */
-
-table select,
-.m-detail-value select {
-  background-color: #ffffff;
+.toolbar select {
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #d1d1d6;
+  background: #fff;
 }
 
-/* 文本输入宽度 */
-
-#q {
-  min-width: 220px;
-  flex: 1 1 180px;
-}
-
-/* 标签式控件 */
-
-.label-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #333;
-}
-
-/* 按钮 */
+/* Buttons */
 
 button {
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 999px;
+  border: none;
+  padding: 6px 12px;
   cursor: pointer;
-  transition: background 0.15s ease, box-shadow 0.12s ease,
-    transform 0.05s ease;
-}
-
-button:active {
-  transform: translateY(1px);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  outline: none;
+  background: #007aff;
+  color: #ffffff;
+  white-space: nowrap;
 }
 
 button.ghost {
   background: #f2f2f7;
-  border-color: transparent;
+  color: #111111;
+  border: 1px solid #e5e5ea;
 }
 
-button.ghost:hover {
-  background: #e5e5ea;
+button.btn-danger {
+  background: #ff3b30;
+  color: #ffffff;
 }
 
-button.primary {
-  background: var(--blue);
-  color: #fff;
-  border-color: transparent;
+button.btn-mini {
+  padding: 3px 8px;
+  font-size: 12px;
 }
 
-button.primary:hover {
-  background: var(--blue-press);
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-/* chip */
+button:active {
+  transform: translateY(1px);
+}
 
-.chip {
+/* 状态文案 */
+
+.status {
+  font-size: 12px;
+  color: #8e8e93;
+  padding: 2px 2px 0;
+}
+
+/* 云端历史 */
+
+.cloud-history-panel {
+  margin-top: 4px;
+  border-radius: 10px;
+  border: 1px solid #e5e5ea;
+  max-height: 260px;
+  overflow: auto;
+  background: #f9f9fb;
+}
+
+.cloud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e5ea;
+  cursor: pointer;
+}
+
+.cloud-item:last-child {
+  border-bottom: none;
+}
+
+.cloud-item:hover {
+  background: #f2f2f7;
+}
+
+.cloud-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cloud-item-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cloud-item-meta {
+  font-size: 11px;
+  color: #8e8e93;
+}
+
+.cloud-item-time {
+  font-size: 11px;
+  color: #8e8e93;
+  margin-left: 6px;
+}
+
+/* 分类设置 */
+
+#panelCategories .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -223,106 +235,101 @@ button.primary:hover {
 }
 
 .colorDot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #d1d1d6;
 }
 
-/* 云端快照列表 */
-
-.cloud-history-panel {
-  margin-top: 6px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  padding: 4px 6px;
-  max-height: 220px;
-  overflow-y: auto;
+#catName {
+  border: none;
+  outline: none;
+  background: transparent;
   font-size: 13px;
 }
 
-.cloud-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
-  border-radius: 10px;
-  cursor: pointer;
-  gap: 10px;
-}
-
-.cloud-item + .cloud-item {
-  margin-top: 2px;
-}
-
-.cloud-item:hover {
-  background: #f2f6ff;
-}
-
-.cloud-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cloud-item-name {
-  font-weight: 500;
-  color: #111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cloud-item-meta {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* 右侧时间戳（你要保留的“最右日期时间”） */
-
-.cloud-item-time {
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
+#catColor {
+  width: 32px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid #d1d1d6;
+  padding: 0;
 }
 
 /* 分类列表 */
 
-#catList {
-  margin-top: 6px;
-}
-
 .cat-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   padding: 6px 4px;
-  border-radius: 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e5ea;
+  margin-bottom: 4px;
 }
 
 .cat-row:hover {
-  background: #f5f5f7;
-}
-
-.cat-name {
-  flex: 1 1 auto;
-  font-size: 14px;
+  background: #f2f2f7;
 }
 
 .cat-color-preview {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #d1d1d6;
+  margin-right: 6px;
+}
+
+.cat-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 6px;
+  min-width: 40px;
+}
+
+.cat-name:focus {
+  outline: 1px solid #007aff;
+  background: #ffffff;
 }
 
 .cat-actions {
-  display: inline-flex;
+  display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-/* 桌面表格 */
+/* 显示设置 */
+
+.label-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #3c3c43;
+}
+
+.label-inline input[type="text"] {
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid #d1d1d6;
+}
+
+.label-inline input[type="color"] {
+  width: 32px;
+  height: 22px;
+  border-radius: 8px;
+  border: 1px solid #d1d1d6;
+}
+
+.label-inline select {
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 1px solid #d1d1d6;
+}
+
+/* Table (桌面版) */
 
 .table-wrap {
   width: 100%;
@@ -333,162 +340,101 @@ table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  background: #ffffff;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-thead {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--cell-alt);
-}
-
-thead tr {
-  background: var(--cell-alt);
-}
-
-th,
-td {
-  padding: var(--pad) 8px;
-  border-bottom: 1px solid var(--line);
   font-size: 13px;
+}
+
+thead th {
   text-align: left;
+  font-weight: 600;
+  padding: 6px 6px;
+  border-bottom: 1px solid #e5e5ea;
+  color: #3c3c43;
+  background: #f9f9fb;
+}
+
+tbody td {
+  padding: var(--pad) 6px;
+  border-bottom: 1px solid #f2f2f7;
   vertical-align: middle;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: #ffffff;
 }
-
-/* 蓝色行 / 高亮时，表头保持统一浅色，不会变成奇怪灰色 */
-
-th {
-  font-weight: 500;
-  color: #555;
-}
-
-/* 隔行着色（桌面） */
 
 tbody.zebra tr:nth-child(even) td {
   background: var(--zebra);
 }
 
-/* hover 行，再稍微加一点高亮 */
+/* 列宽 & 对齐 */
 
-tbody tr:hover td {
-  background: #e9f3ff;
+.col-phone {
+  width: calc(120px * var(--colScale));
 }
 
-/* 列宽 */
-
-th.col-phone,
-td.col-phone {
-  width: calc(var(--w-phone) * var(--colScale));
+.col-owner {
+  width: calc(110px * var(--colScale));
 }
 
-th.col-owner,
-td.col-owner {
-  width: calc(var(--w-owner) * var(--colScale));
+.col-real {
+  width: calc(120px * var(--colScale));
 }
 
-th.col-real,
-td.col-real {
-  width: calc(var(--w-real) * var(--colScale));
+.col-wx {
+  width: calc(140px * var(--colScale));
 }
 
-th.col-wx,
-td.col-wx {
-  width: calc(var(--w-wx) * var(--colScale));
+.col-xhs {
+  width: calc(160px * var(--colScale));
 }
 
-/* 小红书名称：桌面右对齐 */
-th.col-xhs,
-td.col-xhs {
-  width: calc(var(--w-xhs) * var(--colScale));
-  text-align: right;
+.col-note {
+  width: calc(180px * var(--colScale));
 }
 
-th.col-note,
-td.col-note {
-  width: calc(var(--w-note) * var(--colScale));
+.col-cat {
+  width: calc(110px * var(--colScale));
 }
 
-th.col-cat,
-td.col-cat {
-  width: calc(var(--w-cat) * var(--colScale));
+.col-act {
+  width: 120px;
 }
 
-th.col-act,
-td.col-act {
-  width: calc(var(--w-actions) * var(--colScale));
+/* 小红书名称 & 所属人字体统一加粗一点 */
+
+.col-owner,
+.col-xhs {
+  font-size: 13px;
+  font-weight: 500;
 }
 
-/* 表格内联编辑 */
+/* 可编辑单元格 */
 
 td[contenteditable="true"] {
   cursor: text;
 }
 
-td[contenteditable="true"]:focus-visible {
-  outline: 2px solid rgba(0, 122, 255, 0.35);
-  outline-offset: -2px;
-  background: #ffffff;
+td[contenteditable="true"]:focus {
+  outline: 1px solid #007aff;
 }
 
-/* 分类单元格 */
+/* 分类下拉 */
 
-td.col-cat select {
+.col-cat select {
   width: 100%;
-  min-width: 80px;
-  font-size: 13px;
-  height: 28px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid #d1d1d6;
+  font-size: 12px;
 }
 
-/* 操作列（桌面） */
+/* 操作列 */
 
 .actions-container {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: flex;
   gap: 4px;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
-/* 兼容旧逻辑：有“编辑” + 隐藏动作时 */
-
-.actions-extra {
-  display: inline-flex;
-  gap: 4px;
-  margin-left: 4px;
-}
-
-.actions-extra.hidden {
-  display: none;
-}
-
-/* 三个功能按钮样式（上移/下移/删除） */
-
-.actions-container .btn-mini,
-.actions-extra .btn-mini {
-  padding: 2px 6px;
-  height: 24px;
-  font-size: 12px;
-  border-radius: 999px;
-}
-
-/* 删除按钮稍微醒目一点 */
-
-.btn-danger {
-  background: #ff3b30;
-  border-color: transparent;
-  color: #fff;
-}
-
-.btn-danger:hover {
-  background: #e03228;
-}
-
-/* 桌面 / 手机显示切换 */
+/* Desktop / Mobile 切换 */
 
 .desktop-only {
   display: block;
@@ -498,175 +444,125 @@ td.col-cat select {
   display: none;
 }
 
-/* 手机版折叠列表卡片 */
+/* 手机版布局 */
 
 .m-row {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card-bg, #fff);
-  margin-bottom: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.2s ease, transform 0.1s ease;
-  color: #111;
+  background: var(--card-bg, #ffffff);
+  border-radius: 12px;
+  padding: 4px 8px 4px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e5ea;
 }
-
-.m-row:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-}
-
-/* 卡片头：保证“手机号 + 人名”对齐，不显得太高 */
 
 .m-row-header {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 16px 18px;
-  min-height: 60px; /* 对应你说的高度从 160px 收紧到约 100px 整体视觉 */
+  padding: 4px 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 8px;
   cursor: pointer;
-  transition: background 0.15s ease;
-  color: inherit;
 }
-
-.m-row:hover .m-row-header {
-  background: #f5f7ff;
-}
-
-/* 头部主行：手机号 + 小红书名称 */
 
 .m-main-line {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .m-phone {
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 600;
-  flex: 0 0 auto;
 }
 
-/* 小红书名称：移动端靠右显示 + 右对齐 */
 .m-xhs {
   font-size: 14px;
-  color: #333;
-  max-width: 60%;
+  font-weight: 500;
+  max-width: 55%;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  margin-left: auto;
-  text-align: right;
+  padding: 2px 6px;
+  border-radius: 999px;
 }
 
-/* 头部第二行：所属人标签 + 分类 pill */
+.m-arrow {
+  font-size: 11px;
+  color: #8e8e93;
+}
 
 .m-meta-line {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: 2px;
+  gap: 6px;
   font-size: 12px;
-  color: var(--muted);
 }
 
-/* 所属人：字体大小调到和 m-xhs 一致 */
 .m-owner {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f2f2f7;
-  color: #333;
-  font-size: 14px;
+  font-size: 13px;
 }
-
-/* 分类 pill（颜色与桌面保持一致，由 JS 设置背景） */
 
 .m-cat-pill {
-  padding: 2px 8px;
+  font-size: 11px;
+  padding: 2px 6px;
   border-radius: 999px;
-  font-size: 12px;
-  background: rgba(0, 122, 255, 0.09);
+  color: #111111;
+  max-width: 50%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-/* 下拉箭头 */
-
-.m-arrow {
-  margin-left: auto;
-  font-size: 14px;
-  transform-origin: center;
-  transition: transform 0.15s ease;
-}
-
-.m-row.open .m-arrow {
-  transform: rotate(180deg);
-}
-
-/* 手机详情区域 */
+/* 折叠内容 */
 
 .m-row-details {
   max-height: 0;
-  opacity: 0;
   overflow: hidden;
-  padding: 0 18px;
-  border-top: 1px solid var(--line);
-  background: #fff;
-  transition: max-height 0.2s ease, opacity 0.18s ease;
+  transition: max-height 0.18s ease-out, opacity 0.18s ease-out;
+  opacity: 0;
 }
 
 .m-row.open .m-row-details {
-  max-height: 360px;
+  max-height: 500px;
   opacity: 1;
-  padding: 10px 18px 12px;
+  margin-top: 4px;
 }
 
 .m-detail-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  padding: 4px 0;
+  border-top: 1px solid #f2f2f7;
+}
+
+.m-detail-row:first-child {
+  border-top: none;
 }
 
 .m-detail-label {
-  font-size: 12px;
-  color: var(--muted);
   flex: 0 0 80px;
+  font-size: 12px;
+  color: #8e8e93;
 }
 
 .m-detail-value {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 14px;
-  border-radius: 10px;
-  padding: 4px 8px;
-  background: #f7f7fa;
+  flex: 1;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 6px;
 }
 
-/* 手机端可编辑文本 */
-
-.m-detail-value[contenteditable="true"] {
-  cursor: text;
-}
-
-.m-detail-value[contenteditable="true"]:focus-visible {
-  outline: 2px solid rgba(0, 122, 255, 0.35);
+.m-detail-value[contenteditable="true"]:focus {
+  outline: 1px solid #007aff;
   background: #ffffff;
 }
 
-/* 底部操作区域（手机） */
+/* 手机版操作按钮 */
 
 .m-actions {
-  border-top: 1px solid var(--line);
-  padding: 6px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: #fafafa;
+  margin-top: 6px;
 }
 
 .m-actions-main {
@@ -675,39 +571,24 @@ td.col-cat select {
 }
 
 .m-actions-hidden {
+  display: none;
+  margin-top: 4px;
+  gap: 6px;
+}
+
+.m-actions-hidden.show {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
+  flex-wrap: wrap;
 }
 
-/* 兼容旧版的“编辑 + 隐藏操作按钮” */
-
-.m-hidden-actions {
-  display: none;
-}
-
-.m-hidden-actions.show {
-  display: flex;
-  gap: 6px;
-}
-
-/* 手机操作按钮统一小号 */
-
-.m-actions button {
-  height: 26px;
-  padding: 2px 8px;
-  font-size: 12px;
-}
-
-/* 小屏优化 */
-
-@media (max-width: 1024px) {
-  .wrap {
-    padding: 10px 8px 20px;
-  }
-}
+/* Responsive */
 
 @media (max-width: 768px) {
+  .wrap {
+    padding: 6px 6px 30px;
+  }
+
   .desktop-only {
     display: none;
   }
@@ -717,47 +598,27 @@ td.col-cat select {
   }
 
   .panel {
-    border-radius: 14px;
-    padding: 8px 10px;
+    padding: 8px 8px 6px;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar input#q {
+    flex-basis: 100%;
+  }
+
+  .toolbar select {
+    flex: 1 1 30%;
+    min-width: 120px;
   }
 
   .topbar {
-    padding-bottom: 6px;
+    padding: 4px 2px 8px;
   }
 
-  #appTitle {
-    font-size: 18px;
-  }
-
-  input,
-  select,
-  button {
-    font-size: 13px;
-    height: 30px;
-  }
-
-  th,
-  td {
-    font-size: 13px;
-  }
-}
-
-@media (max-width: 480px) {
-  .toolbar {
-    gap: 6px;
-  }
-
-  #q {
-    min-width: 0;
-    flex: 1 1 140px;
-  }
-
-  .cloud-status {
-    font-size: 12px;
-    padding: 3px 8px;
-  }
-
-  .m-phone {
+  .top-left h1 {
     font-size: 18px;
   }
 }

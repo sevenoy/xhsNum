@@ -10,7 +10,7 @@ const DB_NAME = "xhs_phone_sheet_v7";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
-// ✅ 如果本地还没有 Supabase 配置，则自动写入你提供的参数
+// ✅ 自动写入 Supabase 配置（用你提供的）
 if (!localStorage.getItem("xhs_supabase_url")) {
   localStorage.setItem(
     "xhs_supabase_url",
@@ -443,15 +443,20 @@ function tdActions(rowId) {
 
 function makeRowTr(r) {
   const cats = readCats();
-  const xhsBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+  const xhsColor = catColorOf(cats, r.row_color);
+  const xhsBg = makeHighlightColor(xhsColor, 0.18) || "transparent";
+
   return `<tr data-id="${r.id}">
     ${tdEditable("col-phone", r.phone, "phone", r.id)}
     ${tdEditable("col-owner", r.owner, "owner", r.id)}
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
-    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" style="background:${xhsBg}; text-align:right;">${escapeHtml(
-      r.xhs_name || ""
-    )}</td>
+    <td class="col-xhs" contenteditable="true"
+        data-field="xhs_name"
+        data-id="${r.id}"
+        style="background:${xhsBg};text-align:right;">
+      ${escapeHtml(r.xhs_name || "")}
+    </td>
     ${tdEditable("col-note", r.note1, "note1", r.id)}
     ${tdSelectCat("col-cat", r.row_color, r.id)}
     ${tdActions(r.id)}
@@ -531,13 +536,17 @@ function renderMobileList(rows) {
     .map((r, idx) => {
       const cats = readCats();
       const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
-      const pillBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+      const catColor = catColorOf(cats, r.row_color);
+      const pillBg = makeHighlightColor(catColor, 0.18);
+      const xhsBg = makeHighlightColor(catColor, 0.18);
       const catName = catNameOf(cats, r.row_color);
       return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
         <button class="m-row-header" data-id="${r.id}">
           <div class="m-main-line">
             <span class="m-phone">${escapeHtml(r.phone || "")}</span>
-            <span class="m-xhs">${escapeHtml(r.xhs_name || "")}</span>
+            <span class="m-xhs" style="background:${xhsBg}">${escapeHtml(
+              r.xhs_name || ""
+            )}</span>
             <span class="m-arrow">▾</span>
           </div>
           <div class="m-meta-line">

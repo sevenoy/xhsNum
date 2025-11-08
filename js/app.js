@@ -544,44 +544,8 @@ async function renderTable() {
     });
   });
 
-  // ✅✅✅ 关键修复：使用简单的事件委托，参考原始版本
-  tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
-    sel.addEventListener("change", async (e) => {
-      const id = sel.getAttribute("data-id");
-      const newColor = sel.value;
-      console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
-      
-      // ✅ 更新数据库
-      const row = await db.rows.get(id);
-      if (row) {
-        await db.rows.put({ 
-          ...row, 
-          row_color: newColor, 
-          updated_at: Date.now() 
-        });
-      }
-      
-      // ✅ 重新渲染整个表格（让背景色自动更新）
-      await renderTable();
-    });
-  });
-
-  tbody.querySelectorAll("button[data-act]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-act");
-      if (act === "up") {
-        await moveRow(id, "up");
-      } else if (act === "down") {
-        await moveRow(id, "down");
-      } else if (act === "del") {
-        if (confirm("确定删除该行？")) {
-          await deleteRowById(id);
-        }
-      }
-    });
-  });
-
+  // ✅ 注意：事件委托已在 bindEvents() 中设置，这里不需要重复绑定
+  
   renderMobileList(rows);
 }
 
@@ -669,39 +633,7 @@ function renderMobileList(rows) {
       });
     });
 
-  // ✅✅✅ 移动端分类选择器：简单处理
-  container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
-    sel.addEventListener("change", async (e) => {
-      const id = sel.getAttribute("data-id");
-      const newColor = sel.value;
-      console.log(`✅ 移动端分类改变: ID=${id}, 新分类=${newColor}`);
-      
-      const row = await db.rows.get(id);
-      if (row) {
-        await db.rows.put({ 
-          ...row, 
-          row_color: newColor, 
-          updated_at: Date.now() 
-        });
-      }
-      
-      // ✅ 重新渲染整个表格
-      await renderTable();
-    });
-  });
-
-  container.querySelectorAll("button[data-mact]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-mact");
-      if (act === "up") await moveRow(id, "up");
-      else if (act === "down") await moveRow(id, "down");
-      else if (act === "del") {
-        if (confirm("确定删除该行？")) await deleteRowById(id);
-      }
-    });
-  });
+  // ✅ 注意：移动端事件委托已在 bindEvents() 中设置，这里不需要重复绑定
 
   function mobileDetail(label, text, field, id) {
     return `<div class="m-detail-row">
@@ -1041,6 +973,97 @@ function renderCatList() {
  * ========================= */
 
 function bindEvents() {
+  // ✅✅✅ 关键：使用事件委托在 tbody 上监听，避免重复绑定
+  const gridBody = $("#gridBody");
+  
+  // 监听分类选择器的 change 事件（事件委托）
+  gridBody.addEventListener("change", async (e) => {
+    const sel = e.target.closest('select[data-field="row_color"]');
+    if (!sel) return;
+    
+    const id = sel.getAttribute("data-id");
+    const newColor = sel.value;
+    console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
+    
+    // 更新数据库
+    const row = await db.rows.get(id);
+    if (row) {
+      await db.rows.put({ 
+        ...row, 
+        row_color: newColor, 
+        updated_at: Date.now() 
+      });
+    }
+    
+    // 重新渲染整个表格
+    await renderTable();
+  });
+  
+  // 监听操作按钮的 click 事件（事件委托）
+  gridBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    
+    const id = btn.getAttribute("data-id");
+    const act = btn.getAttribute("data-act");
+    
+    if (act === "up") {
+      await moveRow(id, "up");
+    } else if (act === "down") {
+      await moveRow(id, "down");
+    } else if (act === "del") {
+      if (confirm("确定删除该行？")) {
+        await deleteRowById(id);
+      }
+    }
+  });
+  
+  // ✅✅✅ 移动端事件委托
+  const mobileList = $("#mobileList");
+  
+  // 监听移动端分类选择器的 change 事件（事件委托）
+  mobileList.addEventListener("change", async (e) => {
+    const sel = e.target.closest('select[data-field="row_color"]');
+    if (!sel) return;
+    
+    const id = sel.getAttribute("data-id");
+    const newColor = sel.value;
+    console.log(`✅ 移动端分类改变: ID=${id}, 新分类=${newColor}`);
+    
+    // 更新数据库
+    const row = await db.rows.get(id);
+    if (row) {
+      await db.rows.put({ 
+        ...row, 
+        row_color: newColor, 
+        updated_at: Date.now() 
+      });
+    }
+    
+    // 重新渲染整个表格
+    await renderTable();
+  });
+  
+  // 监听移动端操作按钮的 click 事件（事件委托）
+  mobileList.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-mact]");
+    if (!btn) return;
+    
+    e.stopPropagation();
+    const id = btn.getAttribute("data-id");
+    const act = btn.getAttribute("data-mact");
+    
+    if (act === "up") {
+      await moveRow(id, "up");
+    } else if (act === "down") {
+      await moveRow(id, "down");
+    } else if (act === "del") {
+      if (confirm("确定删除该行？")) {
+        await deleteRowById(id);
+      }
+    }
+  });
+  
   $("#q").addEventListener("input", async (e) => {
     state.q = e.target.value || "";
     await renderTable();

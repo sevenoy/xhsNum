@@ -232,7 +232,11 @@ async function getAllRows() {
 
 async function addRow() {
   const all = await getAllRows();
-  const maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+  // ✅ 正确版本
+let maxOrder = all.length
+  ? Math.max(...all.map((r) => r.order || 0))
+  : 0;
+
   const row = {
     id: uid(),
     order: maxOrder + 1,

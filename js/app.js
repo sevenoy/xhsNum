@@ -1,725 +1,4 @@
-// app.js —— 本地 Dexie + Supabase 快照 + 桌面表格 + 手机版折叠列表
-
-/* =========================
- * 0. 基础配置 & 常量
- * ========================= */
-
-const VIEW_KEY = "xhs_view_v7";
-const CATS_KEY = "xhs_cats_v7";
-const DB_NAME = "xhs_phone_sheet_v7";
-const SUPABASE_TABLE = "xhsphone_snapshot";
-const SUPABASE_DEFAULT_KEY = "default";
-
-// ✅ 自动写入 Supabase 配置（用你提供的）
-if (!localStorage.getItem("xhs_supabase_url")) {
-  localStorage.setItem(
-    "xhs_supabase_url",
-    "https://tmeqccupnsvxexbrlflo.supabase.co"
-  );
-}
-if (!localStorage.getItem("xhs_supabase_anon_key")) {
-  localStorage.setItem(
-    "xhs_supabase_anon_key",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
-  );
-}
-
-// 优先从 window / localStorage 读取已有配置
-const SUPABASE_URL =
-  (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
-const SUPABASE_ANON_KEY =
-  (window.SUPABASE_ANON_KEY ||
-    localStorage.getItem("xhs_supabase_anon_key") ||
-    "").trim();
-
-// 动态加载 Supabase，避免 import 失败把整份脚本搞挂
-let supabase = null;
-let hasSupabase = false;
-
-async function initSupabase() {
-  hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  if (!hasSupabase) return;
-
-  try {
-    const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2"
-    );
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    await cloudHealthCheck();
-    await renderCloudHistory();
-  } catch (err) {
-    console.error("Supabase 初始化失败：", err);
-    supabase = null;
-  }
-}
-
-// 默认视图
-const DEFAULT_VIEW = Object.freeze({
-  viewVersion: 7,
-  pad: 6,
-  colScale: 1,
-  zebraOn: true,
-  zebraColor: "#e2f0ff",
-  fontFamily:
-    '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
-  titleText: "XHSPHONE",
-  titleColor: "#111111",
-});
-
-// 默认分类
-const DEFAULT_CATS = Object.freeze([
-  { id: "enterprise", name: "企业号", color: "#007aff" },
-  { id: "olina", name: "Olina用", color: "#34c759" },
-  { id: "jasper", name: "嘉用", color: "#ff9f0a" },
-  { id: "usable", name: "可用", color: "#8e8e93" },
-]);
-
-// 全局筛选状态
-const state = {
-  q: "",
-  owner: "all",
-  wxReal: "all",
-  sortBy: "order",
-  precise: false,
-};
-
-/* =========================
- * 1. Dexie 初始化
- * ========================= */
-
-const db = new Dexie(DB_NAME);
-db.version(1).stores({
-  rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
-});
-
-/* =========================
- * 2. 视图配置
- * ========================= */
-
-function readView() {
-  try {
-    const raw = localStorage.getItem(VIEW_KEY);
-    if (!raw) return { ...DEFAULT_VIEW };
-    const obj = JSON.parse(raw);
-    if (!obj || obj.viewVersion !== DEFAULT_VIEW.viewVersion) {
-      saveView(DEFAULT_VIEW);
-      return { ...DEFAULT_VIEW };
-    }
-    return { ...DEFAULT_VIEW, ...obj };
-  } catch {
-    saveView(DEFAULT_VIEW);
-    return { ...DEFAULT_VIEW };
-  }
-}
-
-function saveView(v) {
-  localStorage.setItem(VIEW_KEY, JSON.stringify(v));
-}
-
-function applyView(v) {
-  const root = document.documentElement;
-  root.style.setProperty("--pad", `${v.pad}px`);
-  root.style.setProperty("--colScale", `${v.colScale}`);
-  root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
-  root.style.setProperty("--font-main", v.fontFamily);
-
-  const h1 = document.getElementById("appTitle");
-  if (h1) {
-    h1.textContent = v.titleText;
-    h1.style.color = v.titleColor;
-  }
-}
-
-/* =========================
- * 3. 分类配置
- * ========================= */
-
-function readCats() {
-  try {
-    const raw = localStorage.getItem(CATS_KEY);
-    if (!raw) return DEFAULT_CATS.slice();
-    const obj = JSON.parse(raw);
-    if (Array.isArray(obj) && obj.length) return obj;
-    return DEFAULT_CATS.slice();
-  } catch {
-    return DEFAULT_CATS.slice();
-  }
-}
-
-function saveCats(cats) {
-  localStorage.setItem(CATS_KEY, JSON.stringify(cats));
-}
-
-function catNameOf(cats, id) {
-  const found = cats.find((c) => c.id === id);
-  return found ? found.name : "";
-}
-
-function catColorOf(cats, id) {
-  const found = cats.find((c) => c.id === id);
-  return found ? found.color : "transparent";
-}
-
-/* =========================
- * 4. 工具函数
- * ========================= */
-
-const $ = (sel) => document.querySelector(sel);
-
-function fmtTime(ts) {
-  try {
-    const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-    const Y = d.getFullYear();
-    const M = String(d.getMonth() + 1).padStart(2, "0");
-    const D = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const m = String(d.getMinutes()).padStart(2, "0");
-    return `${Y}-${M}-${D} ${h}:${m}`;
-  } catch {
-    return "";
-  }
-}
-
-function uid() {
-  return (
-    Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-  ).toUpperCase();
-}
-
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function unescapeHtml(s) {
-  if (s == null) return "";
-  return String(s)
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&amp;", "&");
-}
-
-function makeHighlightColor(hex, alpha = 0.14) {
-  if (!hex || !hex.startsWith("#")) return "transparent";
-  const c = hex.slice(1);
-  let r, g, b;
-  if (c.length === 3) {
-    r = parseInt(c[0] + c[0], 16);
-    g = parseInt(c[1] + c[1], 16);
-    b = parseInt(c[2] + c[2], 16);
-  } else {
-    r = parseInt(c.slice(0, 2), 16);
-    g = parseInt(c.slice(2, 4), 16);
-    b = parseInt(c.slice(4, 6), 16);
-  }
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/* =========================
- * 5. 本地数据封装
- * ========================= */
-
-async function getAllRows() {
-  const all = await db.rows.toArray();
-  all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  return all;
-}
-
-async function addRow() {
-  const all = await getAllRows();
-  // ✅ 正确版本
-let maxOrder = all.length
-  ? Math.max(...all.map((r) => r.order || 0))
-  : 0;
-
-  const row = {
-    id: uid(),
-    order: maxOrder + 1,
-    phone: "",
-    owner: "",
-    wx_real: "",
-    wx_name: "",
-    xhs_name: "",
-    note1: "",
-    row_color: "",
-    updated_at: Date.now(),
-  };
-  await db.rows.add(row);
-  await refreshFilters();
-  await renderTable();
-}
-
-async function updateRow(id, patch) {
-  const row = await db.rows.get(id);
-  if (!row) return;
-  const next = { ...row, ...patch, updated_at: Date.now() };
-  await db.rows.put(next);
-}
-
-async function deleteRowById(id) {
-  await db.rows.delete(id);
-  await refreshFilters();
-  await renderTable();
-}
-
-async function moveRow(id, dir) {
-  const all = await getAllRows();
-  const filtered = applyFilters(all);
-  const idx = filtered.findIndex((r) => r.id === id);
-  if (idx === -1) return;
-  const targetIdx = dir === "up" ? idx - 1 : idx + 1;
-  if (targetIdx < 0 || targetIdx >= filtered.length) return;
-  const a = filtered[idx];
-  const b = filtered[targetIdx];
-  const ao = a.order ?? 0;
-  const bo = b.order ?? 0;
-  await db.transaction("rw", db.rows, async () => {
-    await db.rows.update(a.id, { order: bo, updated_at: Date.now() });
-    await db.rows.update(b.id, { order: ao, updated_at: Date.now() });
-  });
-  await renderTable();
-}
-
-/* =========================
- * 6. 筛选 / 搜索 / 排序
- * ========================= */
-
-async function refreshFilters() {
-  const owners = new Set();
-  const wxreals = new Set();
-  const all = await getAllRows();
-  for (const r of all) {
-    if (r.owner) owners.add(r.owner);
-    if (r.wx_real) wxreals.add(r.wx_real);
-  }
-  const ownerSel = $("#filterOwner");
-  const realSel = $("#filterWxReal");
-  const ownerVal = ownerSel.value;
-  const realVal = realSel.value;
-
-  ownerSel.innerHTML =
-    `<option value="all">所属人：全部</option>` +
-    Array.from(owners)
-      .sort((a, b) => a.localeCompare(b, "zh"))
-      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
-      .join("");
-  realSel.innerHTML =
-    `<option value="all">微信实名人：全部</option>` +
-    Array.from(wxreals)
-      .sort((a, b) => a.localeCompare(b, "zh"))
-      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
-      .join("");
-
-  ownerSel.value = ownerVal || "all";
-  realSel.value = realVal || "all";
-}
-
-function tokenize(s) {
-  return s
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
-function matchDigitsSubstr(phone, queryDigits) {
-  const digits = String(phone || "").replace(/\D+/g, "");
-  return digits.includes(queryDigits);
-}
-
-function applySearchFilter(rows) {
-  if (!state.q) return rows;
-  const q = state.q.trim();
-  if (!q) return rows;
-
-  if (state.precise) {
-    const hasNum = /\d/.test(q);
-    if (hasNum) {
-      const digits = q.replace(/\D+/g, "");
-      return rows.filter((r) => matchDigitsSubstr(r.phone, digits));
-    } else {
-      const target = q;
-      return rows.filter(
-        (r) =>
-          r.phone === target ||
-          r.owner === target ||
-          r.wx_real === target ||
-          r.wx_name === target ||
-          r.xhs_name === target ||
-          r.note1 === target
-      );
-    }
-  } else {
-    const tokens = tokenize(q);
-    return rows.filter((r) => {
-      const bag = [
-        r.phone,
-        r.owner,
-        r.wx_real,
-        r.wx_name,
-        r.xhs_name,
-        r.note1,
-        catNameOf(readCats(), r.row_color),
-      ]
-        .map((s) => String(s || "").toLowerCase())
-        .join(" ");
-      return tokens.every((t) => bag.includes(t.toLowerCase()));
-    });
-  }
-}
-
-function applyFilters(rows) {
-  let out = rows.slice();
-  if (state.owner !== "all") {
-    out = out.filter((r) => r.owner === state.owner);
-  }
-  if (state.wxReal !== "all") {
-    out = out.filter((r) => r.wx_real === state.wxReal);
-  }
-  out = applySearchFilter(out);
-  switch (state.sortBy) {
-    case "owner":
-      out.sort((a, b) => (a.owner || "").localeCompare(b.owner || "", "zh"));
-      break;
-    case "wx_real":
-      out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
-      break;
-    case "phone":
-      out.sort((a, b) => (a.phone || "").localeCompare(b.phone || "", "zh"));
-      break;
-    case "xhs_name":
-      out.sort((a, b) => (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh"));
-      break;
-    case "row_color": {
-      const cats = readCats();
-      out.sort((a, b) =>
-        catNameOf(cats, a.row_color).localeCompare(
-          catNameOf(cats, b.row_color),
-          "zh"
-        )
-      );
-      break;
-    }
-    default:
-      out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-  return out;
-}
-
-/* =========================
- * 7. 渲染（桌面 + 手机版）
- * ========================= */
-
-function tdEditable(cls, text, field, rowId) {
-  return `<td class="${cls}" contenteditable="true" data-field="${field}" data-id="${rowId}">${escapeHtml(
-    text || ""
-  )}</td>`;
-}
-
-function tdSelectCat(cls, value, rowId) {
-  const cats = readCats();
-  const opts = [`<option value="">未分类</option>`]
-    .concat(
-      cats.map(
-        (c) =>
-          `<option value="${escapeHtml(c.id)}"${
-            c.id === value ? " selected" : ""
-          }>${escapeHtml(c.name)}</option>`
-      )
-    )
-    .join("");
-  return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}" style="position:relative;z-index:5" onfocus="this.closest('td').style.background='#fff';" onblur="this.closest('td').style.background='';">${opts}</select></td>`;
-}
-
-function tdActions(rowId) {
-  return `<td class="col-act">
-    <div class="actions-container">
-      <button class="btn-mini ghost" data-act="up" data-id="${rowId}">上移</button>
-      <button class="btn-mini ghost" data-act="down" data-id="${rowId}">下移</button>
-      <button class="btn-mini btn-danger" data-act="del" data-id="${rowId}">删除</button>
-    </div>
-  </td>`;
-}
-
-function makeRowTr(r) {
-  const cats = readCats();
-  const xhsColor = catColorOf(cats, r.row_color);
-  const xhsBg = makeHighlightColor(xhsColor, 0.18) || "transparent";
-
-  return `<tr data-id="${r.id}">
-    ${tdEditable("col-phone", r.phone, "phone", r.id)}
-    ${tdEditable("col-owner", r.owner, "owner", r.id)}
-    ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
-    ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
-    <td class="col-xhs" contenteditable="true"
-        data-field="xhs_name"
-        data-id="${r.id}"
-        style="background:${xhsBg};text-align:right;">
-      ${escapeHtml(r.xhs_name || "")}
-    </td>
-    ${tdEditable("col-note", r.note1, "note1", r.id)}
-    ${tdSelectCat("col-cat", r.row_color, r.id)}
-    ${tdActions(r.id)}
-  </tr>`;
-}
-
-async function renderTable() {
-  const tbody = $("#gridBody");
-  const all = await getAllRows();
-  const rows = applyFilters(all);
-
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击“新增一行”开始录入</td></tr>`;
-  } else {
-    tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
-  }
-
-  tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
-    td.addEventListener("focus", () => {
-      td.style.background = "#fff";
-    });
-    td.addEventListener("blur", async () => {
-      td.style.background = "";
-      const id = td.getAttribute("data-id");
-      const field = td.getAttribute("data-field");
-      const val = unescapeHtml(td.textContent || "").trim();
-      await updateRow(id, { [field]: val });
-      if (field === "xhs_name" || field === "row_color" || field === "owner") {
-        await refreshFilters();
-        await renderTable();
-      }
-    });
-    td.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        td.blur();
-      }
-    });
-  });
-
-  tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
-    sel.addEventListener("change", async () => {
-      const id = sel.getAttribute("data-id");
-      await updateRow(id, { row_color: sel.value });
-      await renderTable();
-    });
-  });
-
-  tbody.querySelectorAll("button[data-act]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-act");
-      if (act === "up") {
-        await moveRow(id, "up");
-      } else if (act === "down") {
-        await moveRow(id, "down");
-      } else if (act === "del") {
-        if (confirm("确定删除该行？")) {
-          await deleteRowById(id);
-        }
-      }
-    });
-  });
-
-  renderMobileList(rows);
-}
-
-function renderMobileList(rows) {
-  const container = $("#mobileList");
-  const v = readView();
-
-  if (!rows.length) {
-    container.innerHTML = `<div style="text-align:center;color:#888;padding:10px 0;">暂无数据</div>`;
-    return;
-  }
-  container.innerHTML = rows
-    .map((r, idx) => {
-      const cats = readCats();
-      const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
-      const catColor = catColorOf(cats, r.row_color);
-      const pillBg = makeHighlightColor(catColor, 0.18);
-      const xhsBg = makeHighlightColor(catColor, 0.18);
-      const catName = catNameOf(cats, r.row_color);
-      return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
-        <button class="m-row-header" data-id="${r.id}">
-          <div class="m-main-line">
-            <span class="m-phone">${escapeHtml(r.phone || "")}</span>
-            <span class="m-xhs" style="background:${xhsBg}">${escapeHtml(
-              r.xhs_name || ""
-            )}</span>
-            <span class="m-arrow">▾</span>
-          </div>
-          <div class="m-meta-line">
-            <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
-            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(
-              catName || "未分类"
-            )}</span>
-          </div>
-        </button>
-        <div class="m-row-details">
-          ${mobileDetail("微信实名人", r.wx_real, "wx_real", r.id)}
-          ${mobileDetail("对应微信名", r.wx_name, "wx_name", r.id)}
-          ${mobileDetail("小红书名称", r.xhs_name, "xhs_name", r.id)}
-          ${mobileDetail("备注", r.note1, "note1", r.id)}
-          ${mobileCat(r.row_color, r.id)}
-          <div class="m-actions">
-            <div class="m-actions-main">
-              <button class="ghost m-btn-edit" data-id="${r.id}">更多</button>
-            </div>
-            <div class="m-actions-hidden" id="m-hidden-${r.id}">
-              <button class="ghost" data-mact="up" data-id="${r.id}">上移</button>
-              <button class="ghost" data-mact="down" data-id="${r.id}">下移</button>
-              <button class="btn-danger" data-mact="del" data-id="${r.id}">删除</button>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    })
-    .join("");
-
-  container.querySelectorAll(".m-row-header").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const card = btn.closest(".m-row");
-      card.classList.toggle("open");
-    });
-  });
-
-  container
-    .querySelectorAll('.m-detail-value[contenteditable="true"]')
-    .forEach((el) => {
-      el.addEventListener("focus", () => (el.style.background = "#fff"));
-      el.addEventListener("blur", async () => {
-        el.style.background = "";
-        const id = el.getAttribute("data-id");
-        const field = el.getAttribute("data-field");
-        const val = unescapeHtml(el.textContent || "").trim();
-        await updateRow(id, { [field]: val });
-        await renderTable();
-      });
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          el.blur();
-        }
-      });
-    });
-
-  container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
-    sel.addEventListener("change", async () => {
-      const id = sel.getAttribute("data-id");
-      await updateRow(id, { row_color: sel.value });
-      await renderTable();
-    });
-    sel.addEventListener("focus", () => {
-      const td = sel.closest(".m-detail-value");
-      if (td) td.style.background = "#fff";
-    });
-    sel.addEventListener("blur", () => {
-      const td = sel.closest(".m-detail-value");
-      if (td) td.style.background = "";
-    });
-  });
-
-  container.querySelectorAll(".m-btn-edit").forEach((b) => {
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = b.getAttribute("data-id");
-      const box = document.getElementById(`m-hidden-${id}`);
-      if (!box) return;
-      box.classList.toggle("show");
-    });
-  });
-
-  container.querySelectorAll("button[data-mact]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const id = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-mact");
-      if (act === "up") await moveRow(id, "up");
-      else if (act === "down") await moveRow(id, "down");
-      else if (act === "del") {
-        if (confirm("确定删除该行？")) await deleteRowById(id);
-      }
-    });
-  });
-
-  function mobileDetail(label, text, field, id) {
-    return `<div class="m-detail-row">
-      <div class="m-detail-label">${escapeHtml(label)}</div>
-      <div class="m-detail-value" contenteditable="true" data-field="${field}" data-id="${id}">${escapeHtml(
-        text || ""
-      )}</div>
-    </div>`;
-  }
-
-  function mobileCat(value, id) {
-    const cats = readCats();
-    const opts = [`<option value="">未分类</option>`]
-      .concat(
-        cats.map(
-          (c) =>
-            `<option value="${escapeHtml(c.id)}"${
-              c.id === value ? " selected" : ""
-            }>${escapeHtml(c.name)}</option>`
-        )
-      )
-      .join("");
-    return `<div class="m-detail-row">
-      <div class="m-detail-label">分类</div>
-      <div class="m-detail-value">
-        <select data-field="row_color" data-id="${id}" style="width:100%;">
-          ${opts}
-        </select>
-      </div>
-    </div>`;
-  }
-}
-
-/* =========================
- * 8. CSV 导入/导出
- * ========================= */
-
-function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
-  if (!lines.length) return [];
-  const headers = lines[0].split(",").map((h) => h.trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
-    const obj = {};
-    headers.forEach((h, idx) => (obj[h] = cols[idx] || ""));
-    rows.push(obj);
-  }
-  return rows;
-}
-
-function toCSV(rows) {
-  const headers = [
-    "phone",
-    "owner",
-    "wx_real",
-    "wx_name",
-    "xhs_name",
-    "note1",
-    "row_color",
-    "order",
-  ];
-  const out = [headers.join(",")];
-  for (const r of rows) {
-    const line = headers
-      .map((h) => {
-        const s = String(r[h] ?? "");
-        return `"${s.replaceAll('"', '""')}"`;
-      })
-      .join(",");
-    out.push(line);
-  }
-  return out.join("\n");
-}
+// app.js — 本地 Dexie + Supabase 快照 + 桌面表格 + 手机版折叠列表
 
 /* =========================
  * 9. Supabase 云端快照
@@ -1194,3 +473,740 @@ document.addEventListener("DOMContentLoaded", async () => {
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";
 });
+ 0. 基础配置 & 常量
+ * ========================= */
+
+const VIEW_KEY = "xhs_view_v7";
+const CATS_KEY = "xhs_cats_v7";
+const DB_NAME = "xhs_phone_sheet_v7";
+const SUPABASE_TABLE = "xhsphone_snapshot";
+const SUPABASE_DEFAULT_KEY = "default";
+
+// ✅ 如果本地还没有 Supabase 配置，则自动写入你提供的参数
+if (!localStorage.getItem("xhs_supabase_url")) {
+  localStorage.setItem(
+    "xhs_supabase_url",
+    "https://tmeqccupnsvxexbrlflo.supabase.co"
+  );
+}
+if (!localStorage.getItem("xhs_supabase_anon_key")) {
+  localStorage.setItem(
+    "xhs_supabase_anon_key",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0OTg2MjAsImV4cCI6MjA3ODA3NDYyMH0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
+  );
+}
+
+// 优先从 window / localStorage 读取已有配置
+const SUPABASE_URL =
+  (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
+const SUPABASE_ANON_KEY =
+  (window.SUPABASE_ANON_KEY ||
+    localStorage.getItem("xhs_supabase_anon_key") ||
+    "").trim();
+
+// 动态加载 Supabase，避免 import 失败把整份脚本搞挂
+let supabase = null;
+let hasSupabase = false;
+
+async function initSupabase() {
+  hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  if (!hasSupabase) return;
+
+  try {
+    const { createClient } = await import(
+      "https://esm.sh/@supabase/supabase-js@2"
+    );
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    await cloudHealthCheck();
+    await renderCloudHistory();
+  } catch (err) {
+    console.error("Supabase 初始化失败：", err);
+    supabase = null;
+  }
+}
+
+// 默认视图
+const DEFAULT_VIEW = Object.freeze({
+  viewVersion: 7,
+  pad: 6,
+  colScale: 1,
+  zebraOn: true,
+  zebraColor: "#e2f0ff",
+  fontFamily:
+    '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
+  titleText: "XHSPHONE",
+  titleColor: "#111111",
+});
+
+// 默认分类
+const DEFAULT_CATS = Object.freeze([
+  { id: "enterprise", name: "企业号", color: "#007aff" },
+  { id: "olina", name: "Olina用", color: "#34c759" },
+  { id: "jasper", name: "嘉用", color: "#ff9f0a" },
+  { id: "usable", name: "可用", color: "#8e8e93" },
+]);
+
+// 全局筛选状态
+const state = {
+  q: "",
+  owner: "all",
+  wxReal: "all",
+  sortBy: "order",
+  precise: false,
+};
+
+/* =========================
+ * 1. Dexie 初始化
+ * ========================= */
+
+const db = new Dexie(DB_NAME);
+db.version(1).stores({
+  rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
+});
+
+/* =========================
+ * 2. 视图配置
+ * ========================= */
+
+function readView() {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return { ...DEFAULT_VIEW };
+    const obj = JSON.parse(raw);
+    if (!obj || obj.viewVersion !== DEFAULT_VIEW.viewVersion) {
+      saveView(DEFAULT_VIEW);
+      return { ...DEFAULT_VIEW };
+    }
+    return { ...DEFAULT_VIEW, ...obj };
+  } catch {
+    saveView(DEFAULT_VIEW);
+    return { ...DEFAULT_VIEW };
+  }
+}
+
+function saveView(v) {
+  localStorage.setItem(VIEW_KEY, JSON.stringify(v));
+}
+
+function applyView(v) {
+  const root = document.documentElement;
+  root.style.setProperty("--pad", `${v.pad}px`);
+  root.style.setProperty("--colScale", `${v.colScale}`);
+  root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
+  root.style.setProperty("--font-main", v.fontFamily);
+
+  const h1 = document.getElementById("appTitle");
+  if (h1) {
+    h1.textContent = v.titleText;
+    h1.style.color = v.titleColor;
+  }
+}
+
+/* =========================
+ * 3. 分类配置
+ * ========================= */
+
+function readCats() {
+  try {
+    const raw = localStorage.getItem(CATS_KEY);
+    if (!raw) return DEFAULT_CATS.slice();
+    const obj = JSON.parse(raw);
+    if (Array.isArray(obj) && obj.length) return obj;
+    return DEFAULT_CATS.slice();
+  } catch {
+    return DEFAULT_CATS.slice();
+  }
+}
+
+function saveCats(cats) {
+  localStorage.setItem(CATS_KEY, JSON.stringify(cats));
+}
+
+function catNameOf(cats, id) {
+  const found = cats.find((c) => c.id === id);
+  return found ? found.name : "";
+}
+
+function catColorOf(cats, id) {
+  const found = cats.find((c) => c.id === id);
+  return found ? found.color : "transparent";
+}
+
+/* =========================
+ * 4. 工具函数
+ * ========================= */
+
+const $ = (sel) => document.querySelector(sel);
+
+function fmtTime(ts) {
+  try {
+    const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
+    const Y = d.getFullYear();
+    const M = String(d.getMonth() + 1).padStart(2, "0");
+    const D = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    return `${Y}-${M}-${D} ${h}:${m}`;
+  } catch {
+    return "";
+  }
+}
+
+function uid() {
+  return (
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+  ).toUpperCase();
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function unescapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&amp;", "&");
+}
+
+function makeHighlightColor(hex, alpha = 0.14) {
+  if (!hex || !hex.startsWith("#")) return "transparent";
+  const c = hex.slice(1);
+  let r, g, b;
+  if (c.length === 3) {
+    r = parseInt(c[0] + c[0], 16);
+    g = parseInt(c[1] + c[1], 16);
+    b = parseInt(c[2] + c[2], 16);
+  } else {
+    r = parseInt(c.slice(0, 2), 16);
+    g = parseInt(c.slice(2, 4), 16);
+    b = parseInt(c.slice(4, 6), 16);
+  }
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ✅ 截断字符串显示前10个字符
+function truncateText(text, maxChars = 10) {
+  if (!text) return "";
+  const str = String(text);
+  if (str.length <= maxChars) return str;
+  return str.slice(0, maxChars) + "...";
+}
+
+/* =========================
+ * 5. 本地数据封装
+ * ========================= */
+
+async function getAllRows() {
+  const all = await db.rows.toArray();
+  all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return all;
+}
+
+async function addRow() {
+  const all = await getAllRows();
+  const maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+  const row = {
+    id: uid(),
+    order: maxOrder + 1,
+    phone: "",
+    owner: "",
+    wx_real: "",
+    wx_name: "",
+    xhs_name: "",
+    note1: "",
+    row_color: "",
+    updated_at: Date.now(),
+  };
+  await db.rows.add(row);
+  await refreshFilters();
+  await renderTable();
+}
+
+async function updateRow(id, patch) {
+  const row = await db.rows.get(id);
+  if (!row) return;
+  const next = { ...row, ...patch, updated_at: Date.now() };
+  await db.rows.put(next);
+}
+
+async function deleteRowById(id) {
+  await db.rows.delete(id);
+  await refreshFilters();
+  await renderTable();
+}
+
+async function moveRow(id, dir) {
+  const all = await getAllRows();
+  const filtered = applyFilters(all);
+  const idx = filtered.findIndex((r) => r.id === id);
+  if (idx === -1) return;
+  const targetIdx = dir === "up" ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= filtered.length) return;
+  const a = filtered[idx];
+  const b = filtered[targetIdx];
+  const ao = a.order ?? 0;
+  const bo = b.order ?? 0;
+  await db.transaction("rw", db.rows, async () => {
+    await db.rows.update(a.id, { order: bo, updated_at: Date.now() });
+    await db.rows.update(b.id, { order: ao, updated_at: Date.now() });
+  });
+  await renderTable();
+}
+
+/* =========================
+ * 6. 筛选 / 搜索 / 排序
+ * ========================= */
+
+async function refreshFilters() {
+  const owners = new Set();
+  const wxreals = new Set();
+  const all = await getAllRows();
+  for (const r of all) {
+    if (r.owner) owners.add(r.owner);
+    if (r.wx_real) wxreals.add(r.wx_real);
+  }
+  const ownerSel = $("#filterOwner");
+  const realSel = $("#filterWxReal");
+  const ownerVal = ownerSel.value;
+  const realVal = realSel.value;
+
+  ownerSel.innerHTML =
+    `<option value="all">所属人：全部</option>` +
+    Array.from(owners)
+      .sort((a, b) => a.localeCompare(b, "zh"))
+      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+      .join("");
+  realSel.innerHTML =
+    `<option value="all">微信实名人：全部</option>` +
+    Array.from(wxreals)
+      .sort((a, b) => a.localeCompare(b, "zh"))
+      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+      .join("");
+
+  ownerSel.value = ownerVal || "all";
+  realSel.value = realVal || "all";
+}
+
+function tokenize(s) {
+  return s
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function matchDigitsSubstr(phone, queryDigits) {
+  const digits = String(phone || "").replace(/\D+/g, "");
+  return digits.includes(queryDigits);
+}
+
+function applySearchFilter(rows) {
+  if (!state.q) return rows;
+  const q = state.q.trim();
+  if (!q) return rows;
+
+  if (state.precise) {
+    const hasNum = /\d/.test(q);
+    if (hasNum) {
+      const digits = q.replace(/\D+/g, "");
+      return rows.filter((r) => matchDigitsSubstr(r.phone, digits));
+    } else {
+      const target = q;
+      return rows.filter(
+        (r) =>
+          r.phone === target ||
+          r.owner === target ||
+          r.wx_real === target ||
+          r.wx_name === target ||
+          r.xhs_name === target ||
+          r.note1 === target
+      );
+    }
+  } else {
+    const tokens = tokenize(q);
+    return rows.filter((r) => {
+      const bag = [
+        r.phone,
+        r.owner,
+        r.wx_real,
+        r.wx_name,
+        r.xhs_name,
+        r.note1,
+        catNameOf(readCats(), r.row_color),
+      ]
+        .map((s) => String(s || "").toLowerCase())
+        .join(" ");
+      return tokens.every((t) => bag.includes(t.toLowerCase()));
+    });
+  }
+}
+
+function applyFilters(rows) {
+  let out = rows.slice();
+  if (state.owner !== "all") {
+    out = out.filter((r) => r.owner === state.owner);
+  }
+  if (state.wxReal !== "all") {
+    out = out.filter((r) => r.wx_real === state.wxReal);
+  }
+  out = applySearchFilter(out);
+  switch (state.sortBy) {
+    case "owner":
+      out.sort((a, b) => (a.owner || "").localeCompare(b.owner || "", "zh"));
+      break;
+    case "wx_real":
+      out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
+      break;
+    case "phone":
+      out.sort((a, b) => (a.phone || "").localeCompare(b.phone || "", "zh"));
+      break;
+    case "xhs_name":
+      out.sort((a, b) => (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh"));
+      break;
+    case "row_color": {
+      const cats = readCats();
+      out.sort((a, b) =>
+        catNameOf(cats, a.row_color).localeCompare(
+          catNameOf(cats, b.row_color),
+          "zh"
+        )
+      );
+      break;
+    }
+    default:
+      out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  return out;
+}
+
+/* =========================
+ * 7. 渲染（桌面 + 手机版）
+ * ========================= */
+
+function tdEditable(cls, text, field, rowId) {
+  return `<td class="${cls}" contenteditable="true" data-field="${field}" data-id="${rowId}">${escapeHtml(
+    text || ""
+  )}</td>`;
+}
+
+function tdSelectCat(cls, value, rowId) {
+  const cats = readCats();
+  const opts = [`<option value="">未分类</option>`]
+    .concat(
+      cats.map(
+        (c) =>
+          `<option value="${escapeHtml(c.id)}"${
+            c.id === value ? " selected" : ""
+          }>${escapeHtml(c.name)}</option>`
+      )
+    )
+    .join("");
+  return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}" style="position:relative;z-index:5" onfocus="this.closest('td').style.background='#fff';" onblur="this.closest('td').style.background='';">${opts}</select></td>`;
+}
+
+function tdActions(rowId) {
+  return `<td class="col-act">
+    <div class="actions-container">
+      <button class="btn-mini ghost" data-act="up" data-id="${rowId}">上移</button>
+      <button class="btn-mini ghost" data-act="down" data-id="${rowId}">下移</button>
+      <button class="btn-mini btn-danger" data-act="del" data-id="${rowId}">删除</button>
+    </div>
+  </td>`;
+}
+
+function makeRowTr(r) {
+  const cats = readCats();
+  const xhsBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+  // ✅ 小红书名称显示截断文本
+  const xhsDisplay = truncateText(r.xhs_name, 10);
+  return `<tr data-id="${r.id}">
+    ${tdEditable("col-phone", r.phone, "phone", r.id)}
+    ${tdEditable("col-owner", r.owner, "owner", r.id)}
+    ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
+    ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
+    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${
+      r.id
+    }" 
+        style="background:${xhsBg}; text-align:right;" 
+        title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
+    ${tdEditable("col-note", r.note1, "note1", r.id)}
+    ${tdSelectCat("col-cat", r.row_color, r.id)}
+    ${tdActions(r.id)}
+  </tr>`;
+}
+
+async function renderTable() {
+  const tbody = $("#gridBody");
+  const all = await getAllRows();
+  const rows = applyFilters(all);
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
+  }
+
+  tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
+    td.addEventListener("focus", () => {
+      td.style.background = "#fff";
+      // ✅ 编辑时显示完整文本
+      if (td.classList.contains("col-xhs")) {
+        const id = td.getAttribute("data-id");
+        const row = rows.find((r) => r.id === id);
+        if (row) td.textContent = row.xhs_name || "";
+      }
+    });
+    td.addEventListener("blur", async () => {
+      td.style.background = "";
+      const id = td.getAttribute("data-id");
+      const field = td.getAttribute("data-field");
+      const val = unescapeHtml(td.textContent || "").trim();
+      await updateRow(id, { [field]: val });
+      if (field === "xhs_name" || field === "row_color" || field === "owner") {
+        await refreshFilters();
+        await renderTable();
+      }
+    });
+    td.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        td.blur();
+      }
+    });
+  });
+
+  // ✅ 修复分类选择器改变事件
+  tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const id = sel.getAttribute("data-id");
+      const newColor = sel.value;
+      await updateRow(id, { row_color: newColor });
+      // 立即更新对应行的小红书名称背景色
+      const row = sel.closest("tr");
+      const xhsCell = row?.querySelector(".col-xhs");
+      if (xhsCell) {
+        const cats = readCats();
+        const xhsBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
+        xhsCell.style.background = xhsBg;
+      }
+      await renderTable();
+    });
+  });
+
+  tbody.querySelectorAll("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      if (act === "up") {
+        await moveRow(id, "up");
+      } else if (act === "down") {
+        await moveRow(id, "down");
+      } else if (act === "del") {
+        if (confirm("确定删除该行？")) {
+          await deleteRowById(id);
+        }
+      }
+    });
+  });
+
+  renderMobileList(rows);
+}
+
+function renderMobileList(rows) {
+  const container = $("#mobileList");
+  const v = readView();
+
+  if (!rows.length) {
+    container.innerHTML = `<div style="text-align:center;color:#888;padding:10px 0;">暂无数据</div>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((r, idx) => {
+      const cats = readCats();
+      const zebraBg = v.zebraOn && idx % 2 === 1 ? v.zebraColor : "#fff";
+      const pillBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
+      const catName = catNameOf(cats, r.row_color);
+      // ✅ 移动端小红书名称截断显示
+      const xhsDisplay = truncateText(r.xhs_name, 10);
+      return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
+        <button class="m-row-header" data-id="${r.id}">
+          <div class="m-main-line">
+            <span class="m-phone">${escapeHtml(r.phone || "")}</span>
+            <span class="m-xhs" title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(
+        xhsDisplay
+      )}</span>
+            <span class="m-arrow">▾</span>
+          </div>
+          <div class="m-meta-line">
+            <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
+            <span class="m-cat-pill" style="background:${pillBg}">${escapeHtml(
+        catName || "未分类"
+      )}</span>
+          </div>
+        </button>
+        <div class="m-row-details">
+          ${mobileDetail("微信实名人", r.wx_real, "wx_real", r.id)}
+          ${mobileDetail("对应微信名", r.wx_name, "wx_name", r.id)}
+          ${mobileDetail("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobileDetail("备注", r.note1, "note1", r.id)}
+          ${mobileCat(r.row_color, r.id)}
+          <div class="m-actions">
+            <button class="ghost" data-mact="up" data-id="${r.id}">上移</button>
+            <button class="ghost" data-mact="down" data-id="${r.id}">下移</button>
+            <button class="btn-danger" data-mact="del" data-id="${r.id}">删除</button>
+          </div>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  container.querySelectorAll(".m-row-header").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".m-row");
+      card.classList.toggle("open");
+    });
+  });
+
+  container
+    .querySelectorAll('.m-detail-value[contenteditable="true"]')
+    .forEach((el) => {
+      el.addEventListener("focus", () => (el.style.background = "#fff"));
+      el.addEventListener("blur", async () => {
+        el.style.background = "";
+        const id = el.getAttribute("data-id");
+        const field = el.getAttribute("data-field");
+        const val = unescapeHtml(el.textContent || "").trim();
+        await updateRow(id, { [field]: val });
+        await renderTable();
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          el.blur();
+        }
+      });
+    });
+
+  // ✅ 修复移动端分类选择器
+  container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const id = sel.getAttribute("data-id");
+      const newColor = sel.value;
+      await updateRow(id, { row_color: newColor });
+      // 立即更新对应卡片的分类pill背景色
+      const card = sel.closest(".m-row");
+      const pill = card?.querySelector(".m-cat-pill");
+      if (pill) {
+        const cats = readCats();
+        const pillBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
+        pill.style.background = pillBg;
+        pill.textContent = catNameOf(cats, newColor) || "未分类";
+      }
+      await renderTable();
+    });
+    sel.addEventListener("focus", () => {
+      const td = sel.closest(".m-detail-value");
+      if (td) td.style.background = "#fff";
+    });
+    sel.addEventListener("blur", () => {
+      const td = sel.closest(".m-detail-value");
+      if (td) td.style.background = "";
+    });
+  });
+
+  container.querySelectorAll("button[data-mact]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-mact");
+      if (act === "up") await moveRow(id, "up");
+      else if (act === "down") await moveRow(id, "down");
+      else if (act === "del") {
+        if (confirm("确定删除该行？")) await deleteRowById(id);
+      }
+    });
+  });
+
+  function mobileDetail(label, text, field, id) {
+    return `<div class="m-detail-row">
+      <div class="m-detail-label">${escapeHtml(label)}</div>
+      <div class="m-detail-value" contenteditable="true" data-field="${field}" data-id="${id}">${escapeHtml(
+      text || ""
+    )}</div>
+    </div>`;
+  }
+
+  function mobileCat(value, id) {
+    const cats = readCats();
+    const opts = [`<option value="">未分类</option>`]
+      .concat(
+        cats.map(
+          (c) =>
+            `<option value="${escapeHtml(c.id)}"${
+              c.id === value ? " selected" : ""
+            }>${escapeHtml(c.name)}</option>`
+        )
+      )
+      .join("");
+    return `<div class="m-detail-row">
+      <div class="m-detail-label">分类</div>
+      <div class="m-detail-value">
+        <select data-field="row_color" data-id="${id}" style="width:100%;">
+          ${opts}
+        </select>
+      </div>
+    </div>`;
+  }
+}
+
+/* =========================
+ * 8. CSV 导入/导出
+ * ========================= */
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
+  if (!lines.length) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const obj = {};
+    headers.forEach((h, idx) => (obj[h] = cols[idx] || ""));
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function toCSV(rows) {
+  const headers = [
+    "phone",
+    "owner",
+    "wx_real",
+    "wx_name",
+    "xhs_name",
+    "note1",
+    "row_color",
+    "order",
+  ];
+  const out = [headers.join(",")];
+  for (const r of rows) {
+    const line = headers
+      .map((h) => {
+        const s = String(r[h] ?? "");
+        return `"${s.replaceAll('"', '""')}"`;
+      })
+      .join(",");
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/* =========================
+ *

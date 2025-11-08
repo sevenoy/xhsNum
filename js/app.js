@@ -80,6 +80,7 @@ const state = {
   wxReal: "all",
   sortBy: "order",
   precise: false,
+  activeFunction: null, // ✅ 当前激活的功能按钮
 };
 
 /* =========================
@@ -225,6 +226,37 @@ function truncateText(text, maxChars = 10) {
   const str = String(text);
   if (str.length <= maxChars) return str;
   return str.slice(0, maxChars) + "...";
+}
+
+/* =========================
+ * 4.5. 功能按钮激活状态管理
+ * ========================= */
+
+// ✅ 设置当前激活的功能按钮
+function setActiveFunction(functionName) {
+  state.activeFunction = functionName;
+  
+  // 移除所有按钮的激活状态
+  document.querySelectorAll('.function-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // 为当前按钮添加激活状态
+  if (functionName) {
+    const btn = document.querySelector(`[data-function="${functionName}"]`);
+    if (btn) {
+      btn.classList.add('active');
+      console.log(`✅ 激活功能按钮: ${functionName}`);
+    }
+  }
+}
+
+// ✅ 清除所有按钮激活状态
+function clearActiveFunction() {
+  state.activeFunction = null;
+  document.querySelectorAll('.function-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
 }
 
 /* =========================
@@ -480,6 +512,7 @@ async function renderTable() {
     tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
   }
 
+  // ✅ 桌面端可编辑单元格事件
   tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
     td.addEventListener("focus", () => {
       // ✅ 编辑时显示完整文本
@@ -507,11 +540,18 @@ async function renderTable() {
     });
   });
 
-  // ✅ 修复分类选择器改变事件 - 立即更新背景色
+  // ✅✅✅ 修复分类选择器改变事件 - 立即更新背景色
   tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
-    sel.addEventListener("change", async () => {
+    // 添加点击事件调试
+    sel.addEventListener("click", (e) => {
+      console.log("✅ 分类选择器被点击", e.target);
+    });
+    
+    sel.addEventListener("change", async (e) => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
+      console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
+      
       await updateRow(id, { row_color: newColor });
       
       // ✅ 立即更新对应行的小红书名称背景色
@@ -521,6 +561,8 @@ async function renderTable() {
         const cats = readCats();
         const xhsBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
         xhsCell.style.background = xhsBg;
+        xhsCell.style.transition = "background 0.3s ease";
+        console.log(`✅ 更新背景色: ${xhsBg}`);
       }
     });
   });
@@ -620,11 +662,18 @@ function renderMobileList(rows) {
       });
     });
 
-  // ✅ 修复移动端分类选择器 - 立即更新背景色
+  // ✅✅✅ 修复移动端分类选择器 - 立即更新背景色
   container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
-    sel.addEventListener("change", async () => {
+    // 添加点击事件调试
+    sel.addEventListener("click", (e) => {
+      console.log("✅ 移动端分类选择器被点击", e.target);
+    });
+    
+    sel.addEventListener("change", async (e) => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
+      console.log(`✅ 移动端分类改变: ID=${id}, 新分类=${newColor}`);
+      
       await updateRow(id, { row_color: newColor });
       
       // ✅ 立即更新对应卡片的分类pill背景色和文本
@@ -634,7 +683,9 @@ function renderMobileList(rows) {
         const cats = readCats();
         const pillBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
         pill.style.background = pillBg;
+        pill.style.transition = "background 0.3s ease";
         pill.textContent = catNameOf(cats, newColor) || "未分类";
+        console.log(`✅ 更新pill背景色: ${pillBg}`);
       }
     });
   });
@@ -995,7 +1046,9 @@ function bindEvents() {
     await renderTable();
   });
 
+  // ✅ 为功能按钮添加激活状态管理
   $("#btnSearchMode").addEventListener("click", async () => {
+    setActiveFunction("search");
     state.precise = !state.precise;
     $("#btnSearchMode").textContent = state.precise
       ? "当前：精准搜索"
@@ -1018,9 +1071,15 @@ function bindEvents() {
     await renderTable();
   });
 
-  $("#btnAdd").addEventListener("click", addRow);
+  $("#btnAdd").addEventListener("click", async () => {
+    setActiveFunction("add");
+    await addRow();
+  });
 
-  $("#btnImportCSV").addEventListener("click", () => $("#csvFile").click());
+  $("#btnImportCSV").addEventListener("click", () => {
+    setActiveFunction("import");
+    $("#csvFile").click();
+  });
 
   $("#csvFile").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
@@ -1052,6 +1111,7 @@ function bindEvents() {
   });
 
   $("#btnExportCSV").addEventListener("click", async () => {
+    setActiveFunction("export");
     const all = await getAllRows();
     const csv = toCSV(all);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1063,9 +1123,13 @@ function bindEvents() {
     URL.revokeObjectURL(url);
   });
 
-  $("#btnSaveCloud").addEventListener("click", cloudSave);
+  $("#btnSaveCloud").addEventListener("click", async () => {
+    setActiveFunction("saveCloud");
+    await cloudSave();
+  });
 
   $("#btnLoadCloud").addEventListener("click", async () => {
+    setActiveFunction("loadCloud");
     const panel = $("#cloudHistoryPanel");
     if (panel.style.display === "none") {
       panel.style.display = "block";
@@ -1076,6 +1140,7 @@ function bindEvents() {
   });
 
   $("#btnClearAll").addEventListener("click", async () => {
+    setActiveFunction("clear");
     if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
     await db.rows.clear();
     await refreshFilters();
@@ -1083,6 +1148,7 @@ function bindEvents() {
   });
 
   $("#btnCategories").addEventListener("click", () => {
+    setActiveFunction("categories");
     const p = $("#panelCategories");
     p.style.display = p.style.display === "none" ? "block" : "none";
     renderCatList();
@@ -1104,6 +1170,7 @@ function bindEvents() {
   });
 
   $("#btnView").addEventListener("click", () => {
+    setActiveFunction("view");
     const p = $("#panelView");
     p.style.display = p.style.display === "none" ? "block" : "none";
     const v = readView();
@@ -1191,6 +1258,7 @@ function bindEvents() {
  * ========================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
+  console.log("✅ 应用启动");
   applyView(readView());
   bindEvents();
   await refreshFilters();
@@ -1201,5 +1269,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";
+  
+  console.log("✅ 应用初始化完成");
 });
-

@@ -1,480 +1,7 @@
 // app.js — 本地 Dexie + Supabase 快照 + 桌面表格 + 手机版折叠列表
 
 /* =========================
- * 9. Supabase 云端快照
- * ========================= */
-
-async function cloudHealthCheck() {
-  const dot = $("#cloudDot");
-  const text = $("#cloudText");
-  if (!supabase) {
-    dot.style.background = "#ffcc00";
-    text.textContent = "Base 数据连接：未配置";
-    return;
-  }
-  try {
-    const { error } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("updated_at")
-      .eq("key", SUPABASE_DEFAULT_KEY)
-      .maybeSingle();
-    if (error) throw error;
-    dot.style.background = "#30d158";
-    text.textContent = "Base 数据连接：已连接";
-  } catch (e) {
-    dot.style.background = "#ff3b30";
-    text.textContent = "Base 数据连接：失败";
-    console.error(e);
-  }
-}
-
-async function cloudSave() {
-  if (!supabase) {
-    alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
-    return;
-  }
-  const all = await getAllRows();
-  const cats = readCats();
-  const view = readView();
-
-  const label = prompt("输入快照名称（只保存名称，时间将显示在右侧）", "快照");
-  if (label == null) return;
-  const snapshotName = (label || "快照").trim();
-  const now = Date.now();
-
-  const payload = {
-    ver: 1,
-    snapshot_label: snapshotName,
-    updated_at: now,
-    rows: all,
-    cats,
-    view,
-  };
-
-  const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
-    key: SUPABASE_DEFAULT_KEY,
-    payload,
-    updated_at: new Date(now).toISOString(),
-  });
-  if (err1) {
-    alert("保存失败：" + err1.message);
-    return;
-  }
-
-  const histKey = `snap_${now}`;
-  const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
-    key: histKey,
-    payload,
-    updated_at: new Date(now).toISOString(),
-  });
-  if (err2) {
-    alert("保存历史失败：" + err2.message);
-    return;
-  }
-
-  const { data: snaps, error: err3 } = await supabase
-    .from(SUPABASE_TABLE)
-    .select("key,updated_at")
-    .like("key", "snap_%")
-    .order("updated_at", { ascending: false });
-  if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
-    const toDelete = snaps.slice(5).map((s) => s.key);
-    if (toDelete.length) {
-      await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
-    }
-  }
-
-  alert("已保存到云端。");
-  await renderCloudHistory();
-}
-
-async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
-  if (!supabase) {
-    alert("未配置 Supabase，无法从云端加载。");
-    return;
-  }
-  const { data, error } = await supabase
-    .from(SUPABASE_TABLE)
-    .select("payload")
-    .eq("key", key)
-    .maybeSingle();
-  if (error || !data) {
-    alert("云端读取失败。");
-    return;
-  }
-  const payload = data.payload || {};
-  const rows = payload.rows || [];
-  const cats = payload.cats || DEFAULT_CATS;
-  const view = payload.view || DEFAULT_VIEW;
-
-  await db.rows.clear();
-  if (rows.length) await db.rows.bulkAdd(rows);
-
-  saveCats(cats);
-  saveView({ ...DEFAULT_VIEW, ...view });
-
-  await refreshFilters();
-  applyView(readView());
-  await renderTable();
-  alert("云端数据已加载。");
-}
-
-async function renderCloudHistory() {
-  const panel = $("#cloudHistoryPanel");
-  if (!panel) return;
-  if (!supabase) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#888;">未配置 Supabase</div>`;
-    return;
-  }
-  const { data, error } = await supabase
-    .from(SUPABASE_TABLE)
-    .select("key,payload,updated_at")
-    .like("key", "snap_%")
-    .order("updated_at", { ascending: false })
-    .limit(5);
-  if (error) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败</div>`;
-    return;
-  }
-  if (!Array.isArray(data) || !data.length) {
-    panel.innerHTML =
-      `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
-    return;
-  }
-  panel.innerHTML = data
-    .map((row) => {
-      const name = (row.payload?.snapshot_label || "快照").trim();
-      const t = fmtTime(row.updated_at);
-      const metaCount = Array.isArray(row.payload?.rows)
-        ? `${row.payload.rows.length} 条`
-        : "";
-      return `<div class="cloud-item" data-key="${row.key}">
-        <div class="cloud-item-main">
-          <div class="cloud-item-name">${escapeHtml(name)}</div>
-          <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
-        </div>
-        <div class="cloud-item-time">${escapeHtml(t)}</div>
-      </div>`;
-    })
-    .join("");
-
-  panel.querySelectorAll(".cloud-item").forEach((el) => {
-    el.addEventListener("click", async () => {
-      const key = el.getAttribute("data-key");
-      if (!key) return;
-      if (confirm("确定用该快照覆盖本地数据？")) {
-        await cloudLoad(key);
-      }
-    });
-  });
-}
-
-/* =========================
- * 10. 分类设置 UI
- * ========================= */
-
-function renderCatList() {
-  const list = $("#catList");
-  const cats = readCats();
-  list.innerHTML = cats
-    .map(
-      (c, i) => `<div class="cat-row" data-id="${c.id}">
-        <span class="cat-color-preview" style="background:${escapeHtml(
-          c.color
-        )}"></span>
-        <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
-        <div class="cat-actions">
-          <button class="ghost" data-act="up" ${i === 0 ? "disabled" : ""}>上移</button>
-          <button class="ghost" data-act="down" ${
-            i === cats.length - 1 ? "disabled" : ""
-          }>下移</button>
-          <input type="color" value="${escapeHtml(
-            c.color
-          )}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
-          <button class="btn-danger" data-act="del">删除</button>
-        </div>
-      </div>`
-    )
-    .join("");
-
-  list.querySelectorAll(".cat-name").forEach((el) => {
-    el.addEventListener("blur", () => {
-      const id = el.closest(".cat-row").getAttribute("data-id");
-      const v = el.textContent.trim();
-      const cats = readCats();
-      const idx = cats.findIndex((x) => x.id === id);
-      if (idx >= 0) {
-        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
-        saveCats(cats);
-        renderTable();
-      }
-    });
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        el.blur();
-      }
-    });
-  });
-
-  list.querySelectorAll("[data-act]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const row = btn.closest(".cat-row");
-      const id = row.getAttribute("data-id");
-      const act = btn.getAttribute("data-act");
-      const cats = readCats();
-      const idx = cats.findIndex((x) => x.id === id);
-      if (idx < 0) return;
-
-      if (act === "up" && idx > 0) {
-        [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
-      } else if (act === "down" && idx < cats.length - 1) {
-        [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
-      } else if (act === "del") {
-        if (!confirm("确定删除该分类？")) return;
-        cats.splice(idx, 1);
-      }
-      saveCats(cats);
-      renderCatList();
-      renderTable();
-    });
-  });
-
-  list
-    .querySelectorAll('input[type="color"][data-act="color"]')
-    .forEach((el) => {
-      el.addEventListener("change", () => {
-        const row = el.closest(".cat-row");
-        const id = row.getAttribute("data-id");
-        const cats = readCats();
-        const idx = cats.findIndex((x) => x.id === id);
-        if (idx < 0) return;
-        cats[idx] = { ...cats[idx], color: el.value };
-        saveCats(cats);
-        renderCatList();
-        renderTable();
-      });
-    });
-}
-
-/* =========================
- * 11. 事件绑定 & 初始化
- * ========================= */
-
-function bindEvents() {
-  $("#q").addEventListener("input", async (e) => {
-    state.q = e.target.value || "";
-    await renderTable();
-  });
-
-  $("#btnSearchMode").addEventListener("click", async () => {
-    state.precise = !state.precise;
-    $("#btnSearchMode").textContent = state.precise
-      ? "当前：精准搜索"
-      : "当前：模糊搜索";
-    await renderTable();
-  });
-
-  $("#filterOwner").addEventListener("change", async (e) => {
-    state.owner = e.target.value;
-    await renderTable();
-  });
-
-  $("#filterWxReal").addEventListener("change", async (e) => {
-    state.wxReal = e.target.value;
-    await renderTable();
-  });
-
-  $("#sortBy").addEventListener("change", async (e) => {
-    state.sortBy = e.target.value;
-    await renderTable();
-  });
-
-  $("#btnAdd").addEventListener("click", addRow);
-
-  $("#btnImportCSV").addEventListener("click", () => $("#csvFile").click());
-
-  $("#csvFile").addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const items = parseCSV(text);
-    if (!items.length) {
-      alert("CSV 为空或格式不符合简单导入要求。");
-      return;
-    }
-    const all = await getAllRows();
-    let maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
-    const rows = items.map((it) => ({
-      id: uid(),
-      order: ++maxOrder,
-      phone: it.phone || "",
-      owner: it.owner || "",
-      wx_real: it.wx_real || "",
-      wx_name: it.wx_name || "",
-      xhs_name: it.xhs_name || "",
-      note1: it.note1 || "",
-      row_color: it.row_color || "",
-      updated_at: Date.now(),
-    }));
-    await db.rows.bulkAdd(rows);
-    await refreshFilters();
-    await renderTable();
-  });
-
-  $("#btnExportCSV").addEventListener("click", async () => {
-    const all = await getAllRows();
-    const csv = toCSV(all);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "xhsphone.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-
-  $("#btnSaveCloud").addEventListener("click", cloudSave);
-
-  $("#btnLoadCloud").addEventListener("click", async () => {
-    const panel = $("#cloudHistoryPanel");
-    if (panel.style.display === "none") {
-      panel.style.display = "block";
-      await renderCloudHistory();
-    } else {
-      panel.style.display = "none";
-    }
-  });
-
-  $("#btnClearAll").addEventListener("click", async () => {
-    if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
-    await db.rows.clear();
-    await refreshFilters();
-    await renderTable();
-  });
-
-  $("#btnCategories").addEventListener("click", () => {
-    const p = $("#panelCategories");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    renderCatList();
-  });
-
-  $("#btnCatAdd").addEventListener("click", () => {
-    const name = ($("#catName").value || "").trim();
-    const color = ($("#catColor").value || "#007aff").trim();
-    if (!name) {
-      alert("请填写分类名称");
-      return;
-    }
-    const cats = readCats();
-    cats.push({ id: uid(), name, color });
-    saveCats(cats);
-    $("#catName").value = "";
-    renderCatList();
-    renderTable();
-  });
-
-  $("#btnView").addEventListener("click", () => {
-    const p = $("#panelView");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    const v = readView();
-    $("#titleText").value = v.titleText;
-    $("#titleColor").value = v.titleColor;
-    $("#fontFamily").value = v.fontFamily;
-    $("#rowPad").value = v.pad;
-    $("#colScale").value = v.colScale;
-    $("#zebraOn").checked = v.zebraOn;
-    $("#zebraColor").value = v.zebraColor;
-  });
-
-  $("#titleText").addEventListener("input", () => {
-    const v = readView();
-    v.titleText = $("#titleText").value || "XHSPHONE";
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#titleColor").addEventListener("input", () => {
-    const v = readView();
-    v.titleColor = $("#titleColor").value || "#111111";
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#fontFamily").addEventListener("change", () => {
-    const v = readView();
-    v.fontFamily = $("#fontFamily").value;
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#rowPad").addEventListener("input", () => {
-    const v = readView();
-    v.pad = Number($("#rowPad").value) || 6;
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#colScale").addEventListener("input", () => {
-    const v = readView();
-    v.colScale = Number($("#colScale").value) || 1;
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#zebraOn").addEventListener("change", () => {
-    const v = readView();
-    v.zebraOn = $("#zebraOn").checked;
-    saveView(v);
-    applyView(v);
-    renderTable();
-  });
-
-  $("#zebraColor").addEventListener("input", () => {
-    const v = readView();
-    v.zebraColor = $("#zebraColor").value || "#e2f0ff";
-    saveView(v);
-    applyView(v);
-    renderTable();
-  });
-
-  $("#btnCompact").addEventListener("click", () => {
-    const v = readView();
-    v.pad = 5;
-    v.colScale = 0.95;
-    saveView(v);
-    applyView(v);
-  });
-
-  $("#btnResetSize").addEventListener("click", () => {
-    saveView({
-      ...DEFAULT_VIEW,
-      titleText: readView().titleText,
-      titleColor: readView().titleColor,
-    });
-    applyView(readView());
-  });
-}
-
-/* =========================
- * 12. 启动
- * ========================= */
-
-document.addEventListener("DOMContentLoaded", async () => {
-  applyView(readView());
-  bindEvents();
-  await refreshFilters();
-  await renderTable();
-  
-  // ✅ 先初始化 Supabase，再检查连接状态
-  await initSupabase();
-  
-  const panel = $("#cloudHistoryPanel");
-  if (panel) panel.style.display = "none";
-});
- 0. 基础配置 & 常量
+ * 0. 基础配置 & 常量
  * ========================= */
 
 const VIEW_KEY = "xhs_view_v7";
@@ -519,7 +46,6 @@ async function initSupabase() {
     );
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     await cloudHealthCheck();
-    await renderCloudHistory();
   } catch (err) {
     console.error("Supabase 初始化失败：", err);
     supabase = null;
@@ -909,7 +435,7 @@ function tdSelectCat(cls, value, rowId) {
       )
     )
     .join("");
-  return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}" style="position:relative;z-index:5" onfocus="this.closest('td').style.background='#fff';" onblur="this.closest('td').style.background='';">${opts}</select></td>`;
+  return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}">${opts}</select></td>`;
 }
 
 function tdActions(rowId) {
@@ -956,7 +482,6 @@ async function renderTable() {
 
   tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
     td.addEventListener("focus", () => {
-      td.style.background = "#fff";
       // ✅ 编辑时显示完整文本
       if (td.classList.contains("col-xhs")) {
         const id = td.getAttribute("data-id");
@@ -965,15 +490,14 @@ async function renderTable() {
       }
     });
     td.addEventListener("blur", async () => {
-      td.style.background = "";
       const id = td.getAttribute("data-id");
       const field = td.getAttribute("data-field");
       const val = unescapeHtml(td.textContent || "").trim();
       await updateRow(id, { [field]: val });
-      if (field === "xhs_name" || field === "row_color" || field === "owner") {
+      if (field === "owner" || field === "wx_real") {
         await refreshFilters();
-        await renderTable();
       }
+      await renderTable();
     });
     td.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -983,13 +507,14 @@ async function renderTable() {
     });
   });
 
-  // ✅ 修复分类选择器改变事件
+  // ✅ 修复分类选择器改变事件 - 立即更新背景色
   tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
     sel.addEventListener("change", async () => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
       await updateRow(id, { row_color: newColor });
-      // 立即更新对应行的小红书名称背景色
+      
+      // ✅ 立即更新对应行的小红书名称背景色
       const row = sel.closest("tr");
       const xhsCell = row?.querySelector(".col-xhs");
       if (xhsCell) {
@@ -997,7 +522,6 @@ async function renderTable() {
         const xhsBg = makeHighlightColor(catColorOf(cats, newColor), 0.18);
         xhsCell.style.background = xhsBg;
       }
-      await renderTable();
     });
   });
 
@@ -1078,13 +602,14 @@ function renderMobileList(rows) {
   container
     .querySelectorAll('.m-detail-value[contenteditable="true"]')
     .forEach((el) => {
-      el.addEventListener("focus", () => (el.style.background = "#fff"));
       el.addEventListener("blur", async () => {
-        el.style.background = "";
         const id = el.getAttribute("data-id");
         const field = el.getAttribute("data-field");
         const val = unescapeHtml(el.textContent || "").trim();
         await updateRow(id, { [field]: val });
+        if (field === "owner" || field === "wx_real") {
+          await refreshFilters();
+        }
         await renderTable();
       });
       el.addEventListener("keydown", (e) => {
@@ -1095,13 +620,14 @@ function renderMobileList(rows) {
       });
     });
 
-  // ✅ 修复移动端分类选择器
+  // ✅ 修复移动端分类选择器 - 立即更新背景色
   container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
     sel.addEventListener("change", async () => {
       const id = sel.getAttribute("data-id");
       const newColor = sel.value;
       await updateRow(id, { row_color: newColor });
-      // 立即更新对应卡片的分类pill背景色
+      
+      // ✅ 立即更新对应卡片的分类pill背景色和文本
       const card = sel.closest(".m-row");
       const pill = card?.querySelector(".m-cat-pill");
       if (pill) {
@@ -1110,15 +636,6 @@ function renderMobileList(rows) {
         pill.style.background = pillBg;
         pill.textContent = catNameOf(cats, newColor) || "未分类";
       }
-      await renderTable();
-    });
-    sel.addEventListener("focus", () => {
-      const td = sel.closest(".m-detail-value");
-      if (td) td.style.background = "#fff";
-    });
-    sel.addEventListener("blur", () => {
-      const td = sel.closest(".m-detail-value");
-      if (td) td.style.background = "";
     });
   });
 
@@ -1210,4 +727,479 @@ function toCSV(rows) {
 }
 
 /* =========================
- *
+ * 9. Supabase 云端快照
+ * ========================= */
+
+async function cloudHealthCheck() {
+  const dot = $("#cloudDot");
+  const text = $("#cloudText");
+  if (!supabase) {
+    dot.style.background = "#ffcc00";
+    text.textContent = "Base 数据连接：未配置";
+    return;
+  }
+  try {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("updated_at")
+      .eq("key", SUPABASE_DEFAULT_KEY)
+      .maybeSingle();
+    if (error) throw error;
+    dot.style.background = "#30d158";
+    text.textContent = "Base 数据连接：已连接";
+  } catch (e) {
+    dot.style.background = "#ff3b30";
+    text.textContent = "Base 数据连接：失败";
+    console.error(e);
+  }
+}
+
+async function cloudSave() {
+  if (!supabase) {
+    alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
+    return;
+  }
+  const all = await getAllRows();
+  const cats = readCats();
+  const view = readView();
+
+  const label = prompt("输入快照名称（只保存名称，时间将显示在右侧）", "快照");
+  if (label == null) return;
+  const snapshotName = (label || "快照").trim();
+  const now = Date.now();
+
+  const payload = {
+    ver: 1,
+    snapshot_label: snapshotName,
+    updated_at: now,
+    rows: all,
+    cats,
+    view,
+  };
+
+  const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
+    key: SUPABASE_DEFAULT_KEY,
+    payload,
+    updated_at: new Date(now).toISOString(),
+  });
+  if (err1) {
+    alert("保存失败：" + err1.message);
+    return;
+  }
+
+  const histKey = `snap_${now}`;
+  const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
+    key: histKey,
+    payload,
+    updated_at: new Date(now).toISOString(),
+  });
+  if (err2) {
+    alert("保存历史失败：" + err2.message);
+    return;
+  }
+
+  const { data: snaps, error: err3 } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("key,updated_at")
+    .like("key", "snap_%")
+    .order("updated_at", { ascending: false });
+  if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
+    const toDelete = snaps.slice(5).map((s) => s.key);
+    if (toDelete.length) {
+      await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
+    }
+  }
+
+  alert("已保存到云端。");
+  await renderCloudHistory();
+}
+
+async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
+  if (!supabase) {
+    alert("未配置 Supabase，无法从云端加载。");
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("payload")
+    .eq("key", key)
+    .maybeSingle();
+  if (error || !data) {
+    alert("云端读取失败。");
+    return;
+  }
+  const payload = data.payload || {};
+  const rows = payload.rows || [];
+  const cats = payload.cats || DEFAULT_CATS;
+  const view = payload.view || DEFAULT_VIEW;
+
+  await db.rows.clear();
+  if (rows.length) await db.rows.bulkAdd(rows);
+
+  saveCats(cats);
+  saveView({ ...DEFAULT_VIEW, ...view });
+
+  await refreshFilters();
+  applyView(readView());
+  await renderTable();
+  alert("云端数据已加载。");
+}
+
+async function renderCloudHistory() {
+  const panel = $("#cloudHistoryPanel");
+  if (!panel) return;
+  if (!supabase) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#888;">未配置 Supabase</div>`;
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("key,payload,updated_at")
+    .like("key", "snap_%")
+    .order("updated_at", { ascending: false })
+    .limit(5);
+  if (error) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败</div>`;
+    return;
+  }
+  if (!Array.isArray(data) || !data.length) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
+    return;
+  }
+  panel.innerHTML = data
+    .map((row) => {
+      const name = (row.payload?.snapshot_label || "快照").trim();
+      const t = fmtTime(row.updated_at);
+      const metaCount = Array.isArray(row.payload?.rows)
+        ? `${row.payload.rows.length} 条`
+        : "";
+      return `<div class="cloud-item" data-key="${row.key}">
+        <div class="cloud-item-main">
+          <div class="cloud-item-name">${escapeHtml(name)}</div>
+          <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
+        </div>
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
+      </div>`;
+    })
+    .join("");
+
+  panel.querySelectorAll(".cloud-item").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-key");
+      if (!key) return;
+      if (confirm("确定用该快照覆盖本地数据？")) {
+        await cloudLoad(key);
+      }
+    });
+  });
+}
+
+/* =========================
+ * 10. 分类设置 UI
+ * ========================= */
+
+function renderCatList() {
+  const list = $("#catList");
+  const cats = readCats();
+  list.innerHTML = cats
+    .map(
+      (c, i) => `<div class="cat-row" data-id="${c.id}">
+        <span class="cat-color-preview" style="background:${escapeHtml(
+          c.color
+        )}"></span>
+        <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
+        <div class="cat-actions">
+          <button class="ghost" data-act="up" ${i === 0 ? "disabled" : ""}>上移</button>
+          <button class="ghost" data-act="down" ${
+            i === cats.length - 1 ? "disabled" : ""
+          }>下移</button>
+          <input type="color" value="${escapeHtml(
+            c.color
+          )}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
+          <button class="btn-danger" data-act="del">删除</button>
+        </div>
+      </div>`
+    )
+    .join("");
+
+  list.querySelectorAll(".cat-name").forEach((el) => {
+    el.addEventListener("blur", () => {
+      const id = el.closest(".cat-row").getAttribute("data-id");
+      const v = el.textContent.trim();
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
+        saveCats(cats);
+        renderTable();
+      }
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+
+  list.querySelectorAll("[data-act]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".cat-row");
+      const id = row.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx < 0) return;
+
+      if (act === "up" && idx > 0) {
+        [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
+      } else if (act === "down" && idx < cats.length - 1) {
+        [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
+      } else if (act === "del") {
+        if (!confirm("确定删除该分类？")) return;
+        cats.splice(idx, 1);
+      }
+      saveCats(cats);
+      renderCatList();
+      renderTable();
+    });
+  });
+
+  list
+    .querySelectorAll('input[type="color"][data-act="color"]')
+    .forEach((el) => {
+      el.addEventListener("change", () => {
+        const row = el.closest(".cat-row");
+        const id = row.getAttribute("data-id");
+        const cats = readCats();
+        const idx = cats.findIndex((x) => x.id === id);
+        if (idx < 0) return;
+        cats[idx] = { ...cats[idx], color: el.value };
+        saveCats(cats);
+        renderCatList();
+        renderTable();
+      });
+    });
+}
+
+/* =========================
+ * 11. 事件绑定 & 初始化
+ * ========================= */
+
+function bindEvents() {
+  $("#q").addEventListener("input", async (e) => {
+    state.q = e.target.value || "";
+    await renderTable();
+  });
+
+  $("#btnSearchMode").addEventListener("click", async () => {
+    state.precise = !state.precise;
+    $("#btnSearchMode").textContent = state.precise
+      ? "当前：精准搜索"
+      : "当前：模糊搜索";
+    await renderTable();
+  });
+
+  $("#filterOwner").addEventListener("change", async (e) => {
+    state.owner = e.target.value;
+    await renderTable();
+  });
+
+  $("#filterWxReal").addEventListener("change", async (e) => {
+    state.wxReal = e.target.value;
+    await renderTable();
+  });
+
+  $("#sortBy").addEventListener("change", async (e) => {
+    state.sortBy = e.target.value;
+    await renderTable();
+  });
+
+  $("#btnAdd").addEventListener("click", addRow);
+
+  $("#btnImportCSV").addEventListener("click", () => $("#csvFile").click());
+
+  $("#csvFile").addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const items = parseCSV(text);
+    if (!items.length) {
+      alert("CSV 为空或格式不符合简单导入要求。");
+      return;
+    }
+    const all = await getAllRows();
+    let maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+    const rows = items.map((it) => ({
+      id: uid(),
+      order: ++maxOrder,
+      phone: it.phone || "",
+      owner: it.owner || "",
+      wx_real: it.wx_real || "",
+      wx_name: it.wx_name || "",
+      xhs_name: it.xhs_name || "",
+      note1: it.note1 || "",
+      row_color: it.row_color || "",
+      updated_at: Date.now(),
+    }));
+    await db.rows.bulkAdd(rows);
+    await refreshFilters();
+    await renderTable();
+    alert("导入成功！");
+  });
+
+  $("#btnExportCSV").addEventListener("click", async () => {
+    const all = await getAllRows();
+    const csv = toCSV(all);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "xhsphone.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  $("#btnSaveCloud").addEventListener("click", cloudSave);
+
+  $("#btnLoadCloud").addEventListener("click", async () => {
+    const panel = $("#cloudHistoryPanel");
+    if (panel.style.display === "none") {
+      panel.style.display = "block";
+      await renderCloudHistory();
+    } else {
+      panel.style.display = "none";
+    }
+  });
+
+  $("#btnClearAll").addEventListener("click", async () => {
+    if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
+    await db.rows.clear();
+    await refreshFilters();
+    await renderTable();
+  });
+
+  $("#btnCategories").addEventListener("click", () => {
+    const p = $("#panelCategories");
+    p.style.display = p.style.display === "none" ? "block" : "none";
+    renderCatList();
+  });
+
+  $("#btnCatAdd").addEventListener("click", () => {
+    const name = ($("#catName").value || "").trim();
+    const color = ($("#catColor").value || "#007aff").trim();
+    if (!name) {
+      alert("请填写分类名称");
+      return;
+    }
+    const cats = readCats();
+    cats.push({ id: uid(), name, color });
+    saveCats(cats);
+    $("#catName").value = "";
+    renderCatList();
+    renderTable();
+  });
+
+  $("#btnView").addEventListener("click", () => {
+    const p = $("#panelView");
+    p.style.display = p.style.display === "none" ? "block" : "none";
+    const v = readView();
+    $("#titleText").value = v.titleText;
+    $("#titleColor").value = v.titleColor;
+    $("#fontFamily").value = v.fontFamily;
+    $("#rowPad").value = v.pad;
+    $("#colScale").value = v.colScale;
+    $("#zebraOn").checked = v.zebraOn;
+    $("#zebraColor").value = v.zebraColor;
+  });
+
+  $("#titleText").addEventListener("input", () => {
+    const v = readView();
+    v.titleText = $("#titleText").value || "XHSPHONE";
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#titleColor").addEventListener("input", () => {
+    const v = readView();
+    v.titleColor = $("#titleColor").value || "#111111";
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#fontFamily").addEventListener("change", () => {
+    const v = readView();
+    v.fontFamily = $("#fontFamily").value;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#rowPad").addEventListener("input", () => {
+    const v = readView();
+    v.pad = Number($("#rowPad").value) || 6;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#colScale").addEventListener("input", () => {
+    const v = readView();
+    v.colScale = Number($("#colScale").value) || 1;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#zebraOn").addEventListener("change", () => {
+    const v = readView();
+    v.zebraOn = $("#zebraOn").checked;
+    saveView(v);
+    applyView(v);
+    renderTable();
+  });
+
+  $("#zebraColor").addEventListener("input", () => {
+    const v = readView();
+    v.zebraColor = $("#zebraColor").value || "#e2f0ff";
+    saveView(v);
+    applyView(v);
+    renderTable();
+  });
+
+  $("#btnCompact").addEventListener("click", () => {
+    const v = readView();
+    v.pad = 5;
+    v.colScale = 0.95;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#btnResetSize").addEventListener("click", () => {
+    saveView({
+      ...DEFAULT_VIEW,
+      titleText: readView().titleText,
+      titleColor: readView().titleColor,
+    });
+    applyView(readView());
+    renderTable();
+  });
+}
+
+/* =========================
+ * 12. 启动
+ * ========================= */
+
+document.addEventListener("DOMContentLoaded", async () => {
+  applyView(readView());
+  bindEvents();
+  await refreshFilters();
+  await renderTable();
+  
+  // ✅ 先初始化 Supabase，再检查连接状态
+  await initSupabase();
+  
+  const panel = $("#cloudHistoryPanel");
+  if (panel) panel.style.display = "none";
+});
+

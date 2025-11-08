@@ -1,6 +1,4 @@
-// app.js  —— 仅在“样式与交互”层面做增强；保留你原有的本地优先 + 云端快照模型
-// 兼容 Dexie v4（全局 Dexie 对象已在 index.html 通过 CDN 注入）
-// Supabase 使用动态 import，避免 import 失败导致整份脚本挂掉
+// app.js —— 本地 Dexie + Supabase 快照 + 桌面表格 + 手机版折叠列表
 
 /* =========================
  * 0. 基础配置 & 常量
@@ -34,22 +32,19 @@ const SUPABASE_ANON_KEY =
     localStorage.getItem("xhs_supabase_anon_key") ||
     "").trim();
 
-// 使用动态 import，避免 import 失败导致整份脚本无法执行
+// 动态加载 Supabase，避免 import 失败把整份脚本搞挂
 let supabase = null;
 let hasSupabase = false;
 
 async function initSupabase() {
   hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  if (!hasSupabase) {
-    // 没配置就保持“未配置”状态
-    return;
-  }
+  if (!hasSupabase) return;
+
   try {
     const { createClient } = await import(
       "https://esm.sh/@supabase/supabase-js@2"
     );
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    // 初始化完成后再做一次健康检查 & 刷新历史
     await cloudHealthCheck();
     await renderCloudHistory();
   } catch (err) {
@@ -58,7 +53,7 @@ async function initSupabase() {
   }
 }
 
-// 默认视图（统一 zebra = #e2f0ff 即 222/240/255）
+// 默认视图
 const DEFAULT_VIEW = Object.freeze({
   viewVersion: 7,
   pad: 6,
@@ -71,7 +66,7 @@ const DEFAULT_VIEW = Object.freeze({
   titleColor: "#111111",
 });
 
-// 默认分类（可在“分类设置”中调整）
+// 默认分类
 const DEFAULT_CATS = Object.freeze([
   { id: "enterprise", name: "企业号", color: "#007aff" },
   { id: "olina", name: "Olina用", color: "#34c759" },
@@ -79,33 +74,34 @@ const DEFAULT_CATS = Object.freeze([
   { id: "usable", name: "可用", color: "#8e8e93" },
 ]);
 
-// 全局筛选/排序状态
+// 全局筛选状态
 const state = {
   q: "",
   owner: "all",
   wxReal: "all",
   sortBy: "order",
-  precise: false, // 精准/模糊搜索切换
+  precise: false,
 };
 
 /* =========================
- * 1. Dexie 初始化（本地权威数据源）
+ * 1. Dexie 初始化
  * ========================= */
+
 const db = new Dexie(DB_NAME);
 db.version(1).stores({
   rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
 });
 
 /* =========================
- * 2. 视图配置（localStorage）
+ * 2. 视图配置
  * ========================= */
+
 function readView() {
   try {
     const raw = localStorage.getItem(VIEW_KEY);
     if (!raw) return { ...DEFAULT_VIEW };
     const obj = JSON.parse(raw);
     if (!obj || obj.viewVersion !== DEFAULT_VIEW.viewVersion) {
-      // 视图版本不匹配，覆盖为默认
       saveView(DEFAULT_VIEW);
       return { ...DEFAULT_VIEW };
     }
@@ -115,9 +111,11 @@ function readView() {
     return { ...DEFAULT_VIEW };
   }
 }
+
 function saveView(v) {
   localStorage.setItem(VIEW_KEY, JSON.stringify(v));
 }
+
 function applyView(v) {
   const root = document.documentElement;
   root.style.setProperty("--pad", `${v.pad}px`);
@@ -125,7 +123,6 @@ function applyView(v) {
   root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
   root.style.setProperty("--font-main", v.fontFamily);
 
-  // 标题
   const h1 = document.getElementById("appTitle");
   if (h1) {
     h1.textContent = v.titleText;
@@ -134,8 +131,9 @@ function applyView(v) {
 }
 
 /* =========================
- * 3. 分类配置（localStorage）
+ * 3. 分类配置
  * ========================= */
+
 function readCats() {
   try {
     const raw = localStorage.getItem(CATS_KEY);
@@ -147,13 +145,16 @@ function readCats() {
     return DEFAULT_CATS.slice();
   }
 }
+
 function saveCats(cats) {
   localStorage.setItem(CATS_KEY, JSON.stringify(cats));
 }
+
 function catNameOf(cats, id) {
   const found = cats.find((c) => c.id === id);
   return found ? found.name : "";
 }
+
 function catColorOf(cats, id) {
   const found = cats.find((c) => c.id === id);
   return found ? found.color : "transparent";
@@ -162,7 +163,9 @@ function catColorOf(cats, id) {
 /* =========================
  * 4. 工具函数
  * ========================= */
+
 const $ = (sel) => document.querySelector(sel);
+
 function fmtTime(ts) {
   try {
     const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
@@ -176,11 +179,13 @@ function fmtTime(ts) {
     return "";
   }
 }
+
 function uid() {
   return (
     Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
   ).toUpperCase();
 }
+
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s)
@@ -189,6 +194,7 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
 function unescapeHtml(s) {
   if (s == null) return "";
   return String(s)
@@ -197,7 +203,7 @@ function unescapeHtml(s) {
     .replaceAll("&quot;", '"')
     .replaceAll("&amp;", "&");
 }
-// 将分类色转淡色背景（手机 pill）
+
 function makeHighlightColor(hex, alpha = 0.14) {
   if (!hex || !hex.startsWith("#")) return "transparent";
   const c = hex.slice(1);
@@ -215,13 +221,15 @@ function makeHighlightColor(hex, alpha = 0.14) {
 }
 
 /* =========================
- * 5. 本地数据封装（行级）
+ * 5. 本地数据封装
  * ========================= */
+
 async function getAllRows() {
   const all = await db.rows.toArray();
   all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   return all;
 }
+
 async function addRow() {
   const all = await getAllRows();
   const maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
@@ -234,26 +242,28 @@ async function addRow() {
     wx_name: "",
     xhs_name: "",
     note1: "",
-    row_color: "", // 存分类 id
+    row_color: "",
     updated_at: Date.now(),
   };
   await db.rows.add(row);
   await refreshFilters();
   await renderTable();
 }
+
 async function updateRow(id, patch) {
   const row = await db.rows.get(id);
   if (!row) return;
   const next = { ...row, ...patch, updated_at: Date.now() };
   await db.rows.put(next);
 }
+
 async function deleteRowById(id) {
   await db.rows.delete(id);
   await refreshFilters();
   await renderTable();
 }
-async function moveRow(id, dir /* 'up' | 'down' */) {
-  // 在“当前筛选结果”里交换 order
+
+async function moveRow(id, dir) {
   const all = await getAllRows();
   const filtered = applyFilters(all);
   const idx = filtered.findIndex((r) => r.id === id);
@@ -274,6 +284,7 @@ async function moveRow(id, dir /* 'up' | 'down' */) {
 /* =========================
  * 6. 筛选 / 搜索 / 排序
  * ========================= */
+
 async function refreshFilters() {
   const owners = new Set();
   const wxreals = new Set();
@@ -300,7 +311,6 @@ async function refreshFilters() {
       .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
       .join("");
 
-  // 尽量保留原选择
   ownerSel.value = ownerVal || "all";
   realSel.value = realVal || "all";
 }
@@ -311,17 +321,18 @@ function tokenize(s) {
     .split(/\s+/)
     .filter(Boolean);
 }
+
 function matchDigitsSubstr(phone, queryDigits) {
   const digits = String(phone || "").replace(/\D+/g, "");
   return digits.includes(queryDigits);
 }
+
 function applySearchFilter(rows) {
   if (!state.q) return rows;
   const q = state.q.trim();
   if (!q) return rows;
 
   if (state.precise) {
-    // 精准模式：含数字 → 按手机号数字子串；否则要求字段全等之一
     const hasNum = /\d/.test(q);
     if (hasNum) {
       const digits = q.replace(/\D+/g, "");
@@ -339,7 +350,6 @@ function applySearchFilter(rows) {
       );
     }
   } else {
-    // 模糊模式：多关键词且全部命中（任一字段）
     const tokens = tokenize(q);
     return rows.filter((r) => {
       const bag = [
@@ -357,6 +367,7 @@ function applySearchFilter(rows) {
     });
   }
 }
+
 function applyFilters(rows) {
   let out = rows.slice();
   if (state.owner !== "all") {
@@ -396,13 +407,15 @@ function applyFilters(rows) {
 }
 
 /* =========================
- * 7. 渲染（桌面表格 + 手机版卡片）
+ * 7. 渲染（桌面 + 手机版）
  * ========================= */
+
 function tdEditable(cls, text, field, rowId) {
   return `<td class="${cls}" contenteditable="true" data-field="${field}" data-id="${rowId}">${escapeHtml(
     text || ""
   )}</td>`;
 }
+
 function tdSelectCat(cls, value, rowId) {
   const cats = readCats();
   const opts = [`<option value="">未分类</option>`]
@@ -415,11 +428,10 @@ function tdSelectCat(cls, value, rowId) {
       )
     )
     .join("");
-  // 关键：select 聚焦时把单元格背景置白，避免“隔行着色干扰下拉”
   return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}" style="position:relative;z-index:5" onfocus="this.closest('td').style.background='#fff';" onblur="this.closest('td').style.background='';">${opts}</select></td>`;
 }
+
 function tdActions(rowId) {
-  // 直接展示三按钮（替代“编辑”）
   return `<td class="col-act">
     <div class="actions-container">
       <button class="btn-mini ghost" data-act="up" data-id="${rowId}">上移</button>
@@ -428,6 +440,7 @@ function tdActions(rowId) {
     </div>
   </td>`;
 }
+
 function makeRowTr(r) {
   const cats = readCats();
   const xhsBg = makeHighlightColor(catColorOf(cats, r.row_color), 0.18);
@@ -436,7 +449,7 @@ function makeRowTr(r) {
     ${tdEditable("col-owner", r.owner, "owner", r.id)}
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
-    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" style="background:${xhsBg}">${escapeHtml(
+    <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" style="background:${xhsBg}; text-align:right;">${escapeHtml(
       r.xhs_name || ""
     )}</td>
     ${tdEditable("col-note", r.note1, "note1", r.id)}
@@ -456,25 +469,21 @@ async function renderTable() {
     tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
   }
 
-  // 绑定：单元格编辑
   tbody.querySelectorAll('td[contenteditable="true"]').forEach((td) => {
     td.addEventListener("focus", () => {
-      // 聚焦时把背景置白，避免隔行色影响可读性
       td.style.background = "#fff";
     });
     td.addEventListener("blur", async () => {
-      td.style.background = ""; // 还原（由 zebra 控制）
+      td.style.background = "";
       const id = td.getAttribute("data-id");
       const field = td.getAttribute("data-field");
       const val = unescapeHtml(td.textContent || "").trim();
       await updateRow(id, { [field]: val });
       if (field === "xhs_name" || field === "row_color" || field === "owner") {
-        // 需要刷新高亮和筛选
         await refreshFilters();
         await renderTable();
       }
     });
-    // 防止回车换行
     td.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -483,7 +492,6 @@ async function renderTable() {
     });
   });
 
-  // 绑定：分类选择
   tbody.querySelectorAll('select[data-field="row_color"]').forEach((sel) => {
     sel.addEventListener("change", async () => {
       const id = sel.getAttribute("data-id");
@@ -492,7 +500,6 @@ async function renderTable() {
     });
   });
 
-  // 绑定：动作按钮
   tbody.querySelectorAll("button[data-act]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-id");
@@ -509,7 +516,6 @@ async function renderTable() {
     });
   });
 
-  // 渲染手机版
   renderMobileList(rows);
 }
 
@@ -562,7 +568,6 @@ function renderMobileList(rows) {
     })
     .join("");
 
-  // 绑定折叠
   container.querySelectorAll(".m-row-header").forEach((btn) => {
     btn.addEventListener("click", () => {
       const card = btn.closest(".m-row");
@@ -570,7 +575,6 @@ function renderMobileList(rows) {
     });
   });
 
-  // 绑定手机端可编辑文本
   container
     .querySelectorAll('.m-detail-value[contenteditable="true"]')
     .forEach((el) => {
@@ -591,7 +595,6 @@ function renderMobileList(rows) {
       });
     });
 
-  // 绑定手机端分类
   container.querySelectorAll("select[data-field='row_color']").forEach((sel) => {
     sel.addEventListener("change", async () => {
       const id = sel.getAttribute("data-id");
@@ -608,7 +611,6 @@ function renderMobileList(rows) {
     });
   });
 
-  // 绑定手机端“更多”/隐藏动作
   container.querySelectorAll(".m-btn-edit").forEach((b) => {
     b.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -619,7 +621,6 @@ function renderMobileList(rows) {
     });
   });
 
-  // 绑定手机端动作三连
   container.querySelectorAll("button[data-mact]").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -641,6 +642,7 @@ function renderMobileList(rows) {
       )}</div>
     </div>`;
   }
+
   function mobileCat(value, id) {
     const cats = readCats();
     const opts = [`<option value="">未分类</option>`]
@@ -665,10 +667,10 @@ function renderMobileList(rows) {
 }
 
 /* =========================
- * 8. CSV 导入/导出（简单版）
+ * 8. CSV 导入/导出
  * ========================= */
+
 function parseCSV(text) {
-  // 简单 split，不处理引号内逗号的复杂场景（白皮书已标注限制）
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length);
   if (!lines.length) return [];
   const headers = lines[0].split(",").map((h) => h.trim());
@@ -681,6 +683,7 @@ function parseCSV(text) {
   }
   return rows;
 }
+
 function toCSV(rows) {
   const headers = [
     "phone",
@@ -708,6 +711,7 @@ function toCSV(rows) {
 /* =========================
  * 9. Supabase 云端快照
  * ========================= */
+
 async function cloudHealthCheck() {
   const dot = $("#cloudDot");
   const text = $("#cloudText");
@@ -717,7 +721,7 @@ async function cloudHealthCheck() {
     return;
   }
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from(SUPABASE_TABLE)
       .select("updated_at")
       .eq("key", SUPABASE_DEFAULT_KEY)
@@ -741,7 +745,6 @@ async function cloudSave() {
   const cats = readCats();
   const view = readView();
 
-  // 仅快照名称本身，不附加时间（右侧独立显示）
   const label = prompt("输入快照名称（只保存名称，时间将显示在右侧）", "快照");
   if (label == null) return;
   const snapshotName = (label || "快照").trim();
@@ -749,14 +752,13 @@ async function cloudSave() {
 
   const payload = {
     ver: 1,
-    snapshot_label: snapshotName, // 不拼时间
+    snapshot_label: snapshotName,
     updated_at: now,
     rows: all,
     cats,
     view,
   };
 
-  // 1) 写 default
   const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
     key: SUPABASE_DEFAULT_KEY,
     payload,
@@ -767,7 +769,6 @@ async function cloudSave() {
     return;
   }
 
-  // 2) 插入历史 key='snap_时间戳'
   const histKey = `snap_${now}`;
   const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
     key: histKey,
@@ -779,7 +780,6 @@ async function cloudSave() {
     return;
   }
 
-  // 3) 只保留最近 5 个 snap_
   const { data: snaps, error: err3 } = await supabase
     .from(SUPABASE_TABLE)
     .select("key,updated_at")
@@ -853,7 +853,7 @@ async function renderCloudHistory() {
   }
   panel.innerHTML = data
     .map((row) => {
-      const name = (row.payload?.snapshot_label || "快照").trim(); // 名称不带时间
+      const name = (row.payload?.snapshot_label || "快照").trim();
       const t = fmtTime(row.updated_at);
       const metaCount = Array.isArray(row.payload?.rows)
         ? `${row.payload.rows.length} 条`
@@ -882,6 +882,7 @@ async function renderCloudHistory() {
 /* =========================
  * 10. 分类设置 UI
  * ========================= */
+
 function renderCatList() {
   const list = $("#catList");
   const cats = readCats();
@@ -906,7 +907,6 @@ function renderCatList() {
     )
     .join("");
 
-  // 绑定：名称编辑
   list.querySelectorAll(".cat-name").forEach((el) => {
     el.addEventListener("blur", () => {
       const id = el.closest(".cat-row").getAttribute("data-id");
@@ -927,7 +927,6 @@ function renderCatList() {
     });
   });
 
-  // 绑定：操作
   list.querySelectorAll("[data-act]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const row = btn.closest(".cat-row");
@@ -951,7 +950,6 @@ function renderCatList() {
     });
   });
 
-  // 绑定：颜色选择
   list
     .querySelectorAll('input[type="color"][data-act="color"]')
     .forEach((el) => {
@@ -972,12 +970,13 @@ function renderCatList() {
 /* =========================
  * 11. 事件绑定 & 初始化
  * ========================= */
+
 function bindEvents() {
-  // 搜索 & 模式
   $("#q").addEventListener("input", async (e) => {
     state.q = e.target.value || "";
     await renderTable();
   });
+
   $("#btnSearchMode").addEventListener("click", async () => {
     state.precise = !state.precise;
     $("#btnSearchMode").textContent = state.precise
@@ -986,25 +985,25 @@ function bindEvents() {
     await renderTable();
   });
 
-  // 筛选/排序
   $("#filterOwner").addEventListener("change", async (e) => {
     state.owner = e.target.value;
     await renderTable();
   });
+
   $("#filterWxReal").addEventListener("change", async (e) => {
     state.wxReal = e.target.value;
     await renderTable();
   });
+
   $("#sortBy").addEventListener("change", async (e) => {
     state.sortBy = e.target.value;
     await renderTable();
   });
 
-  // 行操作
   $("#btnAdd").addEventListener("click", addRow);
 
-  // CSV
   $("#btnImportCSV").addEventListener("click", () => $("#csvFile").click());
+
   $("#csvFile").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1032,6 +1031,7 @@ function bindEvents() {
     await refreshFilters();
     await renderTable();
   });
+
   $("#btnExportCSV").addEventListener("click", async () => {
     const all = await getAllRows();
     const csv = toCSV(all);
@@ -1044,8 +1044,8 @@ function bindEvents() {
     URL.revokeObjectURL(url);
   });
 
-  // 云端
   $("#btnSaveCloud").addEventListener("click", cloudSave);
+
   $("#btnLoadCloud").addEventListener("click", async () => {
     const panel = $("#cloudHistoryPanel");
     if (panel.style.display === "none") {
@@ -1063,12 +1063,12 @@ function bindEvents() {
     await renderTable();
   });
 
-  // 分类设置
   $("#btnCategories").addEventListener("click", () => {
     const p = $("#panelCategories");
     p.style.display = p.style.display === "none" ? "block" : "none";
     renderCatList();
   });
+
   $("#btnCatAdd").addEventListener("click", () => {
     const name = ($("#catName").value || "").trim();
     const color = ($("#catColor").value || "#007aff").trim();
@@ -1084,11 +1084,9 @@ function bindEvents() {
     renderTable();
   });
 
-  // 显示设置
   $("#btnView").addEventListener("click", () => {
     const p = $("#panelView");
     p.style.display = p.style.display === "none" ? "block" : "none";
-    // 同步控件初值
     const v = readView();
     $("#titleText").value = v.titleText;
     $("#titleColor").value = v.titleColor;
@@ -1105,37 +1103,43 @@ function bindEvents() {
     saveView(v);
     applyView(v);
   });
+
   $("#titleColor").addEventListener("input", () => {
     const v = readView();
     v.titleColor = $("#titleColor").value || "#111111";
     saveView(v);
     applyView(v);
   });
+
   $("#fontFamily").addEventListener("change", () => {
     const v = readView();
     v.fontFamily = $("#fontFamily").value;
     saveView(v);
     applyView(v);
   });
+
   $("#rowPad").addEventListener("input", () => {
     const v = readView();
     v.pad = Number($("#rowPad").value) || 6;
     saveView(v);
     applyView(v);
   });
+
   $("#colScale").addEventListener("input", () => {
     const v = readView();
     v.colScale = Number($("#colScale").value) || 1;
     saveView(v);
     applyView(v);
   });
+
   $("#zebraOn").addEventListener("change", () => {
     const v = readView();
     v.zebraOn = $("#zebraOn").checked;
     saveView(v);
     applyView(v);
-    renderTable(); // 手机卡片也要刷新 zebra
+    renderTable();
   });
+
   $("#zebraColor").addEventListener("input", () => {
     const v = readView();
     v.zebraColor = $("#zebraColor").value || "#e2f0ff";
@@ -1146,11 +1150,12 @@ function bindEvents() {
 
   $("#btnCompact").addEventListener("click", () => {
     const v = readView();
-    v.pad = 5; // 更紧凑
+    v.pad = 5;
     v.colScale = 0.95;
     saveView(v);
     applyView(v);
   });
+
   $("#btnResetSize").addEventListener("click", () => {
     saveView({
       ...DEFAULT_VIEW,
@@ -1164,21 +1169,15 @@ function bindEvents() {
 /* =========================
  * 12. 启动
  * ========================= */
+
 document.addEventListener("DOMContentLoaded", async () => {
-  // 应用视图
   applyView(readView());
-  // 事件
   bindEvents();
-  // 初次筛选/渲染
   await refreshFilters();
   await renderTable();
-
-  // 先做一次本地的云端状态检查（此时 supabase 可能还没初始化好）
   await cloudHealthCheck();
-  // 异步初始化 Supabase（失败也不会影响本地功能）
   initSupabase();
 
-  // 云端历史面板初始隐藏
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";
 });

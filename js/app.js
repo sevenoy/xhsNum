@@ -467,9 +467,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
   await refreshFilters();
   await renderTable();
-  await cloudHealthCheck();
-  initSupabase();
-
+  
+  // ✅ 先初始化 Supabase，再检查连接状态
+  await initSupabase();
+  
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";
 });

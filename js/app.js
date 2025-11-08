@@ -1,11 +1,10 @@
 // app.js  —— 仅在“样式与交互”层面做增强；保留你原有的本地优先 + 云端快照模型
 // 兼容 Dexie v4（全局 Dexie 对象已在 index.html 通过 CDN 注入）
-// Supabase 使用 ESM（按需连接，缺失配置时自动降级本地工作）
+// Supabase 使用动态 import，避免 import 失败导致整份脚本挂掉
 
 /* =========================
  * 0. 基础配置 & 常量
  * ========================= */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const VIEW_KEY = "xhs_view_v7";
 const CATS_KEY = "xhs_cats_v7";
@@ -13,7 +12,7 @@ const DB_NAME = "xhs_phone_sheet_v7";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
-// ✅ 如果本地还没有 Supabase 配置，则自动写入你这次提供的项目参数
+// ✅ 如果本地还没有 Supabase 配置，则自动写入你提供的参数
 if (!localStorage.getItem("xhs_supabase_url")) {
   localStorage.setItem(
     "xhs_supabase_url",
@@ -27,7 +26,7 @@ if (!localStorage.getItem("xhs_supabase_anon_key")) {
   );
 }
 
-// 优先从 window / localStorage 读取已有配置，缺失时仍可离线工作
+// 优先从 window / localStorage 读取已有配置
 const SUPABASE_URL =
   (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
 const SUPABASE_ANON_KEY =
@@ -35,16 +34,29 @@ const SUPABASE_ANON_KEY =
     localStorage.getItem("xhs_supabase_anon_key") ||
     "").trim();
 
-const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-const supabase = hasSupabase
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
+// 使用动态 import，避免 import 失败导致整份脚本无法执行
+let supabase = null;
+let hasSupabase = false;
 
-
-const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-const supabase = hasSupabase
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
+async function initSupabase() {
+  hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  if (!hasSupabase) {
+    // 没配置就保持“未配置”状态
+    return;
+  }
+  try {
+    const { createClient } = await import(
+      "https://esm.sh/@supabase/supabase-js@2"
+    );
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // 初始化完成后再做一次健康检查 & 刷新历史
+    await cloudHealthCheck();
+    await renderCloudHistory();
+  } catch (err) {
+    console.error("Supabase 初始化失败：", err);
+    supabase = null;
+  }
+}
 
 // 默认视图（统一 zebra = #e2f0ff 即 222/240/255）
 const DEFAULT_VIEW = Object.freeze({
@@ -695,7 +707,6 @@ function toCSV(rows) {
 
 /* =========================
  * 9. Supabase 云端快照
- *    —— 满足你的需求：自定义名称不加时间；仅在最右侧显示时间
  * ========================= */
 async function cloudHealthCheck() {
   const dot = $("#cloudDot");
@@ -933,8 +944,6 @@ function renderCatList() {
       } else if (act === "del") {
         if (!confirm("确定删除该分类？")) return;
         cats.splice(idx, 1);
-      } else if (act === "color") {
-        // 颜色由 <input type="color"> 直接触发 change 处理
       }
       saveCats(cats);
       renderCatList();
@@ -1163,8 +1172,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 初次筛选/渲染
   await refreshFilters();
   await renderTable();
-  // 云端健康检查
+
+  // 先做一次本地的云端状态检查（此时 supabase 可能还没初始化好）
   await cloudHealthCheck();
+  // 异步初始化 Supabase（失败也不会影响本地功能）
+  initSupabase();
 
   // 云端历史面板初始隐藏
   const panel = $("#cloudHistoryPanel");

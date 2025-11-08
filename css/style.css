@@ -487,6 +487,11 @@ td.col-xhs {
   max-width: 160px;
 }
 
+/* ✅✅✅ 关键修复：使用CSS变量支持动态分类颜色 */
+td.col-xhs[data-cat] {
+  background: var(--cat-bg-color, transparent) !important;
+}
+
 th.col-note,
 td.col-note {
   width: calc(var(--w-note) * var(--colScale));
@@ -500,23 +505,6 @@ td.col-cat {
 th.col-act,
 td.col-act {
   width: calc(var(--w-actions) * var(--colScale));
-}
-
-/* ✅ 按分类设置小红书名称背景色（移除内联样式） */
-td.col-xhs[data-cat="enterprise"] {
-  background: rgba(0, 122, 255, 0.18) !important;
-}
-
-td.col-xhs[data-cat="olina"] {
-  background: rgba(52, 199, 89, 0.18) !important;
-}
-
-td.col-xhs[data-cat="jasper"] {
-  background: rgba(255, 159, 10, 0.18) !important;
-}
-
-td.col-xhs[data-cat="usable"] {
-  background: rgba(142, 142, 147, 0.18) !important;
 }
 
 /* 表格内联编辑 */
@@ -594,8 +582,6 @@ td.col-cat select:focus {
 .btn-danger:active {
   background: #d9363e;
 }
-
-/* 空状态提示 */
 
 .empty-state {
   text-align: center;
@@ -706,29 +692,13 @@ td.col-cat select:focus {
   font-size: 14px;
 }
 
-/* ✅ 分类 pill - 根据分类颜色动态设置 */
+/* ✅✅✅ 关键修复：使用CSS变量支持动态分类颜色 */
 .m-cat-pill {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
-  background: rgba(0, 122, 255, 0.09);
+  background: var(--cat-pill-bg, rgba(0, 122, 255, 0.09));
   transition: background 0.3s ease;
-}
-
-.m-cat-pill[data-cat="enterprise"] {
-  background: rgba(0, 122, 255, 0.18);
-}
-
-.m-cat-pill[data-cat="olina"] {
-  background: rgba(52, 199, 89, 0.18);
-}
-
-.m-cat-pill[data-cat="jasper"] {
-  background: rgba(255, 159, 10, 0.18);
-}
-
-.m-cat-pill[data-cat="usable"] {
-  background: rgba(142, 142, 147, 0.18);
 }
 
 /* 下拉箭头 */

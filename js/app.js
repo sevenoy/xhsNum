@@ -1,23 +1,125 @@
 // app.js — 本地 Dexie + Supabase 快照 + 桌面表格 + 手机版折叠列表
 
-/* =========================
- * 1. 常量 & 工具函数
- * ========================= */
+/* =========================================================
+ * 0. 小工具函数
+ * ========================================================= */
 
-const DB_NAME = "xhs_phone_db_v7";
-const DB_VERSION = 7;
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-// 本地存储 key
-const STORAGE_KEY = "xhs_phone_rows_v7"; // 已弃用，只为旧版本兼容
-const SNAPSHOT_KEY = "xhs_phone_snapshots_v7";
-const VIEW_KEY = "xhs_phone_view_v7";
-const CATS_KEY = "xhs_phone_cats_v7";
+function uid() {
+  return (
+    "id_" +
+    Math.random().toString(16).slice(2) +
+    "_" +
+    Date.now().toString(16)
+  );
+}
 
-// Dexie 表名
-const TABLE_ROWS = "rows";
-const TABLE_SNAPSHOTS = "snapshots";
+function escapeHtml(str) {
+  return (str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
-// 默认视图配置
+function fmtTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const pad = (n) => (n < 10 ? "0" + n : "" + n);
+  return (
+    d.getFullYear() +
+    "-" +
+    pad(d.getMonth() + 1) +
+    "-" +
+    pad(d.getDate()) +
+    " " +
+    pad(d.getHours()) +
+    ":" +
+    pad(d.getMinutes())
+  );
+}
+
+// 简单节流
+function throttle(fn, delay = 120) {
+  let last = 0;
+  let timer = null;
+  return function (...args) {
+    const now = Date.now();
+    if (now - last < delay) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        last = Date.now();
+        fn.apply(this, args);
+      }, delay);
+    } else {
+      last = now;
+      fn.apply(this, args);
+    }
+  };
+}
+
+// 文本截断（用于手机版小红书名）
+function truncateText(str, maxLen = 16) {
+  if (!str) return "";
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen) + "…";
+}
+
+/* =========================================================
+ * 1. Dexie 数据库
+ * ========================================================= */
+
+const db = new Dexie("xhsphone_db_v7");
+db.version(1).stores({
+  rows: "id, phone, owner, wx_real, wx_name, xhs_name, note1, row_color, order, updated_at",
+});
+
+/** 表结构：
+ *  {
+ *    id: string,
+ *    phone: string,
+ *    owner: string,
+ *    wx_real: string,
+ *    wx_name: string,
+ *    xhs_name: string,
+ *    note1: string,
+ *    row_color: string,  // 存分类 ID
+ *    order: number,
+ *    updated_at: number
+ *  }
+ */
+
+/* =========================================================
+ * 2. Supabase 云端快照
+ * ========================================================= */
+
+const SUPABASE_URL = (localStorage.getItem("xhs_supabase_url") || "").trim();
+const SUPABASE_ANON_KEY = (localStorage.getItem("xhs_supabase_key") || "").trim();
+const SUPABASE_TABLE = "xhsphone_snapshots";
+const SUPABASE_DEFAULT_KEY = "default";
+
+let supabase = null;
+
+if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+  try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.error("创建 Supabase 客户端失败", e);
+    supabase = null;
+  }
+} else {
+  console.warn("未配置 Supabase URL / Key，将只使用本地存储。");
+}
+
+/* =========================================================
+ * 3. 视图状态：标题 / 字体 / 行高 / 列宽 / 隔行颜色
+ * ========================================================= */
+
+const VIEW_KEY = "xhs_view_v3";
+const CATS_KEY = "xhs_cats_v3";
+
 const DEFAULT_VIEW = Object.freeze({
   viewVersion: 7,
   pad: 6,
@@ -44,106 +146,21 @@ const state = {
   owner: "all",
   wxReal: "all",
   sortBy: "order",
-  precise: false,
-  activeFunction: null,
+  precise: false, // false=模糊搜索  true=精准搜索
 };
 
-function uid() {
-  return (
-    Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8)
-  );
-}
-
-function escapeHtml(str) {
-  if (str == null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-/**
- * 简单节流：防止频繁触发
- */
-function throttle(fn, delay) {
-  let timer = null;
-  return function (...args) {
-    if (timer) return;
-    timer = setTimeout(() => {
-      timer = null;
-      fn.apply(this, args);
-    }, delay);
-  };
-}
-
-/**
- * 安全绑定事件：元素不存在就跳过
- */
-function safeBind(selector, event, handler) {
-  const el =
-    typeof selector === "string" ? document.querySelector(selector) : selector;
-  if (!el) return;
-  el.addEventListener(event, handler);
-}
-
-/**
- * 统一设置激活的功能按钮
- */
-function setActiveFunction(name) {
-  state.activeFunction = name;
-  document.querySelectorAll(".function-btn").forEach((btn) => {
-    const fn = btn.dataset.function;
-    if (fn === name) {
-      btn.classList.add("active");
-    } else {
-      btn.classList.remove("active");
-    }
-  });
-}
-
-function clearActiveFunction() {
-  state.activeFunction = null;
-  document.querySelectorAll(".function-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-}
-
-/* =========================
- * 2. 视图配置（标题、行高、字体等）
- * ========================= */
+/* =========================================================
+ * 4. 视图 / 分类 的本地存取
+ * ========================================================= */
 
 function readView() {
   try {
     const raw = localStorage.getItem(VIEW_KEY);
-    if (!raw) {
-      saveView(DEFAULT_VIEW);
-      return { ...DEFAULT_VIEW };
-    }
-
+    if (!raw) return { ...DEFAULT_VIEW };
     const obj = JSON.parse(raw);
-    if (obj.viewVersion !== DEFAULT_VIEW.viewVersion) {
-      const merged = {
-        ...DEFAULT_VIEW,
-        ...obj,
-        viewVersion: DEFAULT_VIEW.viewVersion,
-      };
-      saveView(merged);
-      return merged;
-    }
-
-    if (typeof obj.pad !== "number") obj.pad = DEFAULT_VIEW.pad;
-    if (typeof obj.colScale !== "number") obj.colScale = DEFAULT_VIEW.colScale;
-    if (typeof obj.zebraOn !== "boolean") obj.zebraOn = DEFAULT_VIEW.zebraOn;
-    if (!obj.zebraColor) obj.zebraColor = DEFAULT_VIEW.zebraColor;
-    if (!obj.fontFamily) obj.fontFamily = DEFAULT_VIEW.fontFamily;
-    if (!obj.titleText) obj.titleText = DEFAULT_VIEW.titleText;
-    if (!obj.titleColor) obj.titleColor = DEFAULT_VIEW.titleColor;
-
-    return obj;
+    // 合并默认值，支持后续升级
+    return { ...DEFAULT_VIEW, ...(obj || {}) };
   } catch {
-    saveView(DEFAULT_VIEW);
     return { ...DEFAULT_VIEW };
   }
 }
@@ -153,23 +170,26 @@ function saveView(v) {
 }
 
 function applyView(v) {
+  // 设置 CSS 变量
   const root = document.documentElement;
-  root.style.setProperty("--pad", `${v.pad}px`);
-  root.style.setProperty("--colScale", `${v.colScale}`);
-  root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
-  root.style.setProperty("--font-main", v.fontFamily);
+  root.style.setProperty("--row-pad", (v.pad || 6) + "px");
+  root.style.setProperty("--col-scale", String(v.colScale || 1));
+  root.style.setProperty("--zebra-on", v.zebraOn ? "1" : "0");
+  root.style.setProperty("--zebra", v.zebraColor || "#e2f0ff");
+  root.style.setProperty("--font-family", v.fontFamily || DEFAULT_VIEW.fontFamily);
+  root.style.setProperty("--title-color", v.titleColor || "#1990FF");
 
-  const h1 = document.getElementById("appTitle");
-  if (h1) {
-    h1.textContent = v.titleText;
-    h1.style.color = v.titleColor;
+  // 应用标题
+  const titleEl = $("#appTitle");
+  if (titleEl) {
+    titleEl.textContent = v.titleText || "XHSPHONE";
+    titleEl.style.color = v.titleColor || "#1990FF";
   }
 }
 
-/* =========================
- * 3. 分类配置
- * ========================= */
-
+/**
+ * 分类读写（修复旧分类没有 id 导致按钮失效的问题）
+ */
 function readCats() {
   try {
     const raw = localStorage.getItem(CATS_KEY);
@@ -202,305 +222,298 @@ function saveCats(cats) {
 }
 
 function catNameOf(cats, id) {
-  const found = cats.find((c) => c.id === id || c.color === id);
-  return found ? found.name : "";
+  if (!id) return "";
+  const c = cats.find((x) => x.id === id);
+  return c ? c.name : "";
 }
 
-/* =========================
- * 4. Dexie 初始化
- * ========================= */
-
-const db = new Dexie(DB_NAME);
-
-db.version(DB_VERSION).stores({
-  [TABLE_ROWS]:
-    "id, order, phone, xhs_name, owner, wx_real, wx_name, xhs_link, note, row_color, created_at, updated_at",
-  [TABLE_SNAPSHOTS]: "id, created_at",
-});
-
-/* =========================
- * 5. 本地数据封装
- * ========================= */
-
-/**
- * 读取所有行
- */
-async function loadAllRows() {
-  return await db.rows.orderBy("order").toArray();
+function catColorOf(cats, id) {
+  if (!id) return "";
+  const c = cats.find((x) => x.id === id);
+  return c ? c.color || "#007aff" : "";
 }
 
-/**
- * 新增一行
- */
-async function addRow() {
-  const all = await loadAllRows();
-  const maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
-  const now = Date.now();
-  const row = {
-    id: uid(),
-    order: maxOrder + 1,
-    phone: "",
-    xhs_name: "",
-    owner: "",
-    wx_real: "",
-    wx_name: "",
-    xhs_link: "",
-    note: "",
-    row_color: "",
-    created_at: now,
-    updated_at: now,
-  };
-  await db.rows.add(row);
-  return row;
-}
+/* =========================================================
+ * 5. 数据层：增 / 删 / 改 / 查
+ * ========================================================= */
 
-/**
- * 更新某行
- */
-async function updateRow(id, patch) {
-  const row = await db.rows.get(id);
-  if (!row) return;
-  patch.updated_at = Date.now();
-  await db.rows.put({ ...row, ...patch });
-}
-
-/**
- * 删除某行
- */
-async function deleteRow(id) {
-  await db.rows.delete(id);
-}
-
-/* =========================
- * 6. 旧 localStorage 数据迁移（一次性）
- * ========================= */
-
-async function migrateFromLocalStorage() {
-  const old = localStorage.getItem(STORAGE_KEY);
-  if (!old) return;
-  try {
-    const arr = JSON.parse(old);
-    if (!Array.isArray(arr) || !arr.length) return;
-
-    const existing = await db.rows.count();
-    if (existing > 0) return;
-
-    const now = Date.now();
-    const toAdd = arr.map((r, idx) => ({
-      id: r.id || uid(),
-      order: r.order || idx + 1,
-      phone: r.phone || "",
-      xhs_name: r.xhs_name || "",
-      owner: r.owner || "",
-      wx_real: r.wx_real || "",
-      wx_name: r.wx_name || "",
-      xhs_link: r.xhs_link || "",
-      note: r.note || "",
-      row_color: r.row_color || "",
-      created_at: r.created_at || now,
-      updated_at: r.updated_at || now,
-    }));
-    await db.rows.bulkAdd(toAdd);
-  } catch (e) {
-    console.error("迁移旧数据失败:", e);
-  } finally {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-}
-
-/* =========================
- * 7. Supabase 接入
- * ========================= */
-
-// 默认提供一份可用的配置（只在本地还没存过的情况下自动写入一次）
-if (!localStorage.getItem("xhs_supabase_url")) {
-  localStorage.setItem(
-    "xhs_supabase_url",
-    "https://tmeqccupnsvxexbrlflo.supabase.co"
-  );
-}
-if (!localStorage.getItem("xhs_supabase_anon_key")) {
-  localStorage.setItem(
-    "xhs_supabase_anon_key",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRtZXFjY3VwbnN2eGV4YnJsZmxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzA2MDM2MjIsImV4cCI6MjA2MjE2OTYyMn0.9ZJz6Cwpjo5HLGXRNMBtj-J57gX47Aj42_0ILmkxbho"
-  );
-}
-
-// 优先从 window / localStorage 读取已有配置
-const SUPABASE_URL =
-  (window.SUPABASE_URL || localStorage.getItem("xhs_supabase_url") || "").trim();
-const SUPABASE_ANON_KEY =
-  (window.SUPABASE_ANON_KEY ||
-    localStorage.getItem("xhs_supabase_anon_key") ||
-    "").trim();
-
-let supabase = null;
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = window.supabase
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    : null;
-} else {
-  console.warn("⚠ 未配置 Supabase URL/KEY，云端功能不可用");
-}
-
-/* =========================
- * 8. 表格渲染（桌面端）
- * ========================= */
-
-function normalizeText(str) {
-  return (str || "").toString().trim().toLowerCase();
-}
-
-function matchRow(row, q, precise) {
-  if (!q) return true;
-  const fields = [
-    row.phone,
-    row.xhs_name,
-    row.owner,
-    row.wx_real,
-    row.wx_name,
-    row.xhs_link,
-    row.note,
-  ];
-  const target = normalizeText(q);
-  if (!precise) {
-    return fields.some((f) => normalizeText(f).includes(target));
-  }
-  return fields.some((f) => normalizeText(f) === target);
-}
-
-function applyFilters(rows) {
-  return rows.filter((r) => {
-    if (!matchRow(r, state.q, state.precise)) return false;
-    if (state.owner !== "all" && (r.owner || "") !== state.owner) return false;
-    if (state.wxReal !== "all" && (r.wx_real || "") !== state.wxReal)
-      return false;
-    return true;
+async function getAllRows() {
+  const rows = await db.rows.toArray();
+  // 缺少 order 的补上
+  let maxOrder = rows.length
+    ? Math.max(...rows.map((r) => (typeof r.order === "number" ? r.order : 0)))
+    : 0;
+  let changed = false;
+  const fixed = rows.map((r) => {
+    if (typeof r.order !== "number") {
+      changed = true;
+      maxOrder += 1;
+      return { ...r, order: maxOrder };
+    }
+    return r;
   });
-}
-
-function sortRows(rows) {
-  if (state.sortBy === "order") {
-    return rows.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-  }
-  if (state.sortBy === "created") {
-    return rows.slice().sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
-  }
-  if (state.sortBy === "updated") {
-    return rows.slice().sort((a, b) => (a.updated_at || 0) - (b.updated_at || 0));
+  if (changed) {
+    await db.rows.bulkPut(fixed);
+    return fixed;
   }
   return rows;
 }
 
-function truncateText(str, maxLen) {
-  if (!str) return "";
-  const s = String(str);
-  if (s.length <= maxLen) return s;
-  return s.slice(0, maxLen - 1) + "…";
+async function addRow() {
+  const rows = await getAllRows();
+  const maxOrder = rows.length
+    ? Math.max(...rows.map((r) => (typeof r.order === "number" ? r.order : 0)))
+    : 0;
+  const r = {
+    id: uid(),
+    phone: "",
+    owner: "",
+    wx_real: "",
+    wx_name: "",
+    xhs_name: "",
+    note1: "",
+    row_color: "",
+    order: maxOrder + 1,
+    updated_at: Date.now(),
+  };
+  await db.rows.add(r);
+  await refreshFilters();
+  await renderTable();
 }
 
-/* 根据 row_color 设置 CSS 变量，让 zebra 不被覆盖 */
-function setCategoryBg(el, rowColor) {
-  const color = rowColor || "";
-  if (!color) {
-    el.style.removeProperty("--cat-pill-bg");
-    return;
-  }
-  const m = color.match(/^rgba?\(([^)]+)\)$/i);
-  if (m) {
+/* =========================================================
+ * 6. 筛选 & 排序逻辑
+ * ========================================================= */
+
+function normalizeText(str) {
+  return (str || "").toLowerCase();
+}
+
+function includesAll(haystack, keywords) {
+  return keywords.every((kw) => haystack.includes(kw));
+}
+
+function preciseMatch(row, q) {
+  const text = [
+    row.phone,
+    row.owner,
+    row.wx_real,
+    row.wx_name,
+    row.xhs_name,
+    row.note1,
+  ]
+    .map((x) => normalizeText(x))
+    .join(" ");
+  const qNorm = normalizeText(q);
+  if (!qNorm) return true;
+  // 精准 = 分词后全部包含
+  const parts = qNorm.split(/\s+/).filter(Boolean);
+  return includesAll(text, parts);
+}
+
+function fuzzyMatch(row, q) {
+  const text = [
+    row.phone,
+    row.owner,
+    row.wx_real,
+    row.wx_name,
+    row.xhs_name,
+    row.note1,
+  ]
+    .map((x) => normalizeText(x))
+    .join(" ");
+  const qNorm = normalizeText(q);
+  if (!qNorm) return true;
+  return text.includes(qNorm);
+}
+
+function filterAndSort(rows) {
+  const cats = readCats();
+  const { q, owner, wxReal, sortBy, precise } = state;
+
+  let result = rows.filter((r) => {
+    // 筛选所属人
+    if (owner !== "all" && (r.owner || "") !== owner) return false;
+    // 筛选微信实名人
+    if (wxReal !== "all" && (r.wx_real || "") !== wxReal) return false;
+    // 搜索
+    if (q && q.trim()) {
+      if (precise) {
+        if (!preciseMatch(r, q)) return false;
+      } else {
+        if (!fuzzyMatch(r, q)) return false;
+      }
+    }
+    return true;
+  });
+
+  result.sort((a, b) => {
+    if (sortBy === "owner") {
+      return (a.owner || "").localeCompare(b.owner || "") || a.order - b.order;
+    }
+    if (sortBy === "wx_real") {
+      return (
+        (a.wx_real || "").localeCompare(b.wx_real || "") || a.order - b.order
+      );
+    }
+    if (sortBy === "phone") {
+      return (a.phone || "").localeCompare(b.phone || "") || a.order - b.order;
+    }
+    if (sortBy === "xhs_name") {
+      return (
+        (a.xhs_name || "").localeCompare(b.xhs_name || "") ||
+        a.order - b.order
+      );
+    }
+    if (sortBy === "row_color") {
+      const ca = catNameOf(cats, a.row_color);
+      const cb = catNameOf(cats, b.row_color);
+      return ca.localeCompare(cb) || a.order - b.order;
+    }
+    // 默认按 order
+    return a.order - b.order;
+  });
+
+  return result;
+}
+
+/* =========================================================
+ * 7. 桌面版表格渲染
+ * ========================================================= */
+
+function setCategoryBg(el, catId) {
+  const cats = readCats();
+  const color = catColorOf(cats, catId);
+  if (!el) return;
+  if (color) {
     el.style.setProperty("--cat-pill-bg", color);
-    return;
+    el.style.backgroundColor = color;
+  } else {
+    el.style.setProperty("--cat-pill-bg", "rgba(0,122,255,0.09)");
+    el.style.backgroundColor = "";
   }
-  el.style.setProperty(
-    "--cat-pill-bg",
-    color.replace(")", ", 0.15)").replace("rgb", "rgba")
-  );
 }
 
-async function renderTable() {
-  const gridBody = document.getElementById("gridBody");
-  const mobileList = document.getElementById("mobileList");
-  if (!gridBody || !mobileList) return;
-
-  const allRows = await loadAllRows();
-  const filtered = applyFilters(allRows);
-  const sorted = sortRows(filtered);
+function renderDesktopTable(rows) {
+  const tbody = $("#gridBody");
+  if (!tbody) return;
 
   const cats = readCats();
   const v = readView();
+  const zebraColor = v.zebraColor || "#e2f0ff";
+  const zebraOn = v.zebraOn !== false;
 
-  gridBody.innerHTML = sorted
+  tbody.innerHTML = rows
     .map((r, idx) => {
-      const zebraClass = v.zebraOn && idx % 2 === 1 ? "zebra-even" : "";
-      const catName = catNameOf(cats, r.row_color);
-      const catAttr = r.row_color
-        ? `data-cat="${escapeHtml(r.row_color)}"`
-        : "";
-      return `<tr class="${zebraClass}" data-id="${r.id}">
-        <td class="cell-order">${r.order || ""}</td>
-        <td class="cell-phone" data-id="${r.id}" data-field="phone" contenteditable="true">${escapeHtml(
-          r.phone || ""
-        )}</td>
-        <td class="cell-xhs" data-id="${r.id}" data-field="xhs_name" contenteditable="true">
-          ${escapeHtml(r.xhs_name || "")}
-        </td>
-        <td class="cell-owner" data-id="${r.id}" data-field="owner" contenteditable="true">
-          ${escapeHtml(r.owner || "")}
-        </td>
-        <td class="cell-wx-real" data-id="${r.id}" data-field="wx_real" contenteditable="true">
-          ${escapeHtml(r.wx_real || "")}
-        </td>
-        <td class="cell-wx-name" data-id="${r.id}" data-field="wx_name" contenteditable="true">
-          ${escapeHtml(r.wx_name || "")}
-        </td>
-        <td class="cell-xhs-link" data-id="${r.id}" data-field="xhs_link" contenteditable="true">
-          ${escapeHtml(r.xhs_link || "")}
-        </td>
-        <td class="cell-note" data-id="${r.id}" data-field="note" contenteditable="true">
-          ${escapeHtml(r.note || "")}
-        </td>
-        <td class="cell-cat">
-          <span class="cat-pill" ${catAttr}>${escapeHtml(catName || "未分类")}</span>
-        </td>
-        <td class="cell-actions">
-          <button class="btn-danger" data-id="${r.id}" data-act="delete">删除</button>
+      const zebraClass = zebraOn && idx % 2 === 1 ? "zebra-row" : "";
+      const catOptions = cats
+        .map(
+          (c) =>
+            `<option value="${escapeHtml(
+              c.id
+            )}" data-color="${escapeHtml(c.color || "")}" ${
+              r.row_color === c.id ? "selected" : ""
+            }>${escapeHtml(c.name)}</option>`
+        )
+        .join("");
+
+      const catSelectHtml = `<select data-field="row_color" data-id="${escapeHtml(
+        r.id
+      )}">
+        <option value="">未分类</option>
+        ${catOptions}
+      </select>`;
+
+      return `<tr class="${zebraClass}" data-id="${escapeHtml(r.id)}">
+        <td class="col-phone" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="phone">${escapeHtml(r.phone || "")}</td>
+        <td class="col-owner" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="owner">${escapeHtml(r.owner || "")}</td>
+        <td class="col-real" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="wx_real">${escapeHtml(r.wx_real || "")}</td>
+        <td class="col-wx" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="wx_name">${escapeHtml(r.wx_name || "")}</td>
+        <td class="col-xhs" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="xhs_name">${escapeHtml(r.xhs_name || "")}</td>
+        <td class="col-note" contenteditable="true" data-id="${escapeHtml(
+          r.id
+        )}" data-field="note1">${escapeHtml(r.note1 || "")}</td>
+        <td class="col-cat">${catSelectHtml}</td>
+        <td class="col-act">
+          <button data-act="up" data-id="${escapeHtml(
+            r.id
+          )}">上移</button>
+          <button data-act="down" data-id="${escapeHtml(
+            r.id
+          )}">下移</button>
+          <button data-act="del" data-id="${escapeHtml(r.id)}">删除</button>
         </td>
       </tr>`;
     })
     .join("");
 
-  renderMobileList(sorted);
-  await refreshFilters();
+  // 应用分类背景色（xhs 列）
+  tbody.querySelectorAll(".col-xhs").forEach((td) => {
+    const id = td.getAttribute("data-id");
+    if (!id) return;
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+    setCategoryBg(td, row.row_color);
+  });
+
+  // 隔行着色
+  if (zebraOn) {
+    tbody.querySelectorAll("tr").forEach((tr, i) => {
+      if (i % 2 === 1) {
+        tr.style.backgroundColor = zebraColor;
+      } else {
+        tr.style.backgroundColor = "";
+      }
+    });
+  } else {
+    tbody.querySelectorAll("tr").forEach((tr) => {
+      tr.style.backgroundColor = "";
+    });
+  }
 }
 
-/* =========================
- * 9. 移动端折叠列表渲染
- * ========================= */
+/* =========================================================
+ * 8. 手机版折叠列表渲染
+ * ========================================================= */
+
+function mobileDetail(label, text, field, id) {
+  return `<div class="m-detail-row">
+    <div class="m-detail-label">${escapeHtml(label)}</div>
+    <div class="m-detail-value" data-field="${escapeHtml(
+      field
+    )}" data-id="${escapeHtml(id)}" contenteditable="true">${escapeHtml(
+    text || ""
+  )}</div>
+  </div>`;
+}
 
 function renderMobileList(rows) {
-  const container = document.getElementById("mobileList");
-  const v = readView();
-
-  if (!container) return;
-
-  if (!rows.length) {
-    container.innerHTML = `<div class="empty-state">暂无数据</div>`;
-    return;
-  }
+  const list = $("#mobileList");
+  if (!list) return;
 
   const cats = readCats();
+  const v = readView();
+  const zebraColor = v.zebraColor || "#e2f0ff";
+  const zebraOn = v.zebraOn !== false;
 
-  container.innerHTML = rows
+  list.innerHTML = rows
     .map((r, idx) => {
-      const zebraClass = v.zebraOn && idx % 2 === 1 ? "zebra-even" : "";
-      const catAttr = r.row_color
-        ? `data-cat="${escapeHtml(r.row_color)}"`
-        : "";
+      const zebraClass = zebraOn && idx % 2 === 1 ? "zebra-even" : "";
       const catName = catNameOf(cats, r.row_color);
       const xhsDisplay = truncateText(r.xhs_name, 10);
 
-      return `<div class="m-row ${zebraClass}" data-id="${r.id}">
-        <button class="m-row-header" data-id="${r.id}">
+      return `<div class="m-row ${zebraClass}" data-id="${escapeHtml(r.id)}">
+        <button class="m-row-header" data-id="${escapeHtml(r.id)}">
           <div class="m-main-line">
             <span class="m-phone">${escapeHtml(r.phone || "")}</span>
             <span class="m-xhs" title="${escapeHtml(
@@ -509,10 +522,8 @@ function renderMobileList(rows) {
             <span class="m-arrow">▾</span>
           </div>
           <div class="m-meta-line">
-            <span class="m-owner">所属人：${escapeHtml(
-              r.owner || "-"
-            )}</span>
-            <span class="m-cat-pill" ${catAttr}>${escapeHtml(
+            <span class="m-owner">所属人：${escapeHtml(r.owner || "-")}</span>
+            <span class="m-cat-pill">${escapeHtml(
               catName || "未分类"
             )}</span>
           </div>
@@ -520,87 +531,322 @@ function renderMobileList(rows) {
         <div class="m-row-details">
           ${mobileDetail("微信实名人", r.wx_real, "wx_real", r.id)}
           ${mobileDetail("对应微信名", r.wx_name, "wx_name", r.id)}
-          ${mobileDetail("小红书链接", r.xhs_link, "xhs_link", r.id)}
-          ${mobileDetail("备注", r.note, "note", r.id)}
-          ${mobileColorPicker(r.row_color, r.id)}
-          <button class="m-delete" data-id="${r.id}">删除本条</button>
+          ${mobileDetail("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobileDetail("备注", r.note1, "note1", r.id)}
+          <div class="m-detail-row">
+            <div class="m-detail-label">分类</div>
+            <div class="m-detail-value">
+              <select data-field="row_color" data-id="${escapeHtml(r.id)}">
+                <option value="">未分类</option>
+                ${cats
+                  .map(
+                    (c) =>
+                      `<option value="${escapeHtml(
+                        c.id
+                      )}" data-color="${escapeHtml(c.color || "")}" ${
+                        r.row_color === c.id ? "selected" : ""
+                      }>${escapeHtml(c.name)}</option>`
+                  )
+                  .join("")}
+              </select>
+            </div>
+          </div>
         </div>
       </div>`;
     })
     .join("");
 
-  // 为每个移动端 pill 设置 CSS 变量（动态分类底色）
-  rows.forEach((r) => {
-    const card = container.querySelector(`.m-row[data-id="${r.id}"]`);
-    if (card) {
-      const pill = card.querySelector(".m-cat-pill");
-      if (pill) {
-        setCategoryBg(pill, r.row_color);
-      }
+  // 应用分类颜色到 pill
+  list.querySelectorAll(".m-row").forEach((card) => {
+    const id = card.getAttribute("data-id");
+    if (!id) return;
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+    const pill = card.querySelector(".m-cat-pill");
+    if (pill) {
+      setCategoryBg(pill, row.row_color);
+      pill.textContent = catNameOf(cats, row.row_color) || "未分类";
     }
   });
-
-  function mobileDetail(label, text, field, id) {
-    const safe = escapeHtml(text || "");
-    return `<div class="m-detail">
-      <div class="m-detail-label">${escapeHtml(label)}</div>
-      <div class="m-detail-value" contenteditable="true" data-id="${id}" data-field="${field}">
-        ${safe}
-      </div>
-    </div>`;
-  }
-
-  function mobileColorPicker(color, id) {
-    const safe = escapeHtml(color || "");
-    return `<div class="m-detail">
-      <div class="m-detail-label">分类颜色</div>
-      <div class="m-detail-value">
-        <input type="color" value="${safe}" data-id="${id}" class="m-color-input" />
-      </div>
-    </div>`;
-  }
 }
 
-/* =========================
- * 10. 筛选下拉刷新
- * ========================= */
+/* =========================================================
+ * 9. 表格整体渲染
+ * ========================================================= */
 
-async function refreshFilters() {
-  const allRows = await loadAllRows();
-  const owners = Array.from(
-    new Set(allRows.map((r) => r.owner || "").filter(Boolean))
+async function renderTable() {
+  const rows = await getAllRows();
+  const filtered = filterAndSort(rows);
+  renderDesktopTable(filtered);
+  renderMobileList(filtered);
+}
+
+/* =========================================================
+ * 10. Supabase 云端快照
+ * ========================================================= */
+
+async function initSupabase() {
+  if (!supabase) return;
+  console.log("Supabase 已初始化。");
+}
+
+async function cloudSave(snapshotLabel = "") {
+  if (!supabase) {
+    alert("未配置 Supabase，无法保存到云端。");
+    return;
+  }
+  const rows = await getAllRows();
+  const cats = readCats();
+  const view = readView();
+
+  const payload = {
+    rows,
+    cats,
+    view,
+    snapshot_label: snapshotLabel || "手动快照",
+  };
+
+  const key = snapshotLabel
+    ? `snap_${Date.now()}`
+    : SUPABASE_DEFAULT_KEY;
+
+  const { error } = await supabase.from(SUPABASE_TABLE).upsert(
+    {
+      key,
+      payload,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "key",
+    }
   );
-  const wxReals = Array.from(
-    new Set(allRows.map((r) => r.wx_real || "").filter(Boolean))
-  );
 
-  const ownerSelect = document.getElementById("filterOwner");
-  const wxRealSelect = document.getElementById("filterWxReal");
-
-  if (ownerSelect) {
-    const current = ownerSelect.value || "all";
-    ownerSelect.innerHTML =
-      `<option value="all">所属人：全部</option>` +
-      owners
-        .map(
-          (o) =>
-            `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`
-        )
-        .join("");
-    ownerSelect.value = current;
+  if (error) {
+    console.error("云端保存失败", error);
+    alert("保存到云端失败。");
+    return;
   }
 
-  if (wxRealSelect) {
-    const current = wxRealSelect.value || "all";
-    wxRealSelect.innerHTML =
+  alert("已保存到云端。");
+  await renderCloudHistory();
+}
+
+async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
+  if (!supabase) {
+    alert("未配置 Supabase，无法从云端加载。");
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("payload")
+    .eq("key", key)
+    .maybeSingle();
+  if (error || !data) {
+    alert("云端读取失败。");
+    return;
+  }
+  const payload = data.payload || {};
+  const rows = payload.rows || [];
+  const cats = payload.cats || DEFAULT_CATS;
+  const view = payload.view || DEFAULT_VIEW;
+
+  await db.rows.clear();
+  if (rows.length) await db.rows.bulkAdd(rows);
+
+  saveCats(cats);
+  saveView({ ...DEFAULT_VIEW, ...view });
+
+  await refreshFilters();
+  applyView(readView());
+  await renderTable();
+  alert("云端数据已加载。");
+}
+
+async function renderCloudHistory() {
+  const panel = $("#cloudHistoryPanel");
+  if (!panel) return;
+  if (!supabase) {
+    panel.innerHTML = `<div class="cloud-msg">未配置 Supabase</div>`;
+    return;
+  }
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select("key,payload,updated_at")
+    .like("key", "snap_%")
+    .order("updated_at", { ascending: false })
+    .limit(5);
+  if (error) {
+    panel.innerHTML = `<div class="cloud-msg error">加载历史失败</div>`;
+    return;
+  }
+  if (!Array.isArray(data) || !data.length) {
+    panel.innerHTML = `<div class="cloud-msg">暂无历史快照</div>`;
+    return;
+  }
+  panel.innerHTML = data
+    .map((row) => {
+      const name = (row.payload?.snapshot_label || "快照").trim();
+      const t = fmtTime(row.updated_at);
+      const metaCount = Array.isArray(row.payload?.rows)
+        ? `${row.payload.rows.length} 条`
+        : "";
+      return `<div class="cloud-item" data-key="${row.key}">
+        <div class="cloud-item-main">
+          <div class="cloud-item-name">${escapeHtml(name)}</div>
+          <div class="cloud-item-meta">${escapeHtml(metaCount)}</div>
+        </div>
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
+      </div>`;
+    })
+    .join("");
+
+  panel.querySelectorAll(".cloud-item").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-key");
+      if (!key) return;
+      if (confirm("确定用该快照覆盖本地数据？")) {
+        await cloudLoad(key);
+      }
+    });
+  });
+}
+
+/* =========================================================
+ * 10. 分类设置 UI
+ * ========================================================= */
+
+function renderCatList() {
+  const list = $("#catList");
+  if (!list) return;
+  const cats = readCats();
+  list.innerHTML = cats
+    .map(
+      (c) => `<div class="cat-row" data-id="${escapeHtml(c.id)}">
+      <span class="cat-color" style="background:${escapeHtml(
+        c.color || "#007aff"
+      )}"></span>
+      <span class="cat-name" contenteditable="true">${escapeHtml(
+        c.name || ""
+      )}</span>
+      <span class="cat-ops">
+        <button data-act="up">上移</button>
+        <button data-act="down">下移</button>
+        <button data-act="del">删除</button>
+        <input type="color" value="${escapeHtml(
+          c.color || "#007aff"
+        )}" data-act="color" />
+      </span>
+    </div>`
+    )
+    .join("");
+
+  // 分类名称编辑
+  list.querySelectorAll(".cat-name").forEach((el) => {
+    el.addEventListener("blur", () => {
+      const id = el.closest(".cat-row").getAttribute("data-id");
+      const v = el.textContent.trim();
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
+        saveCats(cats);
+        renderTable();
+      }
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        el.blur();
+      }
+    });
+  });
+
+  // 上移/下移/删除
+  list.querySelectorAll("[data-act]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".cat-row");
+      const id = row.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      const cats = readCats();
+      const idx = cats.findIndex((x) => x.id === id);
+      if (idx < 0) return;
+
+      if (act === "up" && idx > 0) {
+        [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
+      } else if (act === "down" && idx < cats.length - 1) {
+        [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
+      } else if (act === "del") {
+        if (!confirm("确定删除该分类？")) return;
+        cats.splice(idx, 1);
+      }
+      saveCats(cats);
+      renderCatList();
+      renderTable();
+    });
+  });
+
+  // 颜色调整
+  list
+    .querySelectorAll('input[type="color"][data-act="color"]')
+    .forEach((el) => {
+      el.addEventListener("change", () => {
+        const row = el.closest(".cat-row");
+        const id = row.getAttribute("data-id");
+        const cats = readCats();
+        const idx = cats.findIndex((x) => x.id === id);
+        if (idx < 0) return;
+        cats[idx] = { ...cats[idx], color: el.value };
+        saveCats(cats);
+        renderCatList();
+        renderTable();
+      });
+    });
+}
+
+/* =========================================================
+ * 11. 事件绑定 & 分类 / 显示面板互斥展开
+ * ========================================================= */
+
+async function refreshFilters() {
+  const rows = await getAllRows();
+  const owners = Array.from(new Set(rows.map((r) => r.owner || ""))).filter(
+    Boolean
+  );
+  const wxRealList = Array.from(
+    new Set(rows.map((r) => r.wx_real || ""))
+  ).filter(Boolean);
+
+  const ownerSel = $("#filterOwner");
+  const wxSel = $("#filterWxReal");
+
+  if (ownerSel) {
+    const cur = ownerSel.value || "all";
+    ownerSel.innerHTML =
+      `<option value="all">所属人：全部</option>` +
+      owners.map(
+        (o) =>
+          `<option value="${escapeHtml(o)}">${
+            "所属人：" + escapeHtml(o)
+          }</option>`
+      );
+    if ([...ownerSel.options].some((x) => x.value === cur)) {
+      ownerSel.value = cur;
+    }
+  }
+
+  if (wxSel) {
+    const cur = wxSel.value || "all";
+    wxSel.innerHTML =
       `<option value="all">微信实名人：全部</option>` +
-      wxReals
-        .map(
-          (o) =>
-            `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`
-        )
-        .join("");
-    wxRealSelect.value = current;
+      wxRealList.map(
+        (o) =>
+          `<option value="${escapeHtml(o)}">${
+            "实名人：" + escapeHtml(o)
+          }</option>`
+      );
+    if ([...wxSel.options].some((x) => x.value === cur)) {
+      wxSel.value = cur;
+    }
   }
 }
 
@@ -608,12 +854,11 @@ async function refreshFilters() {
  * 11. 事件绑定 & 初始化
  * ========================= */
 
-const $ = (sel) => document.querySelector(sel);
-
 function bindEvents() {
-  const gridBody = document.getElementById("gridBody");
-  const mobileList = document.getElementById("mobileList");
+  const gridBody = $("#gridBody");
+  const mobileList = $("#mobileList");
 
+  // 关键元素检查
   if (!gridBody) {
     console.error("❌ 找不到 #gridBody 元素");
     return;
@@ -623,179 +868,338 @@ function bindEvents() {
     return;
   }
 
-  // 新增一行
-  safeBind("#btnAddRow", "click", async () => {
-    setActiveFunction("add");
-    await addRow();
+  // 安全绑定函数
+  const safeBind = (selector, event, handler, useCapture = false) => {
+    const el = $(selector);
+    if (!el) {
+      console.warn(`⚠️ 元素不存在，跳过事件绑定: ${selector}`);
+      return;
+    }
+    try {
+      el.addEventListener(event, handler, useCapture);
+    } catch (error) {
+      console.error(`❌ 绑定事件失败 [${selector}]:`, error);
+    }
+  };
+
+  // 桌面端：单元格 blur 保存修改
+  gridBody.addEventListener(
+    "blur",
+    async (e) => {
+      const td = e.target.closest('td[contenteditable="true"]');
+      if (!td) return;
+
+      const id = td.getAttribute("data-id");
+      const field = td.getAttribute("data-field");
+      const val = td.innerText.trim();
+
+      const row = await db.rows.get(id);
+      if (!row) return;
+
+      const patch = {};
+      patch[field] = val;
+      patch.updated_at = Date.now();
+      await db.rows.put({ ...row, ...patch });
+
+      if (field === "owner" || field === "wx_real") {
+        await refreshFilters();
+      }
+
+      await renderTable();
+    },
+    true
+  );
+
+  // 桌面端：focus 时恢复小红书全名（避免被截断）
+  gridBody.addEventListener(
+    "focus",
+    (e) => {
+      const td = e.target.closest('td[contenteditable="true"]');
+      if (!td) return;
+
+      if (td.classList.contains("col-xhs")) {
+        const id = td.getAttribute("data-id");
+        db.rows.get(id).then((row) => {
+          if (row) td.textContent = row.xhs_name || "";
+        });
+      }
+    },
+    true
+  );
+
+  // 桌面端：监听分类选择器 change（修复分类下拉无效）
+  gridBody.addEventListener("change", async (e) => {
+    console.log("🔍 Change事件触发:", e.target);
+    const sel = e.target.closest('select[data-field="row_color"]');
+    if (!sel) {
+      console.log("⚠️ 不是分类选择器，忽略");
+      return;
+    }
+
+    console.log("✅ 找到分类选择器:", sel);
+    const tr = sel.closest("tr");
+    if (!tr) {
+      console.error("❌ 找不到tr元素");
+      return;
+    }
+
+    const id = tr.getAttribute("data-id");
+    const newColor = sel.value;
+    console.log("📝 更新分类:", { id, newColor });
+
+    const row = await db.rows.get(id);
+    if (!row) {
+      console.error("❌ 找不到行数据:", id);
+      return;
+    }
+
+    await db.rows.put({
+      ...row,
+      row_color: newColor,
+      updated_at: Date.now(),
+    });
+    console.log("💾 数据库已更新");
+
+    // 更新桌面端分类背景
+    const xhsCell = tr.querySelector(".col-xhs");
+    if (xhsCell) {
+      console.log("🎨 更新桌面端背景色");
+      setCategoryBg(xhsCell, newColor);
+    } else {
+      console.warn("⚠️ 找不到xhsCell");
+    }
+
+    // 同步更新移动端 pill
+    const card = $("#mobileList")?.querySelector(
+      `.m-row[data-id="${id}"]`
+    );
+    if (card) {
+      const pill = card.querySelector(".m-cat-pill");
+      if (pill) {
+        console.log("🎨 更新移动端pill");
+        setCategoryBg(pill, newColor);
+        const cats = readCats();
+        pill.textContent = catNameOf(cats, newColor) || "未分类";
+      }
+    }
+
+    console.log("✅ 分类更新完成");
+  });
+
+  // 桌面端：操作按钮（上移/下移/删除）
+  gridBody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+
+    const id = btn.getAttribute("data-id");
+    const act = btn.getAttribute("data-act");
+    const rows = await getAllRows();
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+
+    if (act === "up" && idx > 0) {
+      const tmp = rows[idx - 1].order;
+      rows[idx - 1].order = rows[idx].order;
+      rows[idx].order = tmp;
+    } else if (act === "down" && idx < rows.length - 1) {
+      const tmp = rows[idx + 1].order;
+      rows[idx + 1].order = rows[idx].order;
+      rows[idx].order = tmp;
+    } else if (act === "del") {
+      if (!confirm("确定删除该行？")) return;
+      await db.rows.delete(id);
+      await refreshFilters();
+      await renderTable();
+      return;
+    } else {
+      return;
+    }
+
+    await db.rows.bulkPut(rows);
     await renderTable();
   });
 
-  // 导入数据
-  safeBind("#btnImport", "click", () => {
-    setActiveFunction("import");
-    const input = document.getElementById("fileInput");
-    if (input) input.click();
+  // 手机版：折叠卡片展开/收起
+  mobileList.addEventListener("click", (e) => {
+    const header = e.target.closest(".m-row-header");
+    if (!header) return;
+    const row = header.closest(".m-row");
+    if (!row) return;
+    row.classList.toggle("open");
   });
 
-  safeBind("#fileInput", "change", async (e) => {
-    const file = e.target.files[0];
+  // 手机版：详情区 contenteditable blur 保存
+  mobileList.addEventListener(
+    "blur",
+    async (e) => {
+      const valDiv = e.target.closest(".m-detail-value[contenteditable]");
+      if (!valDiv) return;
+      const field = valDiv.getAttribute("data-field");
+      const id = valDiv.getAttribute("data-id");
+      const val = valDiv.innerText.trim();
+
+      const row = await db.rows.get(id);
+      if (!row) return;
+
+      const patch = {};
+      patch[field] = val;
+      patch.updated_at = Date.now();
+      await db.rows.put({ ...row, ...patch });
+
+      if (field === "owner" || field === "wx_real") {
+        await refreshFilters();
+      }
+      await renderTable();
+    },
+    true
+  );
+
+  // 手机版：详情区分类下拉
+  mobileList.addEventListener("change", async (e) => {
+    const sel = e.target.closest('select[data-field="row_color"]');
+    if (!sel) return;
+    const id = sel.getAttribute("data-id");
+    const newColor = sel.value;
+    const row = await db.rows.get(id);
+    if (!row) return;
+
+    await db.rows.put({
+      ...row,
+      row_color: newColor,
+      updated_at: Date.now(),
+    });
+
+    const card = sel.closest(".m-row");
+    const pill = card?.querySelector(".m-cat-pill");
+    if (pill) {
+      setCategoryBg(pill, newColor);
+      const cats = readCats();
+      pill.textContent = catNameOf(cats, newColor) || "未分类";
+    }
+
+    await renderTable();
+  });
+
+  /* =========== 顶部工具栏 / 搜索 / 筛选绑定 =========== */
+
+  // 搜索框输入（节流）
+  const onSearchInput = throttle(async () => {
+    const qInput = $("#q");
+    state.q = qInput ? qInput.value.trim() : "";
+    await renderTable();
+  }, 200);
+
+  safeBind("#q", "input", onSearchInput);
+
+  // 搜索模式切换（模糊 / 精准）
+  safeBind("#btnSearchMode", "click", async () => {
+    state.precise = !state.precise;
+    const btn = $("#btnSearchMode");
+    if (btn) {
+      btn.textContent = state.precise
+        ? "当前：精准搜索"
+        : "当前：模糊搜索";
+    }
+    await renderTable();
+  });
+
+  // 筛选
+  safeBind("#filterOwner", "change", async (e) => {
+    state.owner = e.target.value;
+    await renderTable();
+  });
+
+  safeBind("#filterWxReal", "change", async (e) => {
+    state.wxReal = e.target.value;
+    await renderTable();
+  });
+
+  // 排序
+  safeBind("#sortBy", "change", async (e) => {
+    state.sortBy = e.target.value;
+    await renderTable();
+  });
+
+  // 新增一行
+  safeBind("#btnAdd", "click", async () => {
+    await addRow();
+  });
+
+  // CSV 导入
+  safeBind("#btnImportCSV", "click", () => {
+    const fileInput = $("#csvFile");
+    if (fileInput) fileInput.click();
+  });
+
+  safeBind("#csvFile", "change", async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
-    try {
-      const arr = JSON.parse(text);
-      if (!Array.isArray(arr)) {
-        alert("导入文件格式不正确");
-        return;
-      }
-      await db.rows.clear();
-      const now = Date.now();
-      const toAdd = arr.map((r, idx) => ({
-        id: r.id || uid(),
-        order: r.order || idx + 1,
-        phone: r.phone || "",
-        xhs_name: r.xhs_name || "",
-        owner: r.owner || "",
-        wx_real: r.wx_real || "",
-        wx_name: r.wx_name || "",
-        xhs_link: r.xhs_link || "",
-        note: r.note || "",
-        row_color: r.row_color || "",
-        created_at: r.created_at || now,
-        updated_at: r.updated_at || now,
-      }));
-      await db.rows.bulkAdd(toAdd);
-      await renderTable();
-      alert("导入成功");
-    } catch (err) {
-      console.error(err);
-      alert("导入失败：JSON 解析错误");
-    } finally {
-      e.target.value = "";
+    const items = parseCSV(text);
+    if (!items.length) {
+      alert("CSV 为空或格式不符合简单导入要求。");
+      return;
     }
+    const all = await getAllRows();
+    let maxOrder = all.length ? Math.max(...all.map((r) => r.order || 0)) : 0;
+    const rows = items.map((it) => ({
+      id: uid(),
+      order: ++maxOrder,
+      phone: it.phone || "",
+      owner: it.owner || "",
+      wx_real: it.wx_real || "",
+      wx_name: it.wx_name || "",
+      xhs_name: it.xhs_name || "",
+      note1: it.note1 || "",
+      row_color: it.row_color || "",
+      updated_at: Date.now(),
+    }));
+    await db.rows.bulkAdd(rows);
+    await refreshFilters();
+    await renderTable();
+    alert("导入成功！");
   });
 
-  // 导出数据
-  safeBind("#btnExport", "click", async () => {
-    setActiveFunction("export");
-    const rows = await loadAllRows();
-    const blob = new Blob([JSON.stringify(rows, null, 2)], {
-      type: "application/json",
-    });
+  // CSV 导出
+  safeBind("#btnExportCSV", "click", async () => {
+    const all = await getAllRows();
+    const csv = toCSV(all);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "xhs_phone_export.json";
+    a.download = "xhsphone.csv";
     a.click();
     URL.revokeObjectURL(url);
   });
 
-  // 保存云端快照
+  // 保存云端
   safeBind("#btnSaveCloud", "click", async () => {
-    setActiveFunction("save");
-    if (!supabase) {
-      alert("未配置 Supabase，无法保存到云端");
-      return;
-    }
-    const rows = await loadAllRows();
-    if (!rows.length) {
-      alert("当前没有任何数据可保存");
-      return;
-    }
-    const now = Date.now();
-    const payload = {
-      id: uid(),
-      created_at: now,
-      rows,
-      view: readView(),
-      cats: readCats(),
-    };
-    const res = await supabase.from("snapshots").insert(payload);
-    if (res.error) {
-      console.error(res.error);
-      alert("保存云端失败：" + res.error.message);
-      return;
-    }
-    alert("已保存到云端");
+    await cloudSave();
   });
 
-  // 云端加载快照列表
+  // 云端加载
   safeBind("#btnLoadCloud", "click", async () => {
-    setActiveFunction("load");
-    if (!supabase) {
-      alert("未配置 Supabase，无法从云端加载");
-      return;
+    const panel = $("#cloudHistoryPanel");
+    if (panel) {
+      if (panel.classList.contains("show")) {
+        panel.classList.remove("show");
+      } else {
+        panel.classList.add("show");
+        await renderCloudHistory();
+      }
     }
-    const res = await supabase
-      .from("snapshots")
-      .select("id, created_at")
-      .order("created_at", { ascending: false });
-    if (res.error) {
-      console.error(res.error);
-      alert("加载云端快照失败：" + res.error.message);
-      return;
-    }
-    const list = res.data || [];
-    const panel = document.getElementById("cloudPanel");
-    if (!panel) return;
-    if (!list.length) {
-      panel.innerHTML = "<p>云端暂无任何快照</p>";
-      return;
-    }
-    panel.innerHTML =
-      "<h3>云端快照列表</h3>" +
-      list
-        .map((s) => {
-          const t = new Date(s.created_at).toLocaleString();
-          return `<div class="cloud-item">
-            <span>${escapeHtml(t)}</span>
-            <button data-id="${s.id}" class="ghost">加载</button>
-          </div>`;
-        })
-        .join("");
-
-    panel
-      .querySelectorAll("button[data-id]")
-      .forEach((btn) =>
-        btn.addEventListener("click", async () => {
-          const id = btn.getAttribute("data-id");
-          const detail = await supabase
-            .from("snapshots")
-            .select("*")
-            .eq("id", id)
-            .single();
-          if (detail.error) {
-            console.error(detail.error);
-            alert("加载快照失败：" + detail.error.message);
-            return;
-          }
-          const snap = detail.data;
-          if (!snap || !snap.rows || !Array.isArray(snap.rows)) {
-            alert("云端快照数据格式不正确");
-            return;
-          }
-          await db.rows.clear();
-          await db.rows.bulkAdd(snap.rows);
-          if (snap.view) {
-            saveView(snap.view);
-            applyView(snap.view);
-          }
-          if (snap.cats) {
-            saveCats(snap.cats);
-          }
-          await renderTable();
-          alert("已从云端快照恢复");
-        })
-      );
   });
 
-  // 清空所有数据
+  // 清空全部
   safeBind("#btnClearAll", "click", async () => {
-    setActiveFunction("clear");
     if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
     await db.rows.clear();
     await refreshFilters();
     await renderTable();
   });
+
+  /* ===== 分类设置 / 显示设置：互斥展开 ===== */
 
   // 分类设置：与「显示设置」互斥展开
   safeBind("#btnCategories", "click", () => {
@@ -808,10 +1212,8 @@ function bindEvents() {
     // 先全部收起
     panelCat.classList.add("panel-hidden");
     if (panelView) panelView.classList.add("panel-hidden");
-    clearActiveFunction();
 
     if (willOpen) {
-      setActiveFunction("categories");
       panelCat.classList.remove("panel-hidden");
       renderCatList();
     }
@@ -829,11 +1231,9 @@ function bindEvents() {
       alert("请填写分类名称");
       return;
     }
-
     const cats = readCats();
     cats.push({ id: uid(), name, color });
     saveCats(cats);
-
     nameEl.value = "";
     renderCatList();
     renderTable();
@@ -850,10 +1250,8 @@ function bindEvents() {
     // 先全部收起
     panelView.classList.add("panel-hidden");
     if (panelCat) panelCat.classList.add("panel-hidden");
-    clearActiveFunction();
 
     if (willOpen) {
-      setActiveFunction("view");
       panelView.classList.remove("panel-hidden");
 
       const v = readView();
@@ -884,6 +1282,7 @@ function bindEvents() {
     applyView(v);
   });
 
+  // 标题颜色默认回退到 #1990FF
   safeBind("#titleColor", "input", () => {
     const v = readView();
     const el = $("#titleColor");
@@ -934,267 +1333,143 @@ function bindEvents() {
     renderTable();
   });
 
-  // 搜索
-  const doSearch = throttle(async () => {
-    const input = document.getElementById("q");
-    state.q = (input?.value || "").trim();
-    await renderTable();
-  }, 300);
-
-  safeBind("#q", "input", doSearch);
-
-  // 精准/模糊切换
-  safeBind("#btnSearchMode", "click", async () => {
-    state.precise = !state.precise;
-    const btn = document.getElementById("btnSearchMode");
-    if (btn) {
-      btn.textContent = state.precise
-        ? "当前：精准搜索"
-        : "当前：模糊搜索";
-    }
-    await renderTable();
+  safeBind("#btnCompact", "click", () => {
+    const v = readView();
+    v.pad = 5;
+    v.colScale = 0.95;
+    saveView(v);
+    applyView(v);
   });
 
-  // 筛选
-  safeBind("#filterOwner", "change", async (e) => {
-    state.owner = e.target.value;
-    await renderTable();
+  safeBind("#btnResetSize", "click", () => {
+    saveView({
+      ...DEFAULT_VIEW,
+      titleText: readView().titleText,
+      titleColor: readView().titleColor,
+    });
+    applyView(readView());
+    renderTable();
   });
+}
 
-  safeBind("#filterWxReal", "change", async (e) => {
-    state.wxReal = e.target.value;
-    await renderTable();
+/* =========================================================
+ * 12. CSV 简单导入 / 导出
+ * ========================================================= */
+
+function parseCSV(text) {
+  const lines = (text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return [];
+
+  const header = lines[0].split(",").map((s) => s.trim());
+  const rows = lines.slice(1).map((line) => {
+    const parts = line.split(",").map((s) => s.trim());
+    const obj = {};
+    header.forEach((h, i) => {
+      obj[h] = parts[i] || "";
+    });
+    return {
+      phone: obj.phone || obj.手机 || "",
+      owner: obj.owner || obj.所属人 || "",
+      wx_real: obj.wx_real || obj.实名 || "",
+      wx_name: obj.wx_name || obj.微信名 || "",
+      xhs_name: obj.xhs_name || obj.小红书 || "",
+      note1: obj.note1 || obj.备注 || "",
+      row_color: obj.row_color || obj.分类 || "",
+    };
   });
+  return rows;
+}
 
-  // 排序
-  safeBind("#sortBy", "change", async (e) => {
-    state.sortBy = e.target.value;
-    await renderTable();
-  });
+function toCSV(rows) {
+  const header = [
+    "phone",
+    "owner",
+    "wx_real",
+    "wx_name",
+    "xhs_name",
+    "note1",
+    "row_color",
+  ];
+  const lines = [
+    header.join(","),
+    ...rows.map((r) =>
+      [
+        r.phone || "",
+        r.owner || "",
+        r.wx_real || "",
+        r.wx_name || "",
+        r.xhs_name || "",
+        (r.note1 || "").replace(/\n/g, "  "),
+        r.row_color || "",
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    ),
+  ];
+  return lines.join("\n");
+}
 
-  // 桌面表格修改
-  gridBody.addEventListener(
-    "blur",
-    async (e) => {
-      const td = e.target.closest("td[data-id][data-field]");
-      if (!td) return;
+/* =========================================================
+ * 13. 启动
+ * ========================================================= */
 
-      const id = td.getAttribute("data-id");
-      const field = td.getAttribute("data-field");
-      const val = td.innerText.trim();
-
-      const row = await db.rows.get(id);
-      if (!row) return;
-
-      const patch = {};
-      patch[field] = val;
-      patch.updated_at = Date.now();
-      await db.rows.put({ ...row, ...patch });
-
-      if (field === "owner" || field === "wx_real") {
-        await refreshFilters();
-      }
-    },
-    true
-  );
-
-  // 桌面删除按钮
-  gridBody.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button[data-id][data-act='delete']");
-    if (!btn) return;
-    const id = btn.getAttribute("data-id");
-    if (!id) return;
-    if (!confirm("确定删除该条记录？")) return;
-    await deleteRow(id);
-    await renderTable();
-  });
-
-  // 移动端 header 展开/收起
-  const mobileListEl = document.getElementById("mobileList");
-  if (mobileListEl) {
-    mobileListEl.addEventListener("click", (e) => {
-      const header = e.target.closest(".m-row-header");
-      if (!header) return;
-      const rowEl = header.closest(".m-row");
-      if (!rowEl) return;
-      const detail = rowEl.querySelector(".m-row-details");
-      if (!detail) return;
-      const open = rowEl.classList.contains("open");
-      if (open) {
-        rowEl.classList.remove("open");
-        detail.style.maxHeight = "0px";
+// 初始化入口
+async function init() {
+  // 等待 DOM 完全加载
+  if (document.readyState === "loading") {
+    await new Promise((resolve) => {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", resolve, { once: true });
       } else {
-        rowEl.classList.add("open");
-        detail.style.maxHeight = detail.scrollHeight + "px";
+        resolve();
       }
     });
+  }
 
-    // 移动端删除按钮
-    mobileListEl.addEventListener("click", async (e) => {
-      const btn = e.target.closest(".m-delete");
-      if (!btn) return;
-      const id = btn.getAttribute("data-id");
-      if (!id) return;
-      if (!confirm("确定删除该条记录？")) return;
-      await deleteRow(id);
-      await renderTable();
-    });
+  // 再等 50ms，确保元素都渲染好
+  await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // 移动端内容编辑
-    mobileListEl.addEventListener(
-      "blur",
-      async (e) => {
-        const el = e.target.closest(
-          ".m-detail-value[contenteditable][data-id][data-field]"
-        );
-        if (!el) return;
-        const id = el.getAttribute("data-id");
-        const field = el.getAttribute("data-field");
-        const val = el.innerText.trim();
-        const row = await db.rows.get(id);
-        if (!row) return;
-        const patch = {};
-        patch[field] = val;
-        patch.updated_at = Date.now();
-        await db.rows.put({ ...row, ...patch });
-        if (field === "owner" || field === "wx_real") {
-          await refreshFilters();
-        }
-        await renderTable();
-      },
-      true
-    );
+  // 检查关键元素
+  const requiredElements = ["#gridBody", "#mobileList", "#btnAdd", "#q"];
+  const missing = requiredElements.filter((sel) => !$(sel));
+  if (missing.length) {
+    console.error("❌ 缺少必需的元素:", missing);
+    console.error("当前 DOM 状态:", document.readyState);
+    // 重试一次
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const retryMissing = requiredElements.filter((sel) => !$(sel));
+    if (retryMissing.length) {
+      console.error("❌ 重试后仍缺少元素:", retryMissing);
+      return;
+    }
+  }
 
-    // 移动端 color picker
-    mobileListEl.addEventListener("change", async (e) => {
-      const input = e.target.closest("input.m-color-input[data-id]");
-      if (!input) return;
-      const id = input.getAttribute("data-id");
-      const color = input.value;
-      const row = await db.rows.get(id);
-      if (!row) return;
-      const patch = { row_color: color, updated_at: Date.now() };
-      await db.rows.put({ ...row, ...patch });
-      await renderTable();
-    });
+  try {
+    console.log("开始初始化…");
+    applyView(readView());
+    console.log("视图已应用");
+    bindEvents();
+    console.log("事件已绑定");
+    await refreshFilters();
+    console.log("筛选器已刷新");
+    await renderTable();
+    console.log("表格已渲染");
+    await initSupabase();
+    console.log("✅ 应用初始化完成");
+  } catch (error) {
+    console.error("❌ 初始化失败:", error);
+    console.error("错误堆栈:", error.stack);
   }
 }
 
-/* =========================
- * 12. 分类列表渲染
- * ========================= */
-
-function renderCatList() {
-  const list = document.getElementById("catList");
-  if (!list) return;
-  const cats = readCats();
-
-  list.innerHTML = cats
-    .map(
-      (c, i) => `<div class="cat-row" data-id="${c.id}">
-        <span class="cat-color-preview" data-color="${escapeHtml(
-          c.color
-        )}"></span>
-        <div class="cat-name" contenteditable="true">${escapeHtml(
-          c.name
-        )}</div>
-        <div class="cat-actions">
-          <button class="ghost" data-act="up" ${
-            i === 0 ? "disabled" : ""
-          }>上移</button>
-          <button class="ghost" data-act="down" ${
-            i === cats.length - 1 ? "disabled" : ""
-          }>下移</button>
-          <input type="color" value="${escapeHtml(
-            c.color
-          )}" data-act="color" class="cat-color-input">
-          <button class="btn-danger" data-act="del">删除</button>
-        </div>
-      </div>`
-    )
-    .join("");
-
-  // 颜色预览
-  list.querySelectorAll(".cat-color-preview").forEach((el) => {
-    const color = el.getAttribute("data-color");
-    if (color) el.style.background = color;
+// DOM 加载完成后启动
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    init();
   });
-
-  // 名称编辑
-  list.querySelectorAll(".cat-name").forEach((el) => {
-    el.addEventListener("blur", () => {
-      const row = el.closest(".cat-row");
-      const id = row.getAttribute("data-id");
-      const v = el.textContent.trim();
-      const cats = readCats();
-      const idx = cats.findIndex((x) => x.id === id);
-      if (idx >= 0) {
-        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
-        saveCats(cats);
-        renderTable();
-      }
-    });
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        el.blur();
-      }
-    });
-  });
-
-  // 上移/下移/删除
-  list.querySelectorAll(".cat-actions button").forEach((el) => {
-    el.addEventListener("click", () => {
-      const row = el.closest(".cat-row");
-      const id = row.getAttribute("data-id");
-      const act = el.getAttribute("data-act");
-      const cats = readCats();
-      const idx = cats.findIndex((x) => x.id === id);
-      if (idx < 0) return;
-
-      if (act === "up" && idx > 0) {
-        [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
-      } else if (act === "down" && idx < cats.length - 1) {
-        [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
-      } else if (act === "del") {
-        if (!confirm("确定删除该分类？")) return;
-        cats.splice(idx, 1);
-      }
-      saveCats(cats);
-      renderCatList();
-      renderTable();
-    });
-  });
-
-  // 颜色选择
-  list
-    .querySelectorAll('input[type="color"][data-act="color"]')
-    .forEach((el) => {
-      el.addEventListener("change", () => {
-        const row = el.closest(".cat-row");
-        const id = row.getAttribute("data-id");
-        const cats = readCats();
-        const idx = cats.findIndex((x) => x.id === id);
-        if (idx < 0) return;
-        cats[idx] = { ...cats[idx], color: el.value };
-        saveCats(cats);
-        renderCatList();
-        renderTable();
-      });
-    });
+} else {
+  init();
 }
-
-/* =========================
- * 13. 启动逻辑
- * ========================= */
-
-async function main() {
-  const view = readView();
-  applyView(view);
-
-  await migrateFromLocalStorage();
-  await renderTable();
-  bindEvents();
-}
-
-document.addEventListener("DOMContentLoaded", main);

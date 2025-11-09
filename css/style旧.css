@@ -10,7 +10,7 @@
   --highlight-blue: #e2f0ff;
   
   /* ✅ 按钮颜色变量 */
-  --btn-default: #CCCCCC;
+  --btn-default: #E2F0FF;
   --btn-active: #1890FF;
   --btn-hover: #40a9ff;
 
@@ -682,6 +682,7 @@ td.col-cat select:focus {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--muted);
+  justify-content: space-between;
 }
 
 .m-owner {
@@ -699,6 +700,8 @@ td.col-cat select:focus {
   font-size: 12px;
   background: var(--cat-pill-bg, rgba(0, 122, 255, 0.09));
   transition: background 0.3s ease;
+  margin-left: auto;
+  text-align: right;
 }
 
 /* 下拉箭头 */

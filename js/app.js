@@ -62,7 +62,7 @@ const DEFAULT_VIEW = Object.freeze({
   fontFamily:
     '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
   titleText: "XHSPHONE",
-  titleColor: "#111111",
+  titleColor: "#1990FF",
 });
 
 // 默认分类
@@ -138,10 +138,28 @@ function readCats() {
   try {
     const raw = localStorage.getItem(CATS_KEY);
     if (!raw) return DEFAULT_CATS.slice();
+
     const obj = JSON.parse(raw);
-    if (Array.isArray(obj) && obj.length) return obj;
+    if (Array.isArray(obj) && obj.length) {
+      let needSave = false;
+      const normalized = obj.map((c, index) => {
+        if (c && !c.id) {
+          needSave = true;
+          return {
+            ...c,
+            id: c.id || c.key || `legacy_${index}_${uid()}`,
+          };
+        }
+        return c;
+      });
+      if (needSave) saveCats(normalized);
+      return normalized;
+    }
     return DEFAULT_CATS.slice();
   } catch {
+    return DEFAULT_CATS.slice();
+  }
+} catch {
     return DEFAULT_CATS.slice();
   }
 }
@@ -1289,16 +1307,25 @@ function bindEvents() {
   });
 
   // 分类设置
-  safeBind("#btnCategories", "click", () => {
+  // 分类设置：与「显示设置」互斥展开
+safeBind("#btnCategories", "click", () => {
+  const panelCat = $("#panelCategories");
+  const panelView = $("#panelView");
+  if (!panelCat) return;
+
+  const willOpen = panelCat.classList.contains("panel-hidden");
+
+  // 先全部收起
+  panelCat.classList.add("panel-hidden");
+  if (panelView) panelView.classList.add("panel-hidden");
+  clearActiveFunction();
+
+  if (willOpen) {
     setActiveFunction("categories");
-    const p = $("#panelCategories");
-    if (p) {
-      p.classList.toggle("panel-hidden");
-      if (!p.classList.contains("panel-hidden")) {
-        renderCatList();
-      }
-    }
-  });
+    panelCat.classList.remove("panel-hidden");
+    renderCatList();
+  }
+});
 
   // 新增分类
   safeBind("#btnCatAdd", "click", () => {
@@ -1321,31 +1348,41 @@ function bindEvents() {
   });
 
   // 显示设置
-  safeBind("#btnView", "click", () => {
+  // 显示设置：与「分类设置」互斥展开
+safeBind("#btnView", "click", () => {
+  const panelView = $("#panelView");
+  const panelCat = $("#panelCategories");
+  if (!panelView) return;
+
+  const willOpen = panelView.classList.contains("panel-hidden");
+
+  // 先全部收起
+  panelView.classList.add("panel-hidden");
+  if (panelCat) panelCat.classList.add("panel-hidden");
+  clearActiveFunction();
+
+  if (willOpen) {
     setActiveFunction("view");
-    const p = $("#panelView");
-    if (p) {
-      p.classList.toggle("panel-hidden");
-      if (!p.classList.contains("panel-hidden")) {
-        const v = readView();
-        const titleText = $("#titleText");
-        const titleColor = $("#titleColor");
-        const fontFamily = $("#fontFamily");
-        const rowPad = $("#rowPad");
-        const colScale = $("#colScale");
-        const zebraOn = $("#zebraOn");
-        const zebraColor = $("#zebraColor");
-        
-        if (titleText) titleText.value = v.titleText;
-        if (titleColor) titleColor.value = v.titleColor;
-        if (fontFamily) fontFamily.value = v.fontFamily;
-        if (rowPad) rowPad.value = v.pad;
-        if (colScale) colScale.value = v.colScale;
-        if (zebraOn) zebraOn.checked = v.zebraOn;
-        if (zebraColor) zebraColor.value = v.zebraColor;
-      }
-    }
-  });
+    panelView.classList.remove("panel-hidden");
+
+    const v = readView();
+    const titleText = $("#titleText");
+    const titleColor = $("#titleColor");
+    const fontFamily = $("#fontFamily");
+    const rowPad = $("#rowPad");
+    const colScale = $("#colScale");
+    const zebraOn = $("#zebraOn");
+    const zebraColor = $("#zebraColor");
+
+    if (titleText) titleText.value = v.titleText;
+    if (titleColor) titleColor.value = v.titleColor;
+    if (fontFamily) fontFamily.value = v.fontFamily;
+    if (rowPad) rowPad.value = v.pad;
+    if (colScale) colScale.value = v.colScale;
+    if (zebraOn) zebraOn.checked = v.zebraOn;
+    if (zebraColor) zebraColor.value = v.zebraColor;
+  }
+});
 
   // 视图设置控件
   safeBind("#titleText", "input", () => {
@@ -1359,7 +1396,7 @@ function bindEvents() {
   safeBind("#titleColor", "input", () => {
     const v = readView();
     const el = $("#titleColor");
-    if (el) v.titleColor = el.value || "#111111";
+    if (el) v.titleColor = el.value || "#1990FF";
     saveView(v);
     applyView(v);
   });

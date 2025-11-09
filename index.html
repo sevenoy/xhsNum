@@ -61,7 +61,15 @@
       <div class="toolbar">
         <button id="btnAdd" class="primary function-btn" data-function="add">新增一行</button>
         <button id="btnImportCSV" class="ghost function-btn" data-function="import">导入数据</button>
-        <input id="csvFile" type="file" accept=".csv,text/csv" />
+
+        <!-- ✅ 隐藏的文件选择框，只给 JS 用，不再在界面上显示 -->
+        <input
+          id="csvFile"
+          type="file"
+          accept=".csv,text/csv"
+          style="display:none"
+        />
+
         <button id="btnExportCSV" class="ghost function-btn" data-function="export">导出数据</button>
         <button id="btnSaveCloud" class="ghost function-btn" data-function="saveCloud">保存云端</button>
         <button id="btnLoadCloud" class="ghost function-btn" data-function="loadCloud">云端加载</button>
@@ -70,17 +78,17 @@
         <button id="btnView" class="ghost function-btn" data-function="view">显示设置</button>
       </div>
 
-      <!-- 云端历史快照下拉 -->
-      <div id="cloudHistoryPanel" class="cloud-history-panel"></div>
+      <!-- 云端历史快照下拉：默认隐藏，class 与 CSS/JS 保持一致 -->
+      <div id="cloudHistoryPanel" class="cloud-history"></div>
 
       <div class="status" id="statusText">
         本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本）。
       </div>
     </div>
 
-    <!-- 分类设置面板 -->
+    <!-- 分类设置面板：初始使用 panel-hidden 隐藏，给 JS 控制互斥展开 -->
     <div class="panel panel-hidden" id="panelCategories">
-      <div class="toolbar toolbar-start">
+      <div class="toolbar" style="align-items:flex-start">
         <div class="chip">
           <span class="colorDot" id="catColorPreview"></span>
           <input id="catName" placeholder="分类名称，例如：Olina用" />
@@ -88,10 +96,10 @@
         </div>
         <button id="btnCatAdd">新增分类</button>
       </div>
-      <div id="catList"></div>
+      <div id="catList" class="cat-list"></div>
     </div>
 
-    <!-- 显示设置面板 -->
+    <!-- 显示设置面板：同样 panel-hidden，和分类设置互斥 -->
     <div class="panel panel-hidden" id="panelView">
       <div class="toolbar toolbar-wrap">
         <label class="label-inline">
@@ -144,7 +152,7 @@
     </div>
 
     <!-- 数据面板 -->
-    <div class="panel panel-scroll">
+    <div class="panel" style="overflow:auto;max-height:92vh">
       <!-- 桌面版表格 -->
       <div class="table-wrap desktop-only">
         <table id="grid">

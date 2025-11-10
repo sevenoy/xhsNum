@@ -697,7 +697,7 @@ function renderMobileList(rows) {
       const catName = catNameOf(cats, r.row_color);
       const xhsDisplay = truncateText(r.xhs_name, 10);
       
-      return `<div class="m-row" data-id="${r.id}" style="--card-bg:${zebraBg}">
+      return `<div class="m-row" data-id="${r.id}" data-original-data='${JSON.stringify(r)}' style="--card-bg:${zebraBg}">
         <button class="m-row-header" data-id="${r.id}">
           <div class="m-main-line">
             <span class="m-phone">${escapeHtml(r.phone || "")}</span>
@@ -710,11 +710,17 @@ function renderMobileList(rows) {
           </div>
         </button>
         <div class="m-row-details">
-          ${mobileDetail("微信实名人", r.wx_real, "wx_real", r.id)}
-          ${mobileDetail("对应微信名", r.wx_name, "wx_name", r.id)}
-          ${mobileDetail("小红书名称", r.xhs_name, "xhs_name", r.id)}
-          ${mobileDetail("备注", r.note1, "note1", r.id)}
+          ${mobileDetailInput("电话号", r.phone, "phone", r.id)}
+          ${mobileDetailInput("所属人", r.owner, "owner", r.id)}
+          ${mobileDetailInput("微信实名人", r.wx_real, "wx_real", r.id)}
+          ${mobileDetailInput("对应微信名", r.wx_name, "wx_name", r.id)}
+          ${mobileDetailInput("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobileDetailTextarea("备注", r.note1, "note1", r.id)}
           ${mobileCat(r.row_color, r.id)}
+          <div class="m-edit-actions" style="display:flex;justify-content:space-between;gap:8px;padding:12px 0 6px;border-top:1px solid #f0f0f0;margin-top:10px;">
+            <button class="primary" data-mact="save" data-id="${r.id}" style="flex:1;">💾 保存修改</button>
+            <button class="ghost" data-mact="cancel" data-id="${r.id}" style="flex:1;">取消</button>
+          </div>
           <div class="m-actions">
             <button class="ghost" data-mact="up" data-id="${r.id}">上移</button>
             <button class="ghost" data-mact="down" data-id="${r.id}">下移</button>
@@ -727,12 +733,32 @@ function renderMobileList(rows) {
 
   // ✅ 注意：所有移动端事件都通过 bindEvents() 中的事件委托处理，这里不需要绑定任何事件
 
-  function mobileDetail(label, text, field, id) {
+  function mobileDetailInput(label, text, field, id) {
+    const inputType = field === 'phone' ? 'tel' : 'text';
+    const placeholder = field === 'phone' ? '输入电话号' : `输入${label}`;
     return `<div class="m-detail-row">
       <div class="m-detail-label">${escapeHtml(label)}</div>
-      <div class="m-detail-value" contenteditable="true" data-field="${field}" data-id="${id}">${escapeHtml(
-      text || ""
-    )}</div>
+      <div class="m-detail-value">
+        <input type="${inputType}" 
+               class="m-input" 
+               data-field="${field}" 
+               data-id="${id}" 
+               value="${escapeHtml(text || '')}"
+               placeholder="${placeholder}">
+      </div>
+    </div>`;
+  }
+
+  function mobileDetailTextarea(label, text, field, id) {
+    return `<div class="m-detail-row">
+      <div class="m-detail-label">${escapeHtml(label)}</div>
+      <div class="m-detail-value">
+        <textarea class="m-textarea" 
+                  data-field="${field}" 
+                  data-id="${id}" 
+                  placeholder="输入${label}"
+                  rows="2">${escapeHtml(text || '')}</textarea>
+      </div>
     </div>`;
   }
 
@@ -757,6 +783,154 @@ function renderMobileList(rows) {
       </div>
     </div>`;
   }
+}
+
+/* =========================
+ * 7.1. 移动端编辑保存函数
+ * ========================= */
+
+// 保存移动端卡片的编辑
+async function saveMobileCardEdit(id) {
+  const card = document.querySelector(`.m-row[data-id="${id}"]`);
+  if (!card) return;
+  
+  try {
+    // 获取所有输入值
+    const inputs = card.querySelectorAll('.m-input, .m-textarea');
+    const select = card.querySelector('select[data-field="row_color"]');
+    
+    // 收集数据
+    const updates = {};
+    let hasChanges = false;
+    
+    inputs.forEach(input => {
+      const field = input.getAttribute('data-field');
+      const value = input.value.trim();
+      updates[field] = value;
+    });
+    
+    if (select) {
+      updates['row_color'] = select.value;
+    }
+    
+    // 验证电话号格式（如果有输入）
+    if (updates.phone && updates.phone.length > 0) {
+      // 简单验证：只允许数字、空格、短横线、括号
+      if (!/^[\d\s\-()]+$/.test(updates.phone)) {
+        alert('❌ 电话号格式不正确\n\n只能包含数字、空格、短横线和括号');
+        return;
+      }
+    }
+    
+    // 获取原始数据
+    const row = await db.rows.get(id);
+    if (!row) {
+      alert('❌ 数据不存在');
+      return;
+    }
+    
+    // 检查是否有变化
+    for (const [field, value] of Object.entries(updates)) {
+      if (row[field] !== value) {
+        hasChanges = true;
+        break;
+      }
+    }
+    
+    if (!hasChanges) {
+      showMobileToast('ℹ️ 没有修改');
+      card.classList.remove('open');
+      return;
+    }
+    
+    // 保存到数据库
+    updates.updated_at = Date.now();
+    updates.updated_by = getCurrentUserId();
+    updates.updated_by_name = getCurrentUserName();
+    
+    await db.rows.put({ ...row, ...updates });
+    
+    // 如果是所属人或微信实名人，刷新筛选器
+    if (updates.owner !== row.owner || updates.wx_real !== row.wx_real) {
+      await refreshFilters();
+    }
+    
+    // 重新渲染
+    await renderTable();
+    
+    showMobileToast('✅ 保存成功');
+    
+  } catch (err) {
+    console.error('❌ 保存失败:', err);
+    alert('❌ 保存失败：' + err.message);
+  }
+}
+
+// 取消移动端卡片的编辑
+async function cancelMobileCardEdit(id) {
+  const card = document.querySelector(`.m-row[data-id="${id}"]`);
+  if (!card) return;
+  
+  // 检查是否有修改
+  if (card.classList.contains('modified')) {
+    if (!confirm('有未保存的修改，确定要取消吗？')) {
+      return;
+    }
+  }
+  
+  // 关闭卡片
+  card.classList.remove('open');
+  card.classList.remove('modified');
+  
+  // 重新渲染以恢复原始数据
+  await renderTable();
+}
+
+// 显示移动端提示
+function showMobileToast(message) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 999px;
+    font-size: 14px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: toastFadeIn 0.3s ease;
+  `;
+  
+  // 添加动画
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes toastFadeIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    @keyframes toastFadeOut {
+      from { opacity: 1; transform: translateX(-50%) translateY(0); }
+      to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    }
+  `;
+  if (!document.querySelector('style[data-mobile-toast]')) {
+    style.setAttribute('data-mobile-toast', 'true');
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(toast);
+  
+  // 2.5秒后淡出
+  setTimeout(() => {
+    toast.style.animation = 'toastFadeOut 0.3s ease';
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 2500);
 }
 
 /* =========================
@@ -1010,24 +1184,24 @@ async function renderCloudHistory() {
   try {
     // ✅ 改进：查询所有可访问的快照（包括授权的快照）
     // RLS策略会自动过滤出有权限的快照
-    const { data, error } = await supabase
-      .from(SUPABASE_TABLE)
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
       .select("key,payload,updated_at,owner_id")
-      .order("updated_at", { ascending: false })
+    .order("updated_at", { ascending: false })
       .limit(20); // 增加数量以包含更多快照
     
-    if (error) {
+  if (error) {
       console.error('❌ 加载历史失败:', error);
-      panel.innerHTML =
+    panel.innerHTML =
         `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败: ${escapeHtml(error.message)}</div>`;
-      return;
-    }
+    return;
+  }
     
-    if (!Array.isArray(data) || !data.length) {
-      panel.innerHTML =
-        `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
-      return;
-    }
+  if (!Array.isArray(data) || !data.length) {
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
+    return;
+  }
     
     // ✅ 获取所有快照所有者的用户信息
     const ownerIds = [...new Set(data.map(s => s.owner_id).filter(Boolean))];
@@ -1057,21 +1231,21 @@ async function renderCloudHistory() {
       html += `<div style="padding:8px 10px;font-weight:600;color:#1990FF;font-size:13px;border-bottom:1px solid #e5e5ea;">📁 我的快照</div>`;
       html += mySnapshots.map((row) => {
         const name = (row.payload?.snapshot_label || row.key).trim();
-        const t = fmtTime(row.updated_at);
+      const t = fmtTime(row.updated_at);
         const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
-        const metaCount = Array.isArray(row.payload?.rows)
-          ? `${row.payload.rows.length} 条`
-          : "";
+      const metaCount = Array.isArray(row.payload?.rows)
+        ? `${row.payload.rows.length} 条`
+        : "";
         const isDefault = row.key === 'default';
         const displayName = isDefault ? '📌 默认快照' : name;
         
-        return `<div class="cloud-item" data-key="${row.key}">
-          <div class="cloud-item-main">
+      return `<div class="cloud-item" data-key="${row.key}">
+        <div class="cloud-item-main">
             <div class="cloud-item-name">${escapeHtml(displayName)}</div>
-            <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
-          </div>
-          <div class="cloud-item-time">${escapeHtml(t)}</div>
-        </div>`;
+          <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
+        </div>
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
+      </div>`;
       }).join("");
     }
     
@@ -1107,10 +1281,10 @@ async function renderCloudHistory() {
     panel.innerHTML = html;
     
     // 绑定点击事件
-    panel.querySelectorAll(".cloud-item").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const key = el.getAttribute("data-key");
-        if (!key) return;
+  panel.querySelectorAll(".cloud-item").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const key = el.getAttribute("data-key");
+      if (!key) return;
         
         // 检查权限
         const hasPermission = await checkPermission(key, 'snapshot', 'view');
@@ -1119,11 +1293,11 @@ async function renderCloudHistory() {
           return;
         }
         
-        if (confirm("确定用该快照覆盖本地数据？")) {
-          await cloudLoad(key);
-        }
-      });
+      if (confirm("确定用该快照覆盖本地数据？")) {
+        await cloudLoad(key);
+      }
     });
+  });
     
     console.log(`✅ 云端历史加载成功: ${mySnapshots.length} 个我的快照, ${sharedSnapshots.length} 个授权快照`);
     
@@ -1345,11 +1519,19 @@ function bindEvents() {
   const mobileList = $("#mobileList");
   
   // 监听移动端卡片头部的点击（展开/折叠）
-  mobileList.addEventListener("click", (e) => {
+  mobileList.addEventListener("click", async (e) => {
     const header = e.target.closest(".m-row-header");
     if (header) {
       const card = header.closest(".m-row");
       if (card) {
+        // 如果卡片有未保存的修改，提示用户
+        if (card.classList.contains('open') && card.classList.contains('modified')) {
+          if (!confirm('有未保存的修改，确定要关闭吗？')) {
+            return;
+          }
+          card.classList.remove('modified');
+          await renderTable();
+        }
         card.classList.toggle("open");
       }
       return;
@@ -1363,78 +1545,43 @@ function bindEvents() {
       const act = btn.getAttribute("data-mact");
       
       if (act === "up") {
-        moveRow(id, "up");
+        await moveRow(id, "up");
       } else if (act === "down") {
-        moveRow(id, "down");
+        await moveRow(id, "down");
       } else if (act === "del") {
         if (confirm("确定删除该行？")) {
-          deleteRowById(id);
+          await deleteRowById(id);
         }
+      } else if (act === "save") {
+        // ✅ 保存修改
+        await saveMobileCardEdit(id);
+      } else if (act === "cancel") {
+        // ✅ 取消修改
+        await cancelMobileCardEdit(id);
       }
     }
   });
   
-  // 监听移动端 contenteditable 元素的 blur 事件
-  mobileList.addEventListener("blur", async (e) => {
-    const el = e.target.closest('.m-detail-value[contenteditable="true"]');
-    if (!el) return;
+  // ✅ 监听移动端输入变化（标记为已修改，不自动保存）
+  mobileList.addEventListener("input", (e) => {
+    const input = e.target.closest('.m-input, .m-textarea');
+    if (!input) return;
     
-    const id = el.getAttribute("data-id");
-    const field = el.getAttribute("data-field");
-    const val = el.textContent.trim();
-    
-    console.log(`📝 移动端 blur 事件: field=${field}, value=${val}`);
-    
-    // 更新数据库
-    const row = await db.rows.get(id);
-    if (row) {
-      const patch = {};
-      patch[field] = val;
-      patch.updated_at = Date.now();
-      await db.rows.put({ ...row, ...patch });
-    }
-    
-    // 如果是所属人或微信实名人，刷新筛选器
-    if (field === "owner" || field === "wx_real") {
-      await refreshFilters();
-    }
-    
-    // 重新渲染
-    await renderTable();
-  }, true); // 使用捕获阶段
-  
-  // 监听移动端 contenteditable 元素的 keydown 事件
-  mobileList.addEventListener("keydown", (e) => {
-    const el = e.target.closest('.m-detail-value[contenteditable="true"]');
-    if (!el) return;
-    
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      el.blur();
+    const card = input.closest('.m-row');
+    if (card) {
+      card.classList.add('modified');
     }
   });
   
-  // 监听移动端分类选择器的 change 事件（事件委托）
-  mobileList.addEventListener("change", async (e) => {
+  // 监听移动端分类选择器的 change 事件（标记为已修改，不自动保存）
+  mobileList.addEventListener("change", (e) => {
     const sel = e.target.closest('select[data-field="row_color"]');
     if (!sel) return;
     
-    const id = sel.getAttribute("data-id");
-    const newColor = sel.value;
-    console.log(`✅ 移动端分类改变: ID=${id}, 新分类=${newColor}`);
-    
-    // 更新数据库
-    const row = await db.rows.get(id);
-    if (row) {
-      await db.rows.put({ 
-        ...row, 
-        row_color: newColor, 
-        updated_at: Date.now() 
-      });
+    const card = sel.closest('.m-row');
+    if (card) {
+      card.classList.add('modified');
     }
-    
-    // 重新渲染整个表格
-    await renderTable();
   });
   
   $("#q").addEventListener("input", async (e) => {

@@ -288,23 +288,35 @@ function getCurrentUserEmail() {
 async function checkPermission(resourceId, resourceType, permissionType = 'view') {
   if (!supabase) return false;
   
-  const userId = getCurrentUserId();
+  // ✅ 修复：getCurrentUserId() 是异步函数，需要 await
+  const userId = await getCurrentUserId();
+  
+  if (!userId) {
+    console.error('❌ 无法获取用户 ID，权限检查失败');
+    return false;
+  }
+  
+  console.log('🔍 权限检查:', { resourceId, resourceType, permissionType, userId });
   
   try {
     // 1. 检查是否是资源所有者
     if (resourceType === 'snapshot') {
-      const { data: snapshot } = await supabase
+      const { data: snapshot, error: snapshotError } = await supabase
         .from(SUPABASE_TABLE)
         .select('owner_id')
         .eq('key', resourceId)
         .maybeSingle();
       
-      if (snapshot && snapshot.owner_id === userId) {
+      if (snapshotError) {
+        console.error('❌ 查询快照失败:', snapshotError);
+      } else if (snapshot && snapshot.owner_id === userId) {
+        console.log('✅ 是资源所有者，有所有权限');
         return true; // 所有者有所有权限
       }
     }
     
     // 2. 检查是否被授予权限
+    console.log('🔍 查询权限表:', { resourceId, resourceType, userId });
     const { data: permission, error: permError } = await supabase
       .from('permissions')
       .select('*')

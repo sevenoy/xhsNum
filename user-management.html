@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>用户管理 - XHSPHONE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="./css/style.css">
+  <style>
+    .admin-container {
+      max-width: 1000px;
+      margin: 20px auto;
+      padding: 20px;
+    }
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e5ea;
+    }
+    .admin-header h1 {
+      font-size: 28px;
+      color: #1990FF;
+    }
+    .user-stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      flex: 1;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .stat-card h3 {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .stat-card .number {
+      font-size: 32px;
+      font-weight: 600;
+      color: #1990FF;
+    }
+    .user-table {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow-x: auto;
+    }
+    .user-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .user-table th,
+    .user-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .user-table th {
+      font-weight: 600;
+      color: #333;
+      background: #f9f9fb;
+    }
+    .user-table tr:hover {
+      background: #f5f7ff;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge.admin {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .badge.user {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .btn-danger-small {
+      padding: 4px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid #ff4d4f;
+      background: white;
+      color: #ff4d4f;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-danger-small:hover {
+      background: #ff4d4f;
+      color: white;
+    }
+    .add-user-form {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+      display: none;
+    }
+    .add-user-form.show {
+      display: block;
+    }
+    .form-row {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .form-row input,
+    .form-row select {
+      flex: 1;
+      min-width: 200px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #1990FF;
+    }
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <div class="admin-header">
+      <h1>👥 用户管理</h1>
+      <div style="display: flex; gap: 10px;">
+        <button class="ghost" onclick="location.href='index.html'">返回主页</button>
+        <button id="btnToggleAddUser" class="primary">➕ 添加用户</button>
+      </div>
+    </div>
+
+    <!-- 添加用户表单 -->
+    <div id="addUserForm" class="add-user-form">
+      <h3 style="margin-bottom: 15px;">添加新用户</h3>
+      <div id="addUserError" class="error-message"></div>
+      <form id="formAddUser">
+        <div class="form-row">
+          <input type="text" id="newUsername" placeholder="用户名（必填）" required minlength="2" maxlength="20">
+          <input type="email" id="newEmail" placeholder="邮箱（必填）" required>
+        </div>
+        <div class="form-row">
+          <input type="password" id="newPassword" placeholder="密码（必填，至少6位）" required minlength="6">
+          <select id="newRole">
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <button type="submit" class="primary">确认添加</button>
+          <button type="button" class="ghost" id="btnCancelAdd">取消</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="user-stats">
+      <div class="stat-card">
+        <h3>总用户数</h3>
+        <div class="number" id="totalUsers">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>管理员</h3>
+        <div class="number" id="adminCount">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>普通用户</h3>
+        <div class="number" id="userCount">-</div>
+      </div>
+    </div>
+
+    <!-- 用户列表 -->
+    <div class="user-table">
+      <div id="loadingState" class="loading">加载中...</div>
+      <div id="emptyState" class="empty-state" style="display:none;">
+        暂无用户数据
+      </div>
+      <table id="userTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>邮箱</th>
+            <th>角色</th>
+            <th>注册时间</th>
+            <th>最后登录</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="userTableBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module">
+    const SUPABASE_URL = localStorage.getItem("xhs_supabase_url");
+    const SUPABASE_ANON_KEY = localStorage.getItem("xhs_supabase_anon_key");
+    
+    const { createClient } = supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 检查登录和权限
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) {
+      alert('请先登录');
+      window.location.href = 'login.html';
+    }
+
+    const currentUserId = session.user.id;
+    const currentUserEmail = session.user.email;
+    
+    // 检查是否是管理员（从 user_profiles 表查询）
+    let isAdmin = false;
+    
+    try {
+      const { data: currentProfile } = await supabaseClient
+        .from('user_profiles')
+        .select('role, username')
+        .eq('user_id', currentUserId)
+        .single();
+      
+      if (currentProfile) {
+        isAdmin = currentProfile.role === 'super_admin' || currentProfile.username === 'sevenoy';
+      }
+    } catch (err) {
+      console.error('查询管理员权限失败:', err);
+    }
+    
+    if (!isAdmin) {
+      alert('⚠️ 您没有管理员权限');
+      window.location.href = 'index.html';
+    }
+    
+    // 格式化时间
+    function formatTime(timestamp) {
+      if (!timestamp) return '-';
+      const d = new Date(timestamp);
+      const now = new Date();
+      const diff = now - d;
+      
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+      
+      return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
+    }
+
+    // 加载用户列表
+    async function loadUsers() {
+      try {
+        // 从 user_profiles 表查询所有用户
+        const { data: profiles, error } = await supabaseClient
+          .from('user_profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (!profiles || profiles.length === 0) {
+          document.getElementById('loadingState').textContent = '暂无用户数据';
+          return;
+        }
+        
+        displayUsers(profiles);
+        
+      } catch (err) {
+        console.error('加载用户失败:', err);
+        document.getElementById('loadingState').textContent = '❌ 加载失败：' + err.message;
+      }
+    }
+
+    // 显示用户列表
+    function displayUsers(profiles) {
+      document.getElementById('loadingState').style.display = 'none';
+      
+      if (!profiles || profiles.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('userTable').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('userTable').style.display = 'table';
+      
+      // 更新统计
+      const adminUsers = profiles.filter(p => p.role === 'super_admin' || p.username === 'sevenoy');
+      document.getElementById('totalUsers').textContent = profiles.length;
+      document.getElementById('adminCount').textContent = adminUsers.length;
+      document.getElementById('userCount').textContent = profiles.length - adminUsers.length;
+      
+      // 渲染表格
+      const tbody = document.getElementById('userTableBody');
+      tbody.innerHTML = profiles.map((profile) => {
+        const isProtected = profile.username === 'sevenoy';
+        const isCurrentUser = profile.user_id === currentUserId;
+        const isAdmin = profile.role === 'super_admin' || profile.username === 'sevenoy';
+        
+        return `
+          <tr>
+            <td>
+              <strong>${profile.username}</strong>
+              ${isCurrentUser ? '<span style="color:#1990FF;font-size:12px;"> (我)</span>' : ''}
+              ${isProtected ? '<span style="color:#ff3b30;font-size:12px;"> 🔒</span>' : ''}
+            </td>
+            <td>${profile.email}</td>
+            <td>
+              <span class="badge ${isAdmin ? 'admin' : 'user'}">
+                ${isAdmin ? '👑 管理员' : '👤 普通用户'}
+              </span>
+            </td>
+            <td>${formatTime(profile.created_at)}</td>
+            <td>${formatTime(profile.approved_at || profile.created_at)}</td>
+            <td>
+              ${isProtected || isCurrentUser ? 
+                '<span style="color:#ccc;font-size:12px;">-</span>' : 
+                `<button class="btn-danger-small" onclick="deleteUser('${profile.user_id}', '${profile.username}')">删除</button>`
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 添加用户表单切换
+    document.getElementById('btnToggleAddUser').addEventListener('click', () => {
+      const form = document.getElementById('addUserForm');
+      form.classList.toggle('show');
+    });
+
+    document.getElementById('btnCancelAdd').addEventListener('click', () => {
+      document.getElementById('addUserForm').classList.remove('show');
+      document.getElementById('formAddUser').reset();
+      document.getElementById('addUserError').style.display = 'none';
+    });
+
+    // 添加用户
+    document.getElementById('formAddUser').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('newUsername').value.trim();
+      const email = document.getElementById('newEmail').value.trim();
+      const password = document.getElementById('newPassword').value;
+      const role = document.getElementById('newRole').value;
+      
+      const errorEl = document.getElementById('addUserError');
+      errorEl.style.display = 'none';
+      
+      const btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = '添加中...';
+      
+      try {
+        // 1. 先检查用户名是否已存在
+        const { data: existingUser } = await supabaseClient
+          .from('user_profiles')
+          .select('username')
+          .eq('username', username)
+          .single();
+        
+        if (existingUser) {
+          throw new Error('用户名已被使用');
+        }
+        
+        // 2. 注册用户到 auth.users
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              username: username,
+              display_name: username
+            }
+          }
+        });
+        
+        if (error) throw error;
+        
+        // 3. 创建 user_profiles 记录
+        const { error: profileError } = await supabaseClient
+          .from('user_profiles')
+          .insert({
+            user_id: data.user.id,
+            username: username,
+            email: email,
+            display_name: username,
+            role: role === 'admin' ? 'super_admin' : 'basic',
+            status: 'approved'  // 管理员添加的用户直接批准
+          });
+        
+        if (profileError) {
+          console.error('创建用户配置失败:', profileError);
+          throw new Error('创建用户配置失败：' + profileError.message);
+        }
+        
+        alert(`✅ 用户 ${username} 添加成功！`);
+        
+        // 重置表单
+        document.getElementById('formAddUser').reset();
+        document.getElementById('addUserForm').classList.remove('show');
+        
+        // 重新加载用户列表
+        await loadUsers();
+        
+      } catch (err) {
+        console.error('添加用户失败:', err);
+        errorEl.textContent = '❌ 添加失败：' + err.message;
+        errorEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '确认添加';
+      }
+    });
+
+    // 删除用户（需要暴露到全局作用域）
+    window.deleteUser = async function(userId, username) {
+      if (!confirm(`确定要删除用户 "${username}" 吗？\n\n此操作不可撤销！`)) {
+        return;
+      }
+      
+      try {
+        // 1. 从 user_profiles 表删除
+        const { error: profileError } = await supabaseClient
+          .from('user_profiles')
+          .delete()
+          .eq('user_id', userId);
+        
+        if (profileError) throw profileError;
+        
+        // 2. 注意：auth.users 中的用户无法通过客户端删除
+        // 需要在 Supabase Dashboard 中手动删除，或者使用 Service Role Key
+        // 这里只删除 user_profiles 记录，用户将无法登录
+        
+        alert(`✅ 用户 ${username} 已从系统中删除\n\n注意：如需完全删除，请在 Supabase Dashboard 中删除 auth.users 中的记录`);
+        
+        // 重新加载用户列表
+        await loadUsers();
+        
+      } catch (err) {
+        console.error('删除用户失败:', err);
+        alert('❌ 删除失败：' + err.message);
+      }
+    };
+
+    // 初始加载
+    loadUsers();
+  </script>
+</body>
+</html>
+

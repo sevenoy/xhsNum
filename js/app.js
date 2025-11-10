@@ -1182,22 +1182,33 @@ async function cloudSave() {
     console.log('✅ 默认快照保存成功，开始保存历史快照...');
 
     // ✅ 历史快照：始终使用当前用户作为所有者（被授权人创建自己的历史快照）
-    // currentUserId 已经在前面获取并验证过了
+    // ⚠️ 关键修复：直接使用 Supabase 会话的 auth.uid()，确保与 RLS 策略匹配
+    const { data: { session } } = await supabase.auth.getSession();
+    const authUid = session?.user?.id;
+    
+    if (!authUid) {
+      console.error('❌ 无法获取 Supabase 会话用户 ID');
+      alert("❌ 无法获取用户信息，请重新登录");
+      return;
+    }
+    
     const histKey = `snap_${now}`;
     
     console.log('💾 准备创建历史快照:', { 
       key: histKey, 
-      ownerId: currentUserId,
-      authUid: '将在 RLS 策略中检查',
+      ownerId: authUid, // ✅ 使用 auth.uid() 而不是 currentUserId
+      currentUserId: currentUserId, // 用于对比
+      authUid: authUid,
+      isMatch: currentUserId === authUid,
       isAuthorizedUser: !isAdminUser && hasPermission && existingSnapshot?.owner_id !== currentUserId
     });
     
-    // ✅ 验证 owner_id 是否等于 auth.uid()（RLS 策略要求）
-    // 注意：这里 currentUserId 应该等于 Supabase 会话的 auth.uid()
+    // ✅ 关键修复：使用 auth.uid() 而不是 currentUserId
+    // RLS 策略检查的是 auth.uid()，所以 owner_id 必须等于 auth.uid()
     const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
       key: histKey,
       payload,
-      owner_id: currentUserId, // ✅ 被授权人创建自己的历史快照，必须等于 auth.uid()
+      owner_id: authUid, // ✅ 使用 auth.uid()，确保与 RLS 策略匹配
       updated_at: new Date(now).toISOString(),
     });
     

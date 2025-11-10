@@ -243,8 +243,33 @@ function truncateText(text, maxChars = 10) {
  * 4.2. 用户相关辅助函数
  * ========================= */
 
-function getCurrentUserId() {
-  return window.currentUser?.id || localStorage.getItem('xhs_user_id') || 'anonymous';
+async function getCurrentUserId() {
+  // ✅ 优先从 Supabase 会话获取（最准确）
+  if (supabase) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        return session.user.id;
+      }
+    } catch (error) {
+      console.error('获取 Supabase 会话失败:', error);
+    }
+  }
+  
+  // ✅ 降级：从 window.currentUser 获取
+  if (window.currentUser?.id && window.currentUser.id !== 'anonymous') {
+    return window.currentUser.id;
+  }
+  
+  // ✅ 降级：从 localStorage 获取
+  const storedId = localStorage.getItem('xhs_user_id');
+  if (storedId && storedId !== 'anonymous') {
+    return storedId;
+  }
+  
+  // ❌ 如果都没有，返回 null（而不是 'anonymous'）
+  console.error('⚠️ 无法获取当前用户 ID，用户可能未登录');
+  return null;
 }
 
 function getCurrentUserName() {
@@ -1034,7 +1059,12 @@ async function cloudSave() {
         return;
       }
       
-      const currentUserId = getCurrentUserId();
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) {
+        alert("❌ 无法获取用户信息，请重新登录");
+        return;
+      }
+      
       console.log('🔍 所有者检查:', { 
         snapshotOwner: snapshot?.owner_id, 
         currentUserId,
@@ -1048,6 +1078,15 @@ async function cloudSave() {
     }
     
     console.log('✅ 权限检查通过，开始收集数据...');
+    
+    // ✅ 获取当前用户 ID（用于后续操作）
+    const currentUserId = await getCurrentUserId();
+    if (!currentUserId) {
+      alert("❌ 无法获取用户信息，请重新登录");
+      return;
+    }
+    
+    console.log('✅ 当前用户ID:', currentUserId);
     
     const all = await getAllRows();
     const cats = readCats();
@@ -1077,7 +1116,7 @@ async function cloudSave() {
       ver: 1,
       snapshot_label: snapshotName,
       updated_at: now,
-      updated_by: getCurrentUserId(),
+      updated_by: currentUserId,
       updated_by_name: getCurrentUserName(),
       rows: all,
       cats,
@@ -1096,7 +1135,7 @@ async function cloudSave() {
     }
     
     // 如果是所有者，保持 owner_id；如果有编辑权限但不是所有者，保持原有 owner_id
-    const ownerId = existingSnapshot?.owner_id || getCurrentUserId();
+    const ownerId = existingSnapshot?.owner_id || currentUserId;
     console.log('✅ 确定所有者ID:', ownerId);
     
     console.log('💾 开始保存默认快照...');
@@ -1116,19 +1155,22 @@ async function cloudSave() {
     console.log('✅ 默认快照保存成功，开始保存历史快照...');
 
     // ✅ 历史快照：始终使用当前用户作为所有者（被授权人创建自己的历史快照）
-    const currentUserId = getCurrentUserId();
+    // currentUserId 已经在前面获取并验证过了
     const histKey = `snap_${now}`;
     
     console.log('💾 准备创建历史快照:', { 
       key: histKey, 
       ownerId: currentUserId,
+      authUid: '将在 RLS 策略中检查',
       isAuthorizedUser: !isAdminUser && hasPermission && existingSnapshot?.owner_id !== currentUserId
     });
     
+    // ✅ 验证 owner_id 是否等于 auth.uid()（RLS 策略要求）
+    // 注意：这里 currentUserId 应该等于 Supabase 会话的 auth.uid()
     const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
       key: histKey,
       payload,
-      owner_id: currentUserId, // ✅ 被授权人创建自己的历史快照
+      owner_id: currentUserId, // ✅ 被授权人创建自己的历史快照，必须等于 auth.uid()
       updated_at: new Date(now).toISOString(),
     });
     

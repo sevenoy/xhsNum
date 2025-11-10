@@ -288,15 +288,28 @@ function getCurrentUserEmail() {
 async function checkPermission(resourceId, resourceType, permissionType = 'view') {
   if (!supabase) return false;
   
-  // ✅ 修复：getCurrentUserId() 是 async 函数，需要 await
-  const userId = await getCurrentUserId();
+  // ⚠️ 关键修复：直接使用 auth.uid() 而不是 getCurrentUserId()
+  // 因为权限表中的 user_id 是 Supabase 的 auth.uid()
+  // 如果 getCurrentUserId() 返回的 ID 与 auth.uid() 不匹配，查询会失败
+  const { data: { session } } = await supabase.auth.getSession();
+  const authUid = session?.user?.id;
   
-  if (!userId) {
-    console.error('❌ 无法获取用户 ID，权限检查失败');
+  if (!authUid) {
+    console.error('❌ 无法获取 Supabase 会话用户 ID，权限检查失败');
     return false;
   }
   
-  console.log('🔍 权限检查:', { resourceId, resourceType, permissionType, userId });
+  // 同时获取 getCurrentUserId() 用于对比和日志
+  const currentUserId = await getCurrentUserId();
+  
+  console.log('🔍 权限检查:', { 
+    resourceId, 
+    resourceType, 
+    permissionType, 
+    authUid,
+    currentUserId,
+    isMatch: authUid === currentUserId
+  });
   
   try {
     // 1. 检查是否是资源所有者
@@ -309,23 +322,25 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
       
       console.log('🔍 所有者检查:', { 
         snapshotOwner: snapshot?.owner_id, 
-        currentUserId: userId,
-        isOwner: snapshot?.owner_id === userId 
+        authUid: authUid,
+        currentUserId: currentUserId,
+        isOwner: snapshot?.owner_id === authUid 
       });
       
-      if (snapshot && snapshot.owner_id === userId) {
+      if (snapshot && snapshot.owner_id === authUid) {
         console.log('✅ 是资源所有者，拥有所有权限');
         return true; // 所有者有所有权限
       }
     }
     
     // 2. 检查是否被授予权限
+    // ⚠️ 关键修复：使用 auth.uid() 查询权限，确保与权限表中的 user_id 匹配
     const { data: permission, error: permError } = await supabase
       .from('permissions')
       .select('*')
       .eq('resource_id', resourceId)
       .eq('resource_type', resourceType)
-      .eq('user_id', userId)
+      .eq('user_id', authUid)  // ✅ 使用 auth.uid() 而不是 getCurrentUserId()
       .eq('status', 'active')
       .maybeSingle();
     

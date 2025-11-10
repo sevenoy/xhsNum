@@ -288,7 +288,7 @@ function getCurrentUserEmail() {
 async function checkPermission(resourceId, resourceType, permissionType = 'view') {
   if (!supabase) return false;
   
-  // ✅ 修复：getCurrentUserId() 是异步函数，需要 await
+  // ✅ 修复：getCurrentUserId() 是 async 函数，需要 await
   const userId = await getCurrentUserId();
   
   if (!userId) {
@@ -301,22 +301,25 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
   try {
     // 1. 检查是否是资源所有者
     if (resourceType === 'snapshot') {
-      const { data: snapshot, error: snapshotError } = await supabase
+      const { data: snapshot } = await supabase
         .from(SUPABASE_TABLE)
         .select('owner_id')
         .eq('key', resourceId)
         .maybeSingle();
       
-      if (snapshotError) {
-        console.error('❌ 查询快照失败:', snapshotError);
-      } else if (snapshot && snapshot.owner_id === userId) {
-        console.log('✅ 是资源所有者，有所有权限');
+      console.log('🔍 所有者检查:', { 
+        snapshotOwner: snapshot?.owner_id, 
+        currentUserId: userId,
+        isOwner: snapshot?.owner_id === userId 
+      });
+      
+      if (snapshot && snapshot.owner_id === userId) {
+        console.log('✅ 是资源所有者，拥有所有权限');
         return true; // 所有者有所有权限
       }
     }
     
     // 2. 检查是否被授予权限
-    console.log('🔍 查询权限表:', { resourceId, resourceType, userId });
     const { data: permission, error: permError } = await supabase
       .from('permissions')
       .select('*')
@@ -411,6 +414,10 @@ async function addRow() {
   const all = await getAllRows();
   const now = Date.now();
   
+  // ✅ 获取当前用户 ID（用于记录）
+  const currentUserId = await getCurrentUserId() || 'unknown';
+  const currentUserName = getCurrentUserName();
+  
   // ✅ 从顶部新增：新行的 order 设为 0，其他所有行的 order + 1
   if (all.length > 0) {
     // 更新所有现有行的 order，让它们下移
@@ -418,8 +425,8 @@ async function addRow() {
       ...r,
       order: (r.order || 0) + 1,
       updated_at: now,
-      updated_by: getCurrentUserId(),
-      updated_by_name: getCurrentUserName()
+      updated_by: currentUserId,
+      updated_by_name: currentUserName
     }));
     await db.rows.bulkPut(updates);
   }
@@ -436,11 +443,11 @@ async function addRow() {
     note1: "",
     row_color: "",
     created_at: now,
-    created_by: getCurrentUserId(),
-    created_by_name: getCurrentUserName(),
+    created_by: currentUserId,
+    created_by_name: currentUserName,
     updated_at: now,
-    updated_by: getCurrentUserId(),
-    updated_by_name: getCurrentUserName(),
+    updated_by: currentUserId,
+    updated_by_name: currentUserName,
   };
   await db.rows.add(row);
   await refreshFilters();
@@ -452,10 +459,14 @@ async function updateRow(id, patch) {
   const row = await db.rows.get(id);
   if (!row) return;
   
+  // ✅ 获取当前用户 ID（用于冲突检测和记录）
+  const currentUserId = await getCurrentUserId() || 'unknown';
+  const currentUserName = getCurrentUserName();
+  
   // ✅ 冲突检测：检查是否有人在最近30秒内修改过
   const now = Date.now();
   const timeSinceUpdate = now - (row.updated_at || 0);
-  const differentUser = row.updated_by !== getCurrentUserId();
+  const differentUser = row.updated_by !== currentUserId;
   
   if (timeSinceUpdate < 30000 && differentUser && row.updated_by_name) {
     // 可能有冲突
@@ -478,8 +489,8 @@ async function updateRow(id, patch) {
     ...row, 
     ...patch, 
     updated_at: now,
-    updated_by: getCurrentUserId(),
-    updated_by_name: getCurrentUserName()
+    updated_by: currentUserId,
+    updated_by_name: currentUserName
   };
   await db.rows.put(next);
   // ✅ 关键：直接重新渲染，不要手动更新UI
@@ -880,10 +891,14 @@ async function saveMobileCardEdit(id) {
       return;
     }
     
+    // ✅ 获取当前用户 ID（用于记录）
+    const currentUserId = await getCurrentUserId() || 'unknown';
+    const currentUserName = getCurrentUserName();
+    
     // 保存到数据库
     updates.updated_at = Date.now();
-    updates.updated_by = getCurrentUserId();
-    updates.updated_by_name = getCurrentUserName();
+    updates.updated_by = currentUserId;
+    updates.updated_by_name = currentUserName;
     
     await db.rows.put({ ...row, ...updates });
     
@@ -1338,7 +1353,8 @@ async function renderCloudHistory() {
     return;
   }
   
-  const currentUserId = getCurrentUserId();
+  // ✅ 修复：getCurrentUserId() 是 async 函数，需要 await
+  const currentUserId = await getCurrentUserId();
   
   try {
     // ✅ 改进：查询所有可访问的快照（包括授权的快照）
@@ -2072,7 +2088,9 @@ const HEARTBEAT_INTERVAL = 5000; // 5秒心跳
 
 class OnlineStatusManager {
   constructor() {
-    this.userId = getCurrentUserId();
+    // ✅ 修复：使用同步方式获取用户 ID（从 localStorage）
+    // 在线状态管理不需要严格的 Supabase 会话验证
+    this.userId = window.currentUser?.id || localStorage.getItem('xhs_user_id') || 'unknown';
     this.userName = getCurrentUserName();
     this.startHeartbeat();
     this.updateUI();

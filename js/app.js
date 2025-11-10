@@ -54,7 +54,7 @@ async function initSupabase() {
 
 // 默认视图
 const DEFAULT_VIEW = Object.freeze({
-  viewVersion: 7,
+  viewVersion: 8,
   pad: 6,
   colScale: 1,
   zebraOn: true,
@@ -62,7 +62,8 @@ const DEFAULT_VIEW = Object.freeze({
   fontFamily:
     '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
   titleText: "XHSPHONE",
-  titleColor: "#111111",
+  titleColor: "#1990FF",
+  btnColor: "#E2F0FF",
 });
 
 // 默认分类
@@ -122,11 +123,12 @@ function applyView(v) {
   root.style.setProperty("--colScale", `${v.colScale}`);
   root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
   root.style.setProperty("--font-main", v.fontFamily);
+  root.style.setProperty("--btn-default", v.btnColor || "#E2F0FF");
 
   const h1 = document.getElementById("appTitle");
   if (h1) {
     h1.textContent = v.titleText;
-    h1.style.color = v.titleColor;
+    h1.style.color = v.titleColor || "#1990FF";
   }
 }
 
@@ -139,7 +141,21 @@ function readCats() {
     const raw = localStorage.getItem(CATS_KEY);
     if (!raw) return DEFAULT_CATS.slice();
     const obj = JSON.parse(raw);
-    if (Array.isArray(obj) && obj.length) return obj;
+    if (Array.isArray(obj) && obj.length) {
+      // ✅ 修复旧分类数据：确保所有分类都有id字段
+      const fixed = obj.map(cat => {
+        if (!cat.id) {
+          // 如果没有id，根据name生成一个唯一id
+          return { ...cat, id: uid() };
+        }
+        return cat;
+      });
+      // 如果有任何分类被修复，保存回localStorage
+      if (fixed.some((cat, idx) => cat.id !== obj[idx]?.id)) {
+        saveCats(fixed);
+      }
+      return fixed;
+    }
     return DEFAULT_CATS.slice();
   } catch {
     return DEFAULT_CATS.slice();
@@ -1222,8 +1238,16 @@ function bindEvents() {
   $("#btnCategories").addEventListener("click", () => {
     setActiveFunction("categories");
     const p = $("#panelCategories");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    renderCatList();
+    const pView = $("#panelView");
+    
+    // ✅ 互斥展开：关闭显示设置面板
+    if (p.style.display === "none") {
+      p.style.display = "block";
+      pView.style.display = "none";
+      renderCatList();
+    } else {
+      p.style.display = "none";
+    }
   });
 
   $("#btnCatAdd").addEventListener("click", () => {
@@ -1244,15 +1268,24 @@ function bindEvents() {
   $("#btnView").addEventListener("click", () => {
     setActiveFunction("view");
     const p = $("#panelView");
-    p.style.display = p.style.display === "none" ? "block" : "none";
-    const v = readView();
-    $("#titleText").value = v.titleText;
-    $("#titleColor").value = v.titleColor;
-    $("#fontFamily").value = v.fontFamily;
-    $("#rowPad").value = v.pad;
-    $("#colScale").value = v.colScale;
-    $("#zebraOn").checked = v.zebraOn;
-    $("#zebraColor").value = v.zebraColor;
+    const pCat = $("#panelCategories");
+    
+    // ✅ 互斥展开：关闭分类设置面板
+    if (p.style.display === "none") {
+      p.style.display = "block";
+      pCat.style.display = "none";
+      const v = readView();
+      $("#titleText").value = v.titleText;
+      $("#titleColor").value = v.titleColor || "#1990FF";
+      $("#fontFamily").value = v.fontFamily;
+      $("#rowPad").value = v.pad;
+      $("#colScale").value = v.colScale;
+      $("#zebraOn").checked = v.zebraOn;
+      $("#zebraColor").value = v.zebraColor;
+      $("#btnColor").value = v.btnColor || "#E2F0FF";
+    } else {
+      p.style.display = "none";
+    }
   });
 
   $("#titleText").addEventListener("input", () => {
@@ -1264,7 +1297,14 @@ function bindEvents() {
 
   $("#titleColor").addEventListener("input", () => {
     const v = readView();
-    v.titleColor = $("#titleColor").value || "#111111";
+    v.titleColor = $("#titleColor").value || "#1990FF";
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#btnColor").addEventListener("input", () => {
+    const v = readView();
+    v.btnColor = $("#btnColor").value || "#E2F0FF";
     saveView(v);
     applyView(v);
   });

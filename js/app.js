@@ -1115,40 +1115,82 @@ async function cloudSave() {
     
     console.log('✅ 默认快照保存成功，开始保存历史快照...');
 
+    // ✅ 历史快照：始终使用当前用户作为所有者（被授权人创建自己的历史快照）
+    const currentUserId = getCurrentUserId();
     const histKey = `snap_${now}`;
+    
+    console.log('💾 准备创建历史快照:', { 
+      key: histKey, 
+      ownerId: currentUserId,
+      isAuthorizedUser: !isAdminUser && hasPermission && existingSnapshot?.owner_id !== currentUserId
+    });
+    
     const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
       key: histKey,
       payload,
-      owner_id: getCurrentUserId(),
+      owner_id: currentUserId, // ✅ 被授权人创建自己的历史快照
       updated_at: new Date(now).toISOString(),
     });
     
     if (err2) {
       console.error('❌ 保存历史快照失败:', err2);
-      alert("保存历史失败：" + err2.message + "\n\n错误详情请查看浏览器控制台（F12）");
-      return;
+      
+      // ✅ 如果是 RLS 错误，提供更详细的提示
+      if (err2.message && err2.message.includes('row-level security')) {
+        alert(
+          "⚠️ 保存历史快照失败（RLS 策略错误）\n\n" +
+          "错误信息：" + err2.message + "\n\n" +
+          "💡 解决方案：\n" +
+          "1. 请执行 SQL 脚本：完整修复-被授权人保存云端错误.sql\n" +
+          "2. 或者联系管理员修复 RLS 策略\n\n" +
+          "✅ 默认快照已成功保存，您可以继续使用。\n" +
+          "历史快照保存失败不影响主要功能。"
+        );
+      } else {
+        alert(
+          "⚠️ 保存历史快照失败\n\n" +
+          "错误信息：" + err2.message + "\n\n" +
+          "✅ 默认快照已成功保存，您可以继续使用。\n" +
+          "历史快照保存失败不影响主要功能。\n\n" +
+          "错误详情请查看浏览器控制台（F12）"
+        );
+      }
+      
+      // ✅ 历史快照保存失败不影响主要功能，继续执行
+      // 不 return，让用户知道默认快照已保存
+      console.log('⚠️ 历史快照保存失败，但默认快照已保存，继续执行清理...');
+    } else {
+      console.log('✅ 历史快照保存成功，开始清理旧快照...');
     }
     
-    console.log('✅ 历史快照保存成功，开始清理旧快照...');
-
-    const { data: snaps, error: err3 } = await supabase
-      .from(SUPABASE_TABLE)
-      .select("key,updated_at")
-      .like("key", "snap_%")
-      .order("updated_at", { ascending: false });
-      
-    if (err3) {
-      console.error('⚠️ 查询历史快照失败（不影响保存）:', err3);
-    } else if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
-      const toDelete = snaps.slice(5).map((s) => s.key);
-      if (toDelete.length) {
-        console.log('🗑️ 删除旧快照:', toDelete);
-        await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
+    // ✅ 只有在历史快照保存成功时才清理旧快照
+    if (!err2) {
+      const { data: snaps, error: err3 } = await supabase
+        .from(SUPABASE_TABLE)
+        .select("key,updated_at")
+        .like("key", "snap_%")
+        .order("updated_at", { ascending: false });
+        
+      if (err3) {
+        console.error('⚠️ 查询历史快照失败（不影响保存）:', err3);
+      } else if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
+        const toDelete = snaps.slice(5).map((s) => s.key);
+        if (toDelete.length) {
+          console.log('🗑️ 删除旧快照:', toDelete);
+          await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
+        }
       }
     }
 
-    console.log('✅ 保存完成！');
-    alert(`✅ 已保存到云端\n操作人：${getCurrentUserName()}`);
+    // ✅ 根据保存结果显示不同的提示
+    if (err2) {
+      console.log('✅ 默认快照保存完成（历史快照保存失败）');
+      // 提示已经在 err2 处理中显示，这里不再重复
+    } else {
+      console.log('✅ 保存完成！');
+      alert(`✅ 已保存到云端\n操作人：${getCurrentUserName()}`);
+    }
+    
     await renderCloudHistory();
     
   } catch (error) {

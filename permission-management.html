@@ -189,17 +189,6 @@
       
       <div class="grant-form">
         <div class="form-group">
-          <label>资源类型</label>
-          <select id="resourceType">
-            <option value="snapshot">云端快照</option>
-            <option value="row">单行数据</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>资源ID/名称</label>
-          <input type="text" id="resourceId" placeholder="输入快照key或行ID">
-        </div>
-        <div class="form-group">
           <label>用户（用户名）</label>
           <input type="text" id="grantUsername" placeholder="输入用户名">
         </div>
@@ -216,6 +205,9 @@
         </div>
         <div class="form-group" style="justify-content: flex-end;">
           <button class="primary" id="btnGrant" style="margin-top: 20px;">授予权限</button>
+        </div>
+        <div style="margin-top: 10px; padding: 10px; background: #f0f7ff; border-radius: 8px; font-size: 13px; color: #666;">
+          💡 提示：将授予该用户访问你的默认快照（default）的权限
         </div>
       </div>
 
@@ -300,14 +292,12 @@
 
     // 授予权限
     document.getElementById('btnGrant').addEventListener('click', async () => {
-      const resourceType = document.getElementById('resourceType').value;
-      const resourceId = document.getElementById('resourceId').value.trim();
       const username = document.getElementById('grantUsername').value.trim();
       const permissionType = document.getElementById('permissionType').value;
       const expiredAt = document.getElementById('expiredAt').value;
 
-      if (!resourceId || !username) {
-        alert('请填写资源ID和用户名');
+      if (!username) {
+        alert('请填写用户名');
         return;
       }
 
@@ -324,50 +314,94 @@
           return;
         }
 
-        // 2. 检查资源是否存在
-        let resourceExists = false;
-        if (resourceType === 'snapshot') {
-          const { data: snapshot } = await supabaseClient
+        // 2. 检查是否是默认快照的所有者（或创建默认快照）
+        const resourceId = 'default';
+        const resourceType = 'snapshot';
+        
+        // 检查默认快照是否存在，如果不存在则创建
+        const { data: existingSnapshot } = await supabaseClient
+          .from('xhsphone_snapshot')
+          .select('key, owner_id')
+          .eq('key', resourceId)
+          .maybeSingle();
+        
+        if (!existingSnapshot) {
+          // 如果默认快照不存在，创建一个空的快照
+          const { error: createError } = await supabaseClient
             .from('xhsphone_snapshot')
-            .select('key, owner_id')
-            .eq('key', resourceId)
-            .single();
+            .insert({
+              key: resourceId,
+              owner_id: currentUserId,
+              payload: { ver: 1, rows: [], cats: [], view: {} },
+              updated_at: new Date().toISOString()
+            });
           
-          if (!snapshot || snapshot.owner_id !== currentUserId) {
-            alert('资源不存在或您不是所有者');
-            return;
+          if (createError) {
+            console.error('创建默认快照失败:', createError);
+            // 继续执行，可能快照已存在
           }
-          resourceExists = true;
-        } else if (resourceType === 'row') {
-          // 对于行数据，需要检查是否是所有者（这里简化处理）
-          resourceExists = true;
-        }
-
-        if (!resourceExists) {
-          alert('资源不存在');
+        } else if (existingSnapshot.owner_id !== currentUserId) {
+          alert('❌ 您不是默认快照的所有者\n\n只有所有者可以授予权限');
           return;
         }
 
-        // 3. 授予权限
-        const { error } = await supabaseClient
+        // 3. 检查是否已经授予过权限
+        const { data: existingPermission } = await supabaseClient
           .from('permissions')
-          .insert({
-            resource_id: resourceId,
-            resource_type: resourceType,
-            user_id: userProfile.user_id,
-            permission_type: permissionType,
-            granted_by: currentUserId,
-            granted_by_name: currentUserName,
-            expired_at: expiredAt ? new Date(expiredAt).toISOString() : null,
-            status: 'active'
-          });
+          .select('id, status')
+          .eq('resource_id', resourceId)
+          .eq('resource_type', resourceType)
+          .eq('user_id', userProfile.user_id)
+          .maybeSingle();
 
-        if (error) throw error;
+        if (existingPermission) {
+          if (existingPermission.status === 'active') {
+            // 如果权限已存在且是激活状态，更新权限类型
+            const { error: updateError } = await supabaseClient
+              .from('permissions')
+              .update({
+                permission_type: permissionType,
+                expired_at: expiredAt ? new Date(expiredAt).toISOString() : null,
+                status: 'active'
+              })
+              .eq('id', existingPermission.id);
 
-        alert('✅ 权限授予成功！');
+            if (updateError) throw updateError;
+            alert('✅ 权限已更新！');
+          } else {
+            // 如果权限已存在但被撤销或过期，重新激活
+            const { error: updateError } = await supabaseClient
+              .from('permissions')
+              .update({
+                permission_type: permissionType,
+                expired_at: expiredAt ? new Date(expiredAt).toISOString() : null,
+                status: 'active'
+              })
+              .eq('id', existingPermission.id);
+
+            if (updateError) throw updateError;
+            alert('✅ 权限已重新激活！');
+          }
+        } else {
+          // 4. 授予新权限
+          const { error } = await supabaseClient
+            .from('permissions')
+            .insert({
+              resource_id: resourceId,
+              resource_type: resourceType,
+              user_id: userProfile.user_id,
+              permission_type: permissionType,
+              granted_by: currentUserId,
+              granted_by_name: currentUserName,
+              expired_at: expiredAt ? new Date(expiredAt).toISOString() : null,
+              status: 'active'
+            });
+
+          if (error) throw error;
+          alert('✅ 权限授予成功！');
+        }
         
         // 重置表单
-        document.getElementById('resourceId').value = '';
         document.getElementById('grantUsername').value = '';
         document.getElementById('expiredAt').value = '';
         
@@ -431,11 +465,12 @@
                 const expiredDate = p.expired_at ? new Date(p.expired_at).toLocaleString('zh-CN') : '永久';
                 const statusClass = p.status === 'active' ? 'active' : p.status === 'expired' ? 'expired' : 'revoked';
                 const statusText = p.status === 'active' ? '有效' : p.status === 'expired' ? '已过期' : '已撤销';
+                const resourceName = p.resource_id === 'default' ? '默认快照' : p.resource_id;
                 
                 return `
                   <tr>
                     <td>${p.resource_type === 'snapshot' ? '快照' : '行数据'}</td>
-                    <td>${p.resource_id}</td>
+                    <td>${resourceName}</td>
                     <td>${username}</td>
                     <td><span class="badge ${p.permission_type}">${p.permission_type === 'view' ? '查看' : '编辑'}</span></td>
                     <td>${new Date(p.created_at).toLocaleString('zh-CN')}</td>
@@ -528,11 +563,12 @@
               ${activePermissions.map(p => {
                 const grantedBy = p.user_profiles?.username || p.granted_by_name || '未知';
                 const expiredDate = p.expired_at ? new Date(p.expired_at).toLocaleString('zh-CN') : '永久';
+                const resourceName = p.resource_id === 'default' ? '默认快照' : p.resource_id;
                 
                 return `
                   <tr>
                     <td>${p.resource_type === 'snapshot' ? '快照' : '行数据'}</td>
-                    <td>${p.resource_id}</td>
+                    <td>${resourceName}</td>
                     <td>${grantedBy}</td>
                     <td><span class="badge ${p.permission_type}">${p.permission_type === 'view' ? '查看' : '编辑'}</span></td>
                     <td>${new Date(p.created_at).toLocaleString('zh-CN')}</td>

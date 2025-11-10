@@ -422,14 +422,32 @@
       try {
         const { data: permissions, error } = await supabaseClient
           .from('permissions')
-          .select(`
-            *,
-            user_profiles:user_id (username, email)
-          `)
+          .select('*')
           .eq('granted_by', currentUserId)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+
+        // 分别查询用户信息
+        if (permissions && permissions.length > 0) {
+          const userIds = [...new Set(permissions.map(p => p.user_id))];
+          const { data: userProfiles } = await supabaseClient
+            .from('user_profiles')
+            .select('user_id, username, email')
+            .in('user_id', userIds);
+
+          // 将用户信息添加到权限对象中
+          const userMap = {};
+          if (userProfiles) {
+            userProfiles.forEach(profile => {
+              userMap[profile.user_id] = profile;
+            });
+          }
+
+          permissions.forEach(p => {
+            p.user_profiles = userMap[p.user_id];
+          });
+        }
 
         if (!permissions || permissions.length === 0) {
           listEl.innerHTML = '<div class="empty-state">暂无已授予的权限</div>';
@@ -523,15 +541,37 @@
       try {
         const { data: permissions, error } = await supabaseClient
           .from('permissions')
-          .select(`
-            *,
-            user_profiles:granted_by (username)
-          `)
+          .select('*')
           .eq('user_id', currentUserId)
           .eq('status', 'active')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+
+        // 分别查询授予人信息
+        if (permissions && permissions.length > 0) {
+          const grantedByIds = [...new Set(permissions.map(p => p.granted_by).filter(Boolean))];
+          if (grantedByIds.length > 0) {
+            const { data: userProfiles } = await supabaseClient
+              .from('user_profiles')
+              .select('user_id, username')
+              .in('user_id', grantedByIds);
+
+            // 将用户信息添加到权限对象中
+            const userMap = {};
+            if (userProfiles) {
+              userProfiles.forEach(profile => {
+                userMap[profile.user_id] = profile;
+              });
+            }
+
+            permissions.forEach(p => {
+              if (p.granted_by) {
+                p.user_profiles = userMap[p.granted_by];
+              }
+            });
+          }
+        }
 
         // 检查过期权限
         const now = new Date();

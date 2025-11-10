@@ -280,7 +280,7 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
     }
     
     // 2. 检查是否被授予权限
-    const { data: permission } = await supabase
+    const { data: permission, error: permError } = await supabase
       .from('permissions')
       .select('*')
       .eq('resource_id', resourceId)
@@ -289,7 +289,17 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
       .eq('status', 'active')
       .maybeSingle();
     
-    if (!permission) return false;
+    if (permError) {
+      console.error('查询权限失败:', permError);
+      return false;
+    }
+    
+    if (!permission) {
+      console.log('❌ 未找到权限记录', { resourceId, resourceType, userId });
+      return false;
+    }
+    
+    console.log('✅ 找到权限记录:', permission);
     
     // 3. 检查权限是否过期
     if (permission.expired_at && new Date(permission.expired_at) < new Date()) {
@@ -303,9 +313,13 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
     
     // 4. 检查权限类型
     if (permissionType === 'view') {
-      return permission.permission_type === 'view' || permission.permission_type === 'edit';
+      const hasView = permission.permission_type === 'view' || permission.permission_type === 'edit';
+      console.log('✅ 查看权限检查:', hasView, '权限类型:', permission.permission_type);
+      return hasView;
     } else if (permissionType === 'edit') {
-      return permission.permission_type === 'edit';
+      const hasEdit = permission.permission_type === 'edit';
+      console.log('✅ 编辑权限检查:', hasEdit, '权限类型:', permission.permission_type);
+      return hasEdit;
     }
     
     return false;
@@ -857,10 +871,20 @@ async function cloudSave() {
     view,
   };
 
+  // ✅ 获取当前快照的 owner_id，保持原有所有者
+  const { data: existingSnapshot } = await supabase
+    .from(SUPABASE_TABLE)
+    .select('owner_id')
+    .eq('key', SUPABASE_DEFAULT_KEY)
+    .maybeSingle();
+  
+  // 如果是所有者，保持 owner_id；如果有编辑权限但不是所有者，保持原有 owner_id
+  const ownerId = existingSnapshot?.owner_id || getCurrentUserId();
+  
   const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
     key: SUPABASE_DEFAULT_KEY,
     payload,
-    owner_id: getCurrentUserId(),
+    owner_id: ownerId, // ✅ 保持原有所有者，不改变
     updated_at: new Date(now).toISOString(),
   });
   if (err1) {

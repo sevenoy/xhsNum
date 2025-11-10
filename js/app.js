@@ -350,7 +350,7 @@ async function checkPermission(resourceId, resourceType, permissionType = 'view'
     }
     
     if (!permission) {
-      console.log('❌ 未找到权限记录', { resourceId, resourceType, userId });
+      console.log('❌ 未找到权限记录', { resourceId, resourceType, authUid });
       return false;
     }
     
@@ -1176,15 +1176,31 @@ async function cloudSave() {
       console.error('⚠️ 查询现有快照失败（可能是新快照）:', existingError);
     }
     
+    // ⚠️ 关键修复：获取 auth.uid() 用于 upsert 操作
+    // 如果快照不存在，upsert 会使用 INSERT 策略，需要 owner_id = auth.uid()
+    const { data: { session: upsertSession } } = await supabase.auth.getSession();
+    const authUidForUpsert = upsertSession?.user?.id;
+    
+    if (!authUidForUpsert) {
+      console.error('❌ 无法获取 Supabase 会话用户 ID（用于 upsert）');
+      alert("❌ 无法获取用户信息，请重新登录");
+      return;
+    }
+    
     // 如果是所有者，保持 owner_id；如果有编辑权限但不是所有者，保持原有 owner_id
-    const ownerId = existingSnapshot?.owner_id || currentUserId;
-    console.log('✅ 确定所有者ID:', ownerId);
+    // 如果快照不存在，使用 auth.uid()（确保 INSERT 策略通过）
+    const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
+    console.log('✅ 确定所有者ID:', ownerId, {
+      existingOwner: existingSnapshot?.owner_id,
+      authUid: authUidForUpsert,
+      isNewSnapshot: !existingSnapshot
+    });
     
     console.log('💾 开始保存默认快照...');
     const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
       key: SUPABASE_DEFAULT_KEY,
       payload,
-      owner_id: ownerId, // ✅ 保持原有所有者，不改变
+      owner_id: ownerId, // ✅ 保持原有所有者，或使用 auth.uid()（如果是新快照）
       updated_at: new Date(now).toISOString(),
     });
     

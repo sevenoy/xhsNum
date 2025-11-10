@@ -266,8 +266,12 @@
     <!-- 头部 -->
     <div class="header">
       <h1>📂 快照浏览器</h1>
-      <div style="display: flex; gap: 10px;">
-        <button class="ghost" onclick="location.reload()">🔄 刷新</button>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button class="ghost" id="btnRefresh" onclick="refreshSnapshots()">🔄 刷新</button>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666;">
+          <input type="checkbox" id="autoRefresh" style="cursor: pointer;">
+          自动刷新（10秒）
+        </label>
         <button class="ghost" onclick="location.href='index.html'">返回主页</button>
       </div>
     </div>
@@ -486,6 +490,11 @@
               <button class="btn-small btn-preview" onclick="previewSnapshot('${snapshot.key}')">
                 👁️ 预览
               </button>
+              ${snapshot.isMine ? `
+              <button class="btn-small" style="background:#34c759;color:white;" onclick="grantSnapshotPermission('${snapshot.key}')">
+                🔓 授权
+              </button>
+              ` : ''}
             </div>
           </div>
         `;
@@ -649,6 +658,190 @@
     document.getElementById('sortBy').addEventListener('change', () => {
       renderSnapshots();
     });
+
+    // =========================================
+    // 刷新功能
+    // =========================================
+    
+    let autoRefreshInterval = null;
+    
+    // 手动刷新
+    window.refreshSnapshots = function() {
+      const btn = document.getElementById('btnRefresh');
+      btn.disabled = true;
+      btn.textContent = '⏳ 刷新中...';
+      
+      loadSnapshots().then(() => {
+        btn.disabled = false;
+        btn.textContent = '🔄 刷新';
+        showToast('✅ 刷新完成');
+      }).catch(() => {
+        btn.disabled = false;
+        btn.textContent = '🔄 刷新';
+        showToast('❌ 刷新失败');
+      });
+    };
+    
+    // 自动刷新开关
+    document.getElementById('autoRefresh').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        // 开启自动刷新（10秒）
+        autoRefreshInterval = setInterval(() => {
+          console.log('🔄 自动刷新快照列表');
+          loadSnapshots();
+        }, 10000);
+        showToast('✅ 已开启自动刷新（10秒）');
+      } else {
+        // 关闭自动刷新
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+        }
+        showToast('已关闭自动刷新');
+      }
+    });
+    
+    // 页面离开时清理定时器
+    window.addEventListener('beforeunload', () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    });
+    
+    // 授权快照给其他用户
+    window.grantSnapshotPermission = async function(snapshotKey) {
+      // 获取快照信息
+      const snapshot = allSnapshots.find(s => s.key === snapshotKey);
+      if (!snapshot) {
+        alert('❌ 快照不存在');
+        return;
+      }
+      
+      // 弹窗输入授权信息
+      const username = prompt(`🔓 授权快照：${snapshot.displayName}\n\n请输入要授权的用户名：`);
+      if (!username) return;
+      
+      const permissionType = confirm('授予编辑权限？\n\n点击【确定】= 编辑权限（可查看和保存）\n点击【取消】= 查看权限（只能查看）') ? 'edit' : 'view';
+      
+      try {
+        // 1. 查询用户
+        const { data: userProfile, error: userError } = await supabaseClient
+          .from('user_profiles')
+          .select('user_id, username')
+          .eq('username', username)
+          .single();
+        
+        if (userError || !userProfile) {
+          alert('❌ 用户不存在\n\n请检查用户名是否正确');
+          return;
+        }
+        
+        // 2. 检查是否已经授予过权限
+        const { data: existingPermission } = await supabaseClient
+          .from('permissions')
+          .select('id, status, permission_type')
+          .eq('resource_id', snapshotKey)
+          .eq('resource_type', 'snapshot')
+          .eq('user_id', userProfile.user_id)
+          .maybeSingle();
+        
+        if (existingPermission) {
+          if (existingPermission.status === 'active') {
+            // 更新权限
+            const { error: updateError } = await supabaseClient
+              .from('permissions')
+              .update({
+                permission_type: permissionType,
+                status: 'active'
+              })
+              .eq('id', existingPermission.id);
+            
+            if (updateError) throw updateError;
+            showToast(`✅ 权限已更新为${permissionType === 'edit' ? '编辑' : '查看'}权限`);
+          } else {
+            // 重新激活
+            const { error: updateError } = await supabaseClient
+              .from('permissions')
+              .update({
+                permission_type: permissionType,
+                status: 'active'
+              })
+              .eq('id', existingPermission.id);
+            
+            if (updateError) throw updateError;
+            showToast('✅ 权限已重新激活');
+          }
+        } else {
+          // 3. 授予新权限
+          const { error } = await supabaseClient
+            .from('permissions')
+            .insert({
+              resource_id: snapshotKey,
+              resource_type: 'snapshot',
+              user_id: userProfile.user_id,
+              permission_type: permissionType,
+              granted_by: currentUserId,
+              granted_by_name: currentUserName,
+              status: 'active'
+            });
+          
+          if (error) throw error;
+          
+          const permText = permissionType === 'edit' ? '编辑' : '查看';
+          showToast(`✅ 已授予 ${username} ${permText}权限`);
+        }
+        
+      } catch (err) {
+        console.error('授权失败:', err);
+        alert('❌ 授权失败：' + err.message);
+      }
+    };
+    
+    // 显示提示消息
+    function showToast(message) {
+      // 创建提示元素
+      const toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+      `;
+      
+      // 添加动画样式
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(400px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(400px); opacity: 0; }
+        }
+      `;
+      if (!document.querySelector('style[data-toast]')) {
+        style.setAttribute('data-toast', 'true');
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(toast);
+      
+      // 3秒后淡出
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+          toast.remove();
+        }, 300);
+      }, 3000);
+    }
 
     // 初始加载
     loadSnapshots();

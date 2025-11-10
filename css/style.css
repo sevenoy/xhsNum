@@ -723,8 +723,42 @@ td.col-cat select:focus {
   background: #ffffff !important;
 }
 
+/* ✅ 移动端输入框样式 */
+.m-input,
+.m-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.m-input:focus,
+.m-textarea:focus {
+  outline: none;
+  border-color: #1990FF;
+  box-shadow: 0 0 0 3px rgba(25, 144, 255, 0.1);
+  background: #ffffff;
+}
+
+.m-textarea {
+  resize: vertical;
+  min-height: 50px;
+  line-height: 1.5;
+}
+
 /* ✅ 移动端分类选择器增强 */
 .m-detail-value select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -738,6 +772,16 @@ td.col-cat select:focus {
   border-color: var(--btn-active);
   box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
   outline: none;
+}
+
+/* ✅ 卡片修改状态标识 */
+.m-row.modified {
+  border-color: #ff9f0a;
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.15);
+}
+
+.m-row.modified .m-row-header {
+  background: #fff9f0;
 }
 
 /* 底部操作区域（手机）*/

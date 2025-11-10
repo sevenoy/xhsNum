@@ -10,7 +10,7 @@
   --highlight-blue: #e2f0ff;
   
   /* ✅ 按钮颜色变量 */
-  --btn-default: #CCCCCC;
+  --btn-default: #E2F0FF;
   --btn-active: #1890FF;
   --btn-hover: #40a9ff;
 
@@ -626,6 +626,7 @@ td.col-cat select:focus {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--muted);
+  width: 100%;
 }
 
 .m-owner {
@@ -636,22 +637,24 @@ td.col-cat select:focus {
   font-size: 14px;
 }
 
-/* ✅ 分类 pill - 根据分类颜色动态设置 */
+/* ✅ 分类 pill - 根据分类颜色动态设置，右对齐 */
 .m-cat-pill {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   background: rgba(0, 122, 255, 0.09);
   transition: background 0.3s ease;
+  margin-left: auto;
+  text-align: right;
 }
 
 /* 下拉箭头 */
 
 .m-arrow {
-  margin-left: auto;
   font-size: 14px;
   transform-origin: center;
   transition: transform 0.15s ease;
+  flex-shrink: 0;
 }
 
 .m-row.open .m-arrow {

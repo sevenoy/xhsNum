@@ -927,11 +927,17 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   }
   
   // ✅ 权限检查：检查是否有权限访问此资源
+  console.log('🔍 开始权限检查，key:', key);
   const hasPermission = await checkPermission(key, 'snapshot', 'view');
+  console.log('✅ 权限检查结果:', hasPermission, 'isAdmin:', isAdmin());
+  
   if (!hasPermission && !isAdmin()) {
-    alert("❌ 您没有权限访问此资源\n\n请联系资源所有者授予权限");
+    console.error('❌ 权限检查失败，没有权限访问资源');
+    alert("❌ 您没有权限访问此资源\n\n请联系资源所有者授予权限\n\n如果已授权，请确保已执行 fix-snapshot-rls.sql 文件");
     return;
   }
+  
+  console.log('✅ 权限检查通过，继续加载数据');
   
   // 检查本地是否有未保存的修改
   const localRows = await getAllRows();
@@ -952,15 +958,26 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
     if (!shouldContinue) return;
   }
   
+  console.log('🔍 开始查询云端数据，key:', key);
   const { data, error } = await supabase
     .from(SUPABASE_TABLE)
     .select("payload, owner_id")
     .eq("key", key)
     .maybeSingle();
-  if (error || !data) {
-    alert("云端读取失败。");
+  
+  if (error) {
+    console.error('❌ 云端读取失败:', error);
+    alert(`❌ 云端读取失败：${error.message}\n\n如果提示权限错误，请确保已执行 fix-snapshot-rls.sql 文件`);
     return;
   }
+  
+  if (!data) {
+    console.error('❌ 未找到云端数据，key:', key);
+    alert(`❌ 未找到云端数据（key: ${key}）\n\n可能原因：\n1. 数据不存在\n2. 没有访问权限（请检查 RLS 策略）`);
+    return;
+  }
+  
+  console.log('✅ 成功查询到云端数据:', data);
   const payload = data.payload || {};
   const rows = payload.rows || [];
   const cats = payload.cats || DEFAULT_CATS;

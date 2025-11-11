@@ -1072,7 +1072,7 @@ async function cloudHealthCheck() {
 
 async function cloudSave() {
   try {
-    console.log('🔄 开始保存云端...');
+    console.log('🔄 开始保存云端... [cloudSave fix v2025-11-11]');
     
     if (!supabase) {
       alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");

@@ -1165,106 +1165,48 @@ async function cloudSave() {
     view,
   };
 
-  // ⚠️ 关键修复：避免使用 upsert，改用显式的 UPDATE/INSERT 分离
-  // 原因：upsert 在记录不存在时会触发 INSERT，如果 owner_id 不匹配 auth.uid() 会被 RLS 拒绝
+  // ⚠️ 关键修复：获取 auth.uid() 用于 upsert 操作
+  // 使用 upsert 可以自动处理"存在则更新，不存在则插入"，避免主键冲突
   const { data: { session: upsertSession } } = await supabase.auth.getSession();
   const authUidForUpsert = upsertSession?.user?.id;
   if (!authUidForUpsert) {
-    console.error('❌ 无法获取 Supabase 会话用户 ID（用于保存操作）');
+    console.error('❌ 无法获取 Supabase 会话用户 ID（用于 upsert）');
     alert("❌ 无法获取用户信息，请重新登录");
     return;
   }
   
-  // 查询现有快照
-  const { data: existingSnapshot, error: existingError } = await supabase
+  // 查询现有快照（用于确定 owner_id）
+  const { data: existingSnapshot } = await supabase
     .from(SUPABASE_TABLE)
     .select('owner_id')
     .eq('key', SUPABASE_DEFAULT_KEY)
     .maybeSingle();
   
-  if (existingError) {
-    console.error('❌ 查询现有快照失败:', existingError);
-    alert("❌ 查询快照失败：" + existingError.message);
-    return;
-  }
+  // ✅ 修复：如果快照存在，保持原有所有者；如果不存在，使用 auth.uid()
+  // 这样 upsert 时：
+  // - 如果记录存在：执行 UPDATE，保持原有 owner_id（RLS UPDATE 策略检查权限）
+  // - 如果记录不存在：执行 INSERT，owner_id = auth.uid()（满足 RLS INSERT 策略）
+  const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
   
-  console.log('🔍 快照检查:', { 
-    exists: !!existingSnapshot, 
+  console.log('✅ 确定所有者ID:', ownerId);
+  console.log('✅ 当前用户ID (auth.uid):', authUidForUpsert);
+  console.log('🔍 快照状态:', {
+    exists: !!existingSnapshot,
     existingOwnerId: existingSnapshot?.owner_id,
-    authUid: authUidForUpsert,
+    finalOwnerId: ownerId,
     isOwner: existingSnapshot?.owner_id === authUidForUpsert,
     hasPermission: hasPermission,
     isAdmin: isAdminUser
   });
   
-  // ⚠️ 关键：在 UPDATE 前，再次验证权限（确保 RLS 策略能通过）
-  if (existingSnapshot) {
-    // 如果不是所有者，验证是否有权限
-    if (existingSnapshot.owner_id !== authUidForUpsert && !isAdminUser) {
-      // 再次检查权限记录是否存在
-      const { data: permCheck, error: permCheckErr } = await supabase
-        .from('permissions')
-        .select('*')
-        .eq('resource_id', SUPABASE_DEFAULT_KEY)
-        .eq('resource_type', 'snapshot')
-        .eq('user_id', authUidForUpsert)
-        .eq('status', 'active')
-        .eq('permission_type', 'edit')
-        .maybeSingle();
-      
-      console.log('🔍 UPDATE 前权限验证:', {
-        hasPermissionRecord: !!permCheck,
-        permissionRecord: permCheck,
-        permCheckError: permCheckErr,
-        authUid: authUidForUpsert,
-        resourceId: SUPABASE_DEFAULT_KEY
-      });
-      
-      if (!permCheck && !hasPermission) {
-        console.error('❌ UPDATE 前权限验证失败：没有权限记录');
-        alert("❌ 您没有权限更新此快照\n\n请确保您有编辑权限，或联系资源所有者");
-        return;
-      }
-    }
-  }
-  
-  let err1 = null;
-  
-  if (existingSnapshot) {
-    // ✅ 记录已存在：使用 UPDATE，保持原有 owner_id
-    // RLS UPDATE 策略会检查权限（所有者或有 edit 权限的用户）
-    console.log('💾 开始更新默认快照（UPDATE）...');
-    console.log('🔍 UPDATE 操作详情:', {
-      key: SUPABASE_DEFAULT_KEY,
-      ownerId: existingSnapshot.owner_id,
-      authUid: authUidForUpsert,
-      isOwner: existingSnapshot.owner_id === authUidForUpsert,
-      hasPermission: hasPermission,
-      isAdmin: isAdminUser
-    });
-    
-    const { error: updateErr } = await supabase
-      .from(SUPABASE_TABLE)
-      .update({ 
-        payload, 
-        updated_at: new Date(now).toISOString() 
-      })
-      .eq('key', SUPABASE_DEFAULT_KEY);
-    err1 = updateErr || null;
-  } else {
-    // ✅ 记录不存在：使用 INSERT，owner_id 必须等于 auth.uid()
-    // RLS INSERT 策略要求 owner_id = auth.uid()
-    console.log('💾 开始创建默认快照（INSERT）...');
-    const { error: insertErr } = await supabase
-      .from(SUPABASE_TABLE)
-      .insert({
-        key: SUPABASE_DEFAULT_KEY,
-        payload,
-        owner_id: authUidForUpsert, // ✅ 关键：INSERT 必须使用 auth.uid()
-        updated_at: new Date(now).toISOString(),
-      });
-    err1 = insertErr || null;
-  }
+  // 保存默认快照（使用 upsert）
+  console.log('💾 开始保存默认快照...');
+  const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
+    key: SUPABASE_DEFAULT_KEY,
+    payload,
+    owner_id: ownerId, // ✅ 现在正确了：存在则保持原 owner_id，不存在则使用 auth.uid()
+    updated_at: new Date(now).toISOString(),
+  });
   
   if (err1) {
     console.error('❌ 保存默认快照失败:', err1);
@@ -1274,8 +1216,8 @@ async function cloudSave() {
       details: err1.details,
       hint: err1.hint,
       existingSnapshot: !!existingSnapshot,
-      authUid: authUidForUpsert,
-      operation: existingSnapshot ? 'UPDATE' : 'INSERT'
+      ownerId: ownerId,
+      authUid: authUidForUpsert
     });
     alert("❌ 保存默认快照失败：" + err1.message + "\n\n错误详情请查看浏览器控制台（F12）");
     return;

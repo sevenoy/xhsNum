@@ -1192,20 +1192,22 @@ async function cloudSave() {
   
   // ✅ 修复：如果快照存在，保持原有所有者；如果不存在，使用 auth.uid()
   const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
+  const isOwner = existingSnapshot?.owner_id === authUidForUpsert;
   
   console.log('🔍 快照保存前检查:', {
     exists: !!existingSnapshot,
     existingOwnerId: existingSnapshot?.owner_id,
     finalOwnerId: ownerId,
     authUid: authUidForUpsert,
-    isOwner: existingSnapshot?.owner_id === authUidForUpsert,
+    isOwner: isOwner,
     hasPermission: hasPermission,
     isAdmin: isAdminUser
   });
   
-  // ⚠️ 关键：在 UPDATE 前，验证权限记录是否存在（用于诊断）
-  if (existingSnapshot && existingSnapshot.owner_id !== authUidForUpsert && !isAdminUser) {
-    // 被授权用户：验证权限记录
+  // ⚠️ 关键：在 UPDATE 前，严格验证权限
+  // 如果快照存在且不是所有者，必须有权限记录才能 UPDATE
+  if (existingSnapshot && !isOwner && !isAdminUser) {
+    // 被授权用户：必须验证权限记录存在
     const { data: permCheck, error: permCheckErr } = await supabase
       .from('permissions')
       .select('*')
@@ -1224,11 +1226,35 @@ async function cloudSave() {
       resourceId: SUPABASE_DEFAULT_KEY
     });
     
-    if (!permCheck && !hasPermission) {
+    // ⚠️ 关键：如果权限记录不存在，必须阻止 UPDATE
+    if (!permCheck) {
       console.error('❌ UPDATE 前权限验证失败：没有权限记录');
-      alert("❌ 您没有权限更新此快照\n\n请确保您有编辑权限，或联系资源所有者");
+      console.error('❌ 详细信息:', {
+        existingSnapshot: !!existingSnapshot,
+        isOwner: isOwner,
+        hasPermission: hasPermission,
+        isAdmin: isAdminUser,
+        permCheckError: permCheckErr
+      });
+      alert(
+        "❌ 您没有权限更新此快照\n\n" +
+        "原因：没有找到有效的编辑权限记录\n\n" +
+        "💡 解决方案：\n" +
+        "1. 请联系资源所有者授予编辑权限\n" +
+        "2. 或者在权限管理页面检查权限记录是否存在\n\n" +
+        "错误详情请查看浏览器控制台（F12）"
+      );
       return;
     }
+    
+    // 验证权限记录是否过期
+    if (permCheck.expired_at && new Date(permCheck.expired_at) < new Date()) {
+      console.error('❌ 权限记录已过期');
+      alert("❌ 您的编辑权限已过期\n\n请联系资源所有者重新授权");
+      return;
+    }
+    
+    console.log('✅ 权限记录验证通过，可以执行 UPDATE');
   }
   
   // 保存默认快照（使用 upsert）

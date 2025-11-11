@@ -1178,19 +1178,67 @@ async function cloudSave() {
   }
   
   // 查询现有快照
-  const { data: existingSnapshot } = await supabase
+  const { data: existingSnapshot, error: existingError } = await supabase
     .from(SUPABASE_TABLE)
     .select('owner_id')
     .eq('key', SUPABASE_DEFAULT_KEY)
     .maybeSingle();
   
+  if (existingError) {
+    console.error('❌ 查询现有快照失败:', existingError);
+    alert("❌ 查询快照失败：" + existingError.message);
+    return;
+  }
+  
   // ✅ 修复：如果快照存在，保持原有所有者；如果不存在，使用 auth.uid()
   const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
-  console.log('✅ 确定所有者ID:', ownerId);
-  console.log('✅ 当前用户ID (auth.uid):', authUidForUpsert);
+  
+  console.log('🔍 快照保存前检查:', {
+    exists: !!existingSnapshot,
+    existingOwnerId: existingSnapshot?.owner_id,
+    finalOwnerId: ownerId,
+    authUid: authUidForUpsert,
+    isOwner: existingSnapshot?.owner_id === authUidForUpsert,
+    hasPermission: hasPermission,
+    isAdmin: isAdminUser
+  });
+  
+  // ⚠️ 关键：在 UPDATE 前，验证权限记录是否存在（用于诊断）
+  if (existingSnapshot && existingSnapshot.owner_id !== authUidForUpsert && !isAdminUser) {
+    // 被授权用户：验证权限记录
+    const { data: permCheck, error: permCheckErr } = await supabase
+      .from('permissions')
+      .select('*')
+      .eq('resource_id', SUPABASE_DEFAULT_KEY)
+      .eq('resource_type', 'snapshot')
+      .eq('user_id', authUidForUpsert)
+      .eq('status', 'active')
+      .eq('permission_type', 'edit')
+      .maybeSingle();
+    
+    console.log('🔍 UPDATE 前权限记录检查:', {
+      hasPermissionRecord: !!permCheck,
+      permissionRecord: permCheck,
+      permCheckError: permCheckErr,
+      authUid: authUidForUpsert,
+      resourceId: SUPABASE_DEFAULT_KEY
+    });
+    
+    if (!permCheck && !hasPermission) {
+      console.error('❌ UPDATE 前权限验证失败：没有权限记录');
+      alert("❌ 您没有权限更新此快照\n\n请确保您有编辑权限，或联系资源所有者");
+      return;
+    }
+  }
   
   // 保存默认快照（使用 upsert）
-  console.log('💾 开始保存默认快照...');
+  console.log('💾 开始保存默认快照（upsert）...', {
+    key: SUPABASE_DEFAULT_KEY,
+    ownerId: ownerId,
+    authUid: authUidForUpsert,
+    operation: existingSnapshot ? 'UPDATE' : 'INSERT'
+  });
+  
   const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
     key: SUPABASE_DEFAULT_KEY,
     payload,
@@ -1200,7 +1248,36 @@ async function cloudSave() {
   
   if (err1) {
     console.error('❌ 保存默认快照失败:', err1);
-    alert("❌ 保存默认快照失败：" + err1.message);
+    console.error('❌ 完整错误详情:', {
+      code: err1.code,
+      message: err1.message,
+      details: err1.details,
+      hint: err1.hint,
+      existingSnapshot: !!existingSnapshot,
+      ownerId: ownerId,
+      authUid: authUidForUpsert,
+      hasPermission: hasPermission,
+      isAdmin: isAdminUser
+    });
+    
+    // 如果是 RLS 错误，提供更详细的提示
+    if (err1.message && err1.message.includes('row-level security')) {
+      alert(
+        "❌ 保存失败（RLS 策略错误）\n\n" +
+        "错误信息：" + err1.message + "\n\n" +
+        "💡 可能的原因：\n" +
+        "1. permissions 表的 RLS 策略阻止了权限查询\n" +
+        "2. 权限记录不存在或已过期\n" +
+        "3. UPDATE 策略无法验证权限\n\n" +
+        "💡 解决方案：\n" +
+        "1. 执行 SQL 脚本：修复-permissions表RLS策略.sql\n" +
+        "2. 检查权限记录是否存在且有效\n" +
+        "3. 联系管理员检查 RLS 策略\n\n" +
+        "错误详情请查看浏览器控制台（F12）"
+      );
+    } else {
+      alert("❌ 保存默认快照失败：" + err1.message + "\n\n错误详情请查看浏览器控制台（F12）");
+    }
     return;
   }
   console.log('✅ 默认快照保存成功');

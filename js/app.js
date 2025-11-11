@@ -1086,38 +1086,23 @@ async function cloudSave() {
     const isAdminUser = isAdmin();
     console.log('🔍 权限检查结果:', { hasPermission, isAdmin: isAdminUser });
     
+    // ⚠️ 关键修复：严格的权限检查逻辑
+    // checkPermission 已经检查了所有者和权限记录
+    // 如果返回 false，说明既不是所有者，也没有权限记录
     if (!hasPermission && !isAdminUser) {
-    // 如果不是所有者且没有编辑权限，检查是否是默认快照的所有者
-      console.log('⚠️ 没有编辑权限，检查是否是所有者...');
-      const { data: snapshot, error: snapshotError } = await supabase
-      .from(SUPABASE_TABLE)
-      .select('owner_id')
-      .eq('key', SUPABASE_DEFAULT_KEY)
-      .maybeSingle();
-    
-      if (snapshotError) {
-        console.error('❌ 查询快照失败:', snapshotError);
-        alert("❌ 查询快照失败：" + snapshotError.message);
-        return;
-      }
-      
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId) {
-        alert("❌ 无法获取用户信息，请重新登录");
-        return;
-      }
-      
-      console.log('🔍 所有者检查:', { 
-        snapshotOwner: snapshot?.owner_id, 
-        currentUserId,
-        isOwner: snapshot?.owner_id === currentUserId 
-      });
-      
-      if (snapshot && snapshot.owner_id !== currentUserId) {
-      alert("❌ 您没有权限修改此资源\n\n只有资源所有者或有编辑权限的用户可以保存");
+      console.error('❌ 权限检查失败：既不是所有者，也没有编辑权限');
+      alert(
+        "❌ 您没有权限修改此资源\n\n" +
+        "原因：\n" +
+        "1. 您不是资源所有者\n" +
+        "2. 没有找到有效的编辑权限记录\n\n" +
+        "💡 解决方案：\n" +
+        "1. 请联系资源所有者授予编辑权限\n" +
+        "2. 或者在权限管理页面检查权限记录是否存在\n\n" +
+        "错误详情请查看浏览器控制台（F12）"
+      );
       return;
     }
-  }
     
     console.log('✅ 权限检查通过，开始收集数据...');
     

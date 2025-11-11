@@ -1191,8 +1191,42 @@ async function cloudSave() {
   console.log('🔍 快照检查:', { 
     exists: !!existingSnapshot, 
     existingOwnerId: existingSnapshot?.owner_id,
-    authUid: authUidForUpsert 
+    authUid: authUidForUpsert,
+    isOwner: existingSnapshot?.owner_id === authUidForUpsert,
+    hasPermission: hasPermission,
+    isAdmin: isAdminUser
   });
+  
+  // ⚠️ 关键：在 UPDATE 前，再次验证权限（确保 RLS 策略能通过）
+  if (existingSnapshot) {
+    // 如果不是所有者，验证是否有权限
+    if (existingSnapshot.owner_id !== authUidForUpsert && !isAdminUser) {
+      // 再次检查权限记录是否存在
+      const { data: permCheck, error: permCheckErr } = await supabase
+        .from('permissions')
+        .select('*')
+        .eq('resource_id', SUPABASE_DEFAULT_KEY)
+        .eq('resource_type', 'snapshot')
+        .eq('user_id', authUidForUpsert)
+        .eq('status', 'active')
+        .eq('permission_type', 'edit')
+        .maybeSingle();
+      
+      console.log('🔍 UPDATE 前权限验证:', {
+        hasPermissionRecord: !!permCheck,
+        permissionRecord: permCheck,
+        permCheckError: permCheckErr,
+        authUid: authUidForUpsert,
+        resourceId: SUPABASE_DEFAULT_KEY
+      });
+      
+      if (!permCheck && !hasPermission) {
+        console.error('❌ UPDATE 前权限验证失败：没有权限记录');
+        alert("❌ 您没有权限更新此快照\n\n请确保您有编辑权限，或联系资源所有者");
+        return;
+      }
+    }
+  }
   
   let err1 = null;
   
@@ -1200,6 +1234,15 @@ async function cloudSave() {
     // ✅ 记录已存在：使用 UPDATE，保持原有 owner_id
     // RLS UPDATE 策略会检查权限（所有者或有 edit 权限的用户）
     console.log('💾 开始更新默认快照（UPDATE）...');
+    console.log('🔍 UPDATE 操作详情:', {
+      key: SUPABASE_DEFAULT_KEY,
+      ownerId: existingSnapshot.owner_id,
+      authUid: authUidForUpsert,
+      isOwner: existingSnapshot.owner_id === authUidForUpsert,
+      hasPermission: hasPermission,
+      isAdmin: isAdminUser
+    });
+    
     const { error: updateErr } = await supabase
       .from(SUPABASE_TABLE)
       .update({ 

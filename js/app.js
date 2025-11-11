@@ -1165,65 +1165,100 @@ async function cloudSave() {
     view,
   };
 
-  // ⚠️ 关键修复：获取 auth.uid() 用于 upsert 操作
-  // 使用 upsert 可以自动处理"存在则更新，不存在则插入"，避免主键冲突
+  // ⚠️ 关键修复：为被授权用户创建独立快照，避免主键冲突和 RLS 策略问题
+  // 问题分析：
+  // - 被授权用户尝试保存默认快照（key = 'default'）时，'default' 已存在且属于其他用户
+  // - upsert 尝试 UPDATE 失败（owner_id 不匹配 auth.uid()）
+  // - 回退到 INSERT，但 key='default' 已存在 → 主键冲突
+  // 解决方案：被授权用户保存到自己的独立快照，而不是覆盖原快照
+  
   const { data: { session: upsertSession } } = await supabase.auth.getSession();
   const authUidForUpsert = upsertSession?.user?.id;
   if (!authUidForUpsert) {
-    console.error('❌ 无法获取 Supabase 会话用户 ID（用于 upsert）');
+    console.error('❌ 无法获取 Supabase 会话用户 ID（用于保存操作）');
     alert("❌ 无法获取用户信息，请重新登录");
     return;
   }
   
-  // 查询现有快照（用于确定 owner_id）
-  const { data: existingSnapshot } = await supabase
+  // 检查是否是原快照的所有者
+  const { data: existingSnapshot, error: existingError } = await supabase
     .from(SUPABASE_TABLE)
     .select('owner_id')
     .eq('key', SUPABASE_DEFAULT_KEY)
     .maybeSingle();
   
-  // ✅ 修复：如果快照存在，保持原有所有者；如果不存在，使用 auth.uid()
-  // 这样 upsert 时：
-  // - 如果记录存在：执行 UPDATE，保持原有 owner_id（RLS UPDATE 策略检查权限）
-  // - 如果记录不存在：执行 INSERT，owner_id = auth.uid()（满足 RLS INSERT 策略）
-  const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
+  if (existingError) {
+    console.error('❌ 查询现有快照失败:', existingError);
+    alert("❌ 查询快照失败：" + existingError.message);
+    return;
+  }
   
-  console.log('✅ 确定所有者ID:', ownerId);
-  console.log('✅ 当前用户ID (auth.uid):', authUidForUpsert);
-  console.log('🔍 快照状态:', {
+  const isOwner = existingSnapshot?.owner_id === authUidForUpsert;
+  
+  console.log('🔍 快照所有权检查:', {
     exists: !!existingSnapshot,
     existingOwnerId: existingSnapshot?.owner_id,
-    finalOwnerId: ownerId,
-    isOwner: existingSnapshot?.owner_id === authUidForUpsert,
+    currentAuthUid: authUidForUpsert,
+    isOwner: isOwner,
     hasPermission: hasPermission,
     isAdmin: isAdminUser
   });
   
-  // 保存默认快照（使用 upsert）
-  console.log('💾 开始保存默认快照...');
+  // 决定保存策略
+  let saveKey, saveOwnerId, saveMessage;
+  
+  if (isOwner || isAdminUser) {
+    // ✅ 所有者或管理员：保存到默认快照
+    saveKey = SUPABASE_DEFAULT_KEY;
+    saveOwnerId = existingSnapshot?.owner_id || authUidForUpsert;
+    saveMessage = '默认快照';
+    console.log('✅ 所有者/管理员：保存到默认快照');
+  } else {
+    // ✅ 被授权用户：保存到自己的独立快照
+    saveKey = `user_${authUidForUpsert}_default`;
+    saveOwnerId = authUidForUpsert; // 被授权用户的快照，owner_id 必须是他们自己
+    
+    // 提示用户
+    const userName = getCurrentUserName();
+    const confirmMsg = `您不是此快照的所有者，将保存到您自己的工作副本：\n"${userName}的工作副本"\n\n是否继续？`;
+    
+    if (!confirm(confirmMsg)) {
+      console.log('ℹ️ 用户取消了保存操作');
+      return;
+    }
+    
+    saveMessage = '您的工作副本';
+    console.log('✅ 被授权用户：保存到独立快照', { saveKey, saveOwnerId });
+  }
+  
+  // 保存快照（使用 upsert）
+  console.log('💾 开始保存快照...', { key: saveKey, ownerId: saveOwnerId });
   const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
-    key: SUPABASE_DEFAULT_KEY,
+    key: saveKey,
     payload,
-    owner_id: ownerId, // ✅ 现在正确了：存在则保持原 owner_id，不存在则使用 auth.uid()
+    owner_id: saveOwnerId, // ✅ 关键：所有者保持原 owner_id，被授权用户使用自己的 auth.uid()
     updated_at: new Date(now).toISOString(),
   });
   
   if (err1) {
-    console.error('❌ 保存默认快照失败:', err1);
+    console.error('❌ 保存快照失败:', err1);
     console.error('❌ 错误详情:', {
       code: err1.code,
       message: err1.message,
       details: err1.details,
       hint: err1.hint,
-      existingSnapshot: !!existingSnapshot,
-      ownerId: ownerId,
-      authUid: authUidForUpsert
+      saveKey: saveKey,
+      saveOwnerId: saveOwnerId,
+      authUid: authUidForUpsert,
+      isOwner: isOwner
     });
-    alert("❌ 保存默认快照失败：" + err1.message + "\n\n错误详情请查看浏览器控制台（F12）");
+    alert("❌ 保存快照失败：" + err1.message + "\n\n错误详情请查看浏览器控制台（F12）");
     return;
   }
-  console.log('✅ 默认快照保存成功');
-  console.log('✅ 默认快照保存成功，开始保存历史快照...');
+  
+  console.log('✅ 快照保存成功:', { key: saveKey, message: saveMessage });
+  alert(`✅ 已保存到${saveMessage}\n操作人：${getCurrentUserName()}`);
+  console.log('✅ 主快照保存成功，开始保存历史快照...');
 
     // ✅ 历史快照：始终使用当前用户作为所有者（被授权人创建自己的历史快照）
     // ⚠️ 关键修复：直接使用 Supabase 会话的 auth.uid()，确保与 RLS 策略匹配
@@ -1236,6 +1271,7 @@ async function cloudSave() {
     return;
   }
 
+  // 历史快照使用时间戳作为 key，确保唯一性
   const histKey = `snap_${now}`;
     
     console.log('💾 准备创建历史快照:', { 

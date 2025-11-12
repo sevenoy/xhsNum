@@ -442,17 +442,23 @@ td.col-wx {
   width: calc(var(--w-wx) * var(--colScale));
 }
 
-/* ✅ 小红书名称：桌面左对齐 */
+/* ✅ 小红书名称：桌面左对齐，显示12个汉字 */
 th.col-xhs,
 td.col-xhs {
   width: calc(var(--w-xhs) * var(--colScale));
   text-align: left; /* ✅ 优化：改为左对齐 */
   max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* ✅ 备注列：宽度与小红书名称列一致 */
 th.col-note,
 td.col-note {
-  width: calc(var(--w-note) * var(--colScale));
+  width: calc(var(--w-xhs) * var(--colScale)); /* ✅ 优化：与小红书名称列宽度一致 */
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 th.col-cat,

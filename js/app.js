@@ -675,7 +675,7 @@ function makeRowTr(r) {
   const cats = readCats();
   // ✅ 使用原始版本的背景色计算方式
   const bg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "";
-  const xhsDisplay = truncateText(r.xhs_name, 10);
+  const xhsDisplay = truncateText(r.xhs_name, 12); /* ✅ 优化：显示12个汉字 */
   
   return `<tr data-id="${r.id}">
     ${tdEditable("col-phone", r.phone, "phone", r.id)}

@@ -425,12 +425,12 @@ td.col-phone {
 
 th.col-owner,
 td.col-owner {
-  width: calc(var(--w-owner) * var(--colScale));
+  width: 100px; /* ✅ 优化：固定宽度100px，不受colScale影响 */
 }
 
 th.col-real,
 td.col-real {
-  width: calc(var(--w-real) * var(--colScale));
+  width: 100px; /* ✅ 优化：固定宽度100px，不受colScale影响 */
 }
 
 th.col-wx,

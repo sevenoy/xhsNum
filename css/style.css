@@ -425,16 +425,16 @@ td.col-phone {
 
 th.col-owner,
 td.col-owner {
-  width: 100px !important; /* ✅ 优化：固定宽度100px，不受colScale影响 */
-  min-width: 100px !important;
-  max-width: 100px !important;
+  width: 55px !important; /* ✅ 优化：固定宽度55px，不受colScale影响 */
+  min-width: 55px !important;
+  max-width: 55px !important;
 }
 
 th.col-real,
 td.col-real {
-  width: 100px !important; /* ✅ 优化：固定宽度100px，不受colScale影响 */
-  min-width: 100px !important;
-  max-width: 100px !important;
+  width: 55px !important; /* ✅ 优化：固定宽度55px，不受colScale影响 */
+  min-width: 55px !important;
+  max-width: 55px !important;
 }
 
 th.col-wx,

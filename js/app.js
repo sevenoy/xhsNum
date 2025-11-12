@@ -1914,16 +1914,22 @@ function bindEvents() {
     applyView(v);
   });
 
-  $("#titleColor").addEventListener("input", () => {
+  $("#titleColor").addEventListener("input", (e) => {
     const v = readView();
-    v.titleColor = $("#titleColor").value || "#208BEE"; // ✅ 优化：使用新的默认颜色
+    const newColor = e.target.value || "#208BEE"; // ✅ 优化：使用新的默认颜色
+    v.titleColor = newColor;
+    // ✅ 优化：实时同步颜色选择器显示
+    $("#titleColor").value = newColor;
     saveView(v);
     applyView(v);
   });
 
-  $("#btnColor").addEventListener("input", () => {
+  $("#btnColor").addEventListener("input", (e) => {
     const v = readView();
-    v.btnColor = $("#btnColor").value || "#639BD5"; // ✅ 优化：使用新的默认颜色
+    const newColor = e.target.value || "#639BD5"; // ✅ 优化：使用新的默认颜色
+    v.btnColor = newColor;
+    // ✅ 优化：实时同步颜色选择器显示
+    $("#btnColor").value = newColor;
     saveView(v);
     applyView(v);
   });
@@ -1957,9 +1963,12 @@ function bindEvents() {
     renderTable();
   });
 
-  $("#zebraColor").addEventListener("input", () => {
+  $("#zebraColor").addEventListener("input", (e) => {
     const v = readView();
-    v.zebraColor = $("#zebraColor").value || "#e2f0ff";
+    const newColor = e.target.value || "#e2f0ff";
+    v.zebraColor = newColor;
+    // ✅ 优化：实时同步颜色选择器显示
+    $("#zebraColor").value = newColor;
     saveView(v);
     applyView(v);
     renderTable();

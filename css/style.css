@@ -477,13 +477,13 @@ td[contenteditable="true"]:focus-visible {
 
 td.col-cat select {
   width: 100%;
-  min-width: 80px;
+  min-width: 120px; /* ✅ 优化：增加最小宽度，确保至少显示8个文字 */
   font-size: 13px;
-  height: 32px; /* ✅ 优化：增加高度，确保文字完整显示 */
-  padding: 4px 8px; /* ✅ 优化：增加内边距 */
+  height: 32px;
+  padding: 4px 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  line-height: 1.5; /* ✅ 优化：设置行高 */
+  line-height: 1.5;
 }
 
 td.col-cat select:hover {
@@ -767,8 +767,8 @@ td.col-cat select:focus {
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 48px; /* ✅ 优化：增加最小高度，确保下拉列表文字完整显示 */
-  height: 48px; /* ✅ 优化：固定高度，确保显示一致 */
+  min-height: 96px; /* ✅ 优化：高度增加1倍（从48px到96px），确保下拉列表文字完整显示 */
+  height: 96px; /* ✅ 优化：固定高度，确保显示一致 */
   line-height: 1.6; /* ✅ 优化：增加行高，优化文字显示 */
   box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
 }

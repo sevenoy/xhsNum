@@ -244,32 +244,26 @@ function truncateText(text, maxChars = 10) {
  * ========================= */
 
 async function getCurrentUserId() {
-  // ✅ 优先从 Supabase 会话获取（最准确）
-  if (supabase) {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id) {
-        return session.user.id;
-      }
-    } catch (error) {
+  if (!supabase) {
+    console.warn('⚠️ Supabase 未初始化，返回 null');
+    return null;
+  }
+
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
       console.error('获取 Supabase 会话失败:', error);
+      return null;
     }
+    const uid = session?.user?.id || null;
+    if (!uid) {
+      console.error('⚠️ 当前没有登录用户');
+    }
+    return uid;
+  } catch (error) {
+    console.error('获取 Supabase 会话异常:', error);
+    return null;
   }
-  
-  // ✅ 降级：从 window.currentUser 获取
-  if (window.currentUser?.id && window.currentUser.id !== 'anonymous') {
-    return window.currentUser.id;
-  }
-  
-  // ✅ 降级：从 localStorage 获取
-  const storedId = localStorage.getItem('xhs_user_id');
-  if (storedId && storedId !== 'anonymous') {
-    return storedId;
-  }
-  
-  // ❌ 如果都没有，返回 null（而不是 'anonymous'）
-  console.error('⚠️ 无法获取当前用户 ID，用户可能未登录');
-  return null;
 }
 
 function getCurrentUserName() {
@@ -286,101 +280,83 @@ function getCurrentUserEmail() {
 
 // 检查用户是否有权限访问资源
 async function checkPermission(resourceId, resourceType, permissionType = 'view') {
-  if (!supabase) return false;
-  
-  // ⚠️ 关键修复：直接使用 auth.uid() 而不是 getCurrentUserId()
-  // 因为权限表中的 user_id 是 Supabase 的 auth.uid()
-  // 如果 getCurrentUserId() 返回的 ID 与 auth.uid() 不匹配，查询会失败
-  const { data: { session } } = await supabase.auth.getSession();
-  const authUid = session?.user?.id;
-  
-  if (!authUid) {
-    console.error('❌ 无法获取 Supabase 会话用户 ID，权限检查失败');
+  if (!supabase) {
+    console.warn('⚠️ Supabase 未初始化，跳过权限检查');
     return false;
   }
-  
-  // 同时获取 getCurrentUserId() 用于对比和日志
-  const currentUserId = await getCurrentUserId();
-  
-  console.log('🔍 权限检查:', { 
-    resourceId, 
-    resourceType, 
-    permissionType, 
-    authUid,
-    currentUserId,
-    isMatch: authUid === currentUserId
-  });
-  
+
   try {
-    // 1. 检查是否是资源所有者
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('❌ 获取 Supabase 会话失败:', error);
+      return false;
+    }
+
+    const authUid = session?.user?.id;
+    if (!authUid) {
+      console.error('❌ 当前没有登录用户，无法执行权限检查');
+      return false;
+    }
+
+    console.log('🔍 权限检查:', { resourceId, resourceType, permissionType, authUid });
+
     if (resourceType === 'snapshot') {
-      const { data: snapshot } = await supabase
+      const { data: snapshot, error: snapshotError } = await supabase
         .from(SUPABASE_TABLE)
         .select('owner_id')
         .eq('key', resourceId)
         .maybeSingle();
-      
-      console.log('🔍 所有者检查:', { 
-        snapshotOwner: snapshot?.owner_id, 
-        authUid: authUid,
-        currentUserId: currentUserId,
-        isOwner: snapshot?.owner_id === authUid 
-      });
-      
-      if (snapshot && snapshot.owner_id === authUid) {
-        console.log('✅ 是资源所有者，拥有所有权限');
-        return true; // 所有者有所有权限
+
+      if (snapshotError) {
+        console.error('❌ 查询快照所有者失败:', snapshotError);
+        return false;
+      }
+
+      if (snapshot?.owner_id === authUid) {
+        console.log('✅ 当前用户是资源所有者');
+        return true;
       }
     }
-    
-    // 2. 检查是否被授予权限
-    // ⚠️ 关键修复：使用 auth.uid() 查询权限，确保与权限表中的 user_id 匹配
+
     const { data: permission, error: permError } = await supabase
       .from('permissions')
       .select('*')
       .eq('resource_id', resourceId)
       .eq('resource_type', resourceType)
-      .eq('user_id', authUid)  // ✅ 使用 auth.uid() 而不是 getCurrentUserId()
+      .eq('user_id', authUid)
       .eq('status', 'active')
       .maybeSingle();
-    
+
     if (permError) {
-      console.error('查询权限失败:', permError);
+      console.error('❌ 查询权限记录失败:', permError);
       return false;
     }
-    
+
     if (!permission) {
       console.log('❌ 未找到权限记录', { resourceId, resourceType, authUid });
       return false;
     }
-    
-    console.log('✅ 找到权限记录:', permission);
-    
-    // 3. 检查权限是否过期
+
     if (permission.expired_at && new Date(permission.expired_at) < new Date()) {
-      // 自动标记为过期
+      console.warn('⚠️ 权限记录已过期，自动标记为 expired');
       await supabase
         .from('permissions')
         .update({ status: 'expired' })
         .eq('id', permission.id);
       return false;
     }
-    
-    // 4. 检查权限类型
-    if (permissionType === 'view') {
-      const hasView = permission.permission_type === 'view' || permission.permission_type === 'edit';
-      console.log('✅ 查看权限检查:', hasView, '权限类型:', permission.permission_type);
-      return hasView;
-    } else if (permissionType === 'edit') {
+
+    if (permissionType === 'edit') {
       const hasEdit = permission.permission_type === 'edit';
-      console.log('✅ 编辑权限检查:', hasEdit, '权限类型:', permission.permission_type);
+      console.log('✅ 编辑权限检查:', hasEdit);
       return hasEdit;
     }
-    
-    return false;
-    
+
+    const hasView = permission.permission_type === 'view' || permission.permission_type === 'edit';
+    console.log('✅ 查看权限检查:', hasView);
+    return hasView;
   } catch (err) {
-    console.error('权限检查失败:', err);
+    console.error('❌ 权限检查失败:', err);
     return false;
   }
 }
@@ -1072,229 +1048,144 @@ async function cloudHealthCheck() {
 
 async function cloudSave() {
   try {
-    console.log('🔄 开始保存云端... [cloudSave fix v2025-11-11]');
-    
-  if (!supabase) {
-    alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
-    return;
-  }
-    
-    console.log('✅ Supabase 已配置，开始权限检查...');
-  
-  // ✅ 权限检查：检查是否有权限保存（默认快照）
-  const hasPermission = await checkPermission(SUPABASE_DEFAULT_KEY, 'snapshot', 'edit');
-    const isAdminUser = isAdmin();
-    console.log('🔍 权限检查结果:', { hasPermission, isAdmin: isAdminUser });
-    
-      if (!hasPermission && !isAdminUser) {
-    // 如果不是所有者且没有编辑权限，检查是否是默认快照的所有者
-      console.log('⚠️ 没有编辑权限，检查是否是所有者...');
-      const { data: snapshot, error: snapshotError } = await supabase
-      .from(SUPABASE_TABLE)
-      .select('owner_id')
-      .eq('key', SUPABASE_DEFAULT_KEY)
-      .maybeSingle();
-    
-      if (snapshotError) {
-        console.error('❌ 查询快照失败:', snapshotError);
-        alert("❌ 查询快照失败：" + snapshotError.message);
-        return;
-      }
-      
-      const currentUserId = await getCurrentUserId();
-      if (!currentUserId) {
-        alert("❌ 无法获取用户信息，请重新登录");
-        return;
-      }
-      
-      console.log('🔍 所有者检查:', { 
-        snapshotOwner: snapshot?.owner_id, 
-        currentUserId,
-        isOwner: snapshot?.owner_id === currentUserId 
-      });
-      
-      if (snapshot && snapshot.owner_id !== currentUserId) {
-      alert("❌ 您没有权限修改此资源\n\n只有资源所有者或有编辑权限的用户可以保存");
+    console.log('🔄 开始保存云端... [RLS Deep Dive 方案]');
+
+    if (!supabase) {
+      alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
       return;
     }
-  }
-    
-    console.log('✅ 权限检查通过，开始收集数据...');
-    
-    // ✅ 获取当前用户 ID（用于后续操作）
-    const currentUserId = await getCurrentUserId();
-    if (!currentUserId) {
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('❌ 获取会话失败:', sessionError);
       alert("❌ 无法获取用户信息，请重新登录");
       return;
     }
-    
-    console.log('✅ 当前用户ID:', currentUserId);
-  
-  const all = await getAllRows();
-  const cats = readCats();
-  const view = readView();
-    
-    console.log('✅ 数据收集完成:', { 
-      rowsCount: all.length, 
-      catsCount: cats.length 
-    });
 
-  const label = prompt("输入快照名称（只保存名称，时间将显示在右侧）", "快照");
-    if (label == null) {
-      console.log('ℹ️ 用户取消了输入');
+    const authUid = session?.user?.id;
+    if (!authUid) {
+      console.error('❌ 当前没有登录用户');
+      alert("❌ 您尚未登录，无法保存到云端");
       return;
     }
-    
-  const snapshotName = (label || "快照").trim();
+
+    const isAdminUser = isAdmin();
+
+    const { data: existingSnapshot, error: existingError } = await supabase
+      .from(SUPABASE_TABLE)
+      .select('owner_id, payload')
+      .eq('key', SUPABASE_DEFAULT_KEY)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('❌ 查询默认快照失败:', existingError);
+      alert("❌ 查询默认快照失败：" + existingError.message);
+      return;
+    }
+
+    const snapshotOwnerId = existingSnapshot?.owner_id || null;
+    const isOwner = snapshotOwnerId === authUid;
+
+    if (existingSnapshot && !isOwner && !isAdminUser) {
+      const hasEditPermission = await checkPermission(SUPABASE_DEFAULT_KEY, 'snapshot', 'edit');
+      if (!hasEditPermission) {
+        alert(
+          "❌ 您没有权限更新此快照\n\n" +
+          "请联系快照所有者或管理员授予编辑权限。"
+        );
+        return;
+      }
+    }
+
+    const defaultLabel = existingSnapshot?.payload?.snapshot_label || "快照";
+    const labelInput = prompt("输入快照名称（只保存名称，时间将显示在右侧）", defaultLabel);
+    if (labelInput == null) {
+      console.log('ℹ️ 用户取消了保存操作');
+      return;
+    }
+
+    const snapshotName = labelInput.trim();
     if (!snapshotName) {
       alert("快照名称不能为空");
       return;
     }
-    
-  const now = Date.now();
-    console.log('✅ 准备保存快照:', snapshotName);
 
-  const payload = {
-    ver: 1,
-    snapshot_label: snapshotName,
-    updated_at: now,
-      updated_by: currentUserId,
-    updated_by_name: getCurrentUserName(),
-    rows: all,
-    cats,
-    view,
-  };
+    const rows = await getAllRows();
+    const cats = readCats();
+    const view = readView();
+    const now = Date.now();
 
-  // ⚠️ 关键修复：获取 auth.uid() 用于 upsert 操作
-  const { data: { session: upsertSession } } = await supabase.auth.getSession();
-  const authUidForUpsert = upsertSession?.user?.id;
-  if (!authUidForUpsert) {
-    console.error('❌ 无法获取 Supabase 会话用户 ID（用于 upsert）');
-    alert("❌ 无法获取用户信息，请重新登录");
-    return;
-  }
-  // 查询现有快照
-  const { data: existingSnapshot } = await supabase
-    .from(SUPABASE_TABLE)
-    .select('owner_id')
-    .eq('key', SUPABASE_DEFAULT_KEY)
-    .maybeSingle();
-  // ✅ 修复：如果快照存在，保持原有所有者；如果不存在，使用 auth.uid()
-  const ownerId = existingSnapshot?.owner_id || authUidForUpsert;
-  console.log('✅ 确定所有者ID:', ownerId);
-  console.log('✅ 当前用户ID (auth.uid):', authUidForUpsert);
-  // 保存默认快照（使用 upsert）
-  console.log('💾 开始保存默认快照...');
-  const { error: err1 } = await supabase.from(SUPABASE_TABLE).upsert({
-    key: SUPABASE_DEFAULT_KEY,
-    payload,
-    owner_id: ownerId,
-    updated_at: new Date(now).toISOString(),
-  });
-  if (err1) {
-    console.error('❌ 保存默认快照失败:', err1);
-    alert("❌ 保存默认快照失败：" + err1.message);
-    return;
-  }
-  console.log('✅ 默认快照保存成功');
-  console.log('✅ 默认快照保存成功，开始保存历史快照...');
+    console.log('✅ 数据收集完成，准备构建 payload');
 
-    // ✅ 历史快照：始终使用当前用户作为所有者（被授权人创建自己的历史快照）
-    // ⚠️ 关键修复：直接使用 Supabase 会话的 auth.uid()，确保与 RLS 策略匹配
-    const { data: { session } } = await supabase.auth.getSession();
-    const authUid = session?.user?.id;
-    
-    if (!authUid) {
-      console.error('❌ 无法获取 Supabase 会话用户 ID');
-      alert("❌ 无法获取用户信息，请重新登录");
-    return;
-  }
+    const payload = {
+      ver: 1,
+      snapshot_label: snapshotName,
+      updated_at: now,
+      updated_by: authUid,
+      updated_by_name: getCurrentUserName(),
+      rows,
+      cats,
+      view,
+    };
 
-  // 历史快照使用时间戳作为 key，确保唯一性
-  const histKey = `snap_${now}`;
-    
-    console.log('💾 准备创建历史快照:', { 
-      key: histKey, 
-      ownerId: authUid, // ✅ 使用 auth.uid() 而不是 currentUserId
-      currentUserId: currentUserId, // 用于对比
-      authUid: authUid,
-      isMatch: currentUserId === authUid,
-      isAuthorizedUser: !isAdminUser && hasPermission && existingSnapshot?.owner_id !== currentUserId
+    const ownerId = snapshotOwnerId || authUid;
+
+    console.log('💾 开始保存默认快照...', { ownerId, authUid });
+
+    const { error: upsertError } = await supabase.from(SUPABASE_TABLE).upsert({
+      key: SUPABASE_DEFAULT_KEY,
+      payload,
+      owner_id: ownerId,
+      updated_at: new Date(now).toISOString(),
     });
-    
-    // ✅ 关键修复：使用 auth.uid() 而不是 currentUserId
-    // RLS 策略检查的是 auth.uid()，所以 owner_id 必须等于 auth.uid()
-  const { error: err2 } = await supabase.from(SUPABASE_TABLE).insert({
-    key: histKey,
-    payload,
-      owner_id: authUid, // ✅ 使用 auth.uid()，确保与 RLS 策略匹配
-    updated_at: new Date(now).toISOString(),
-  });
-    
-  if (err2) {
-      console.error('❌ 保存历史快照失败:', err2);
-      
-      // ✅ 如果是 RLS 错误，提供更详细的提示
-      if (err2.message && err2.message.includes('row-level security')) {
-        alert(
-          "⚠️ 保存历史快照失败（RLS 策略错误）\n\n" +
-          "错误信息：" + err2.message + "\n\n" +
-          "💡 解决方案：\n" +
-          "1. 请执行 SQL 脚本：完整修复-被授权人保存云端错误.sql\n" +
-          "2. 或者联系管理员修复 RLS 策略\n\n" +
-          "✅ 默认快照已成功保存，您可以继续使用。\n" +
-          "历史快照保存失败不影响主要功能。"
-        );
-      } else {
-        alert(
-          "⚠️ 保存历史快照失败\n\n" +
-          "错误信息：" + err2.message + "\n\n" +
-          "✅ 默认快照已成功保存，您可以继续使用。\n" +
-          "历史快照保存失败不影响主要功能。\n\n" +
-          "错误详情请查看浏览器控制台（F12）"
-        );
-      }
-      
-      // ✅ 历史快照保存失败不影响主要功能，继续执行
-      // 不 return，让用户知道默认快照已保存
-      console.log('⚠️ 历史快照保存失败，但默认快照已保存，继续执行清理...');
-    } else {
-      console.log('✅ 历史快照保存成功，开始清理旧快照...');
-    }
-    
-    // ✅ 只有在历史快照保存成功时才清理旧快照
-    if (!err2) {
-  const { data: snaps, error: err3 } = await supabase
-    .from(SUPABASE_TABLE)
-    .select("key,updated_at")
-    .like("key", "snap_%")
-    .order("updated_at", { ascending: false });
-        
-      if (err3) {
-        console.error('⚠️ 查询历史快照失败（不影响保存）:', err3);
-      } else if (!err3 && Array.isArray(snaps) && snaps.length > 5) {
-    const toDelete = snaps.slice(5).map((s) => s.key);
-    if (toDelete.length) {
-          console.log('🗑️ 删除旧快照:', toDelete);
-      await supabase.from(SUPABASE_TABLE).delete().in("key", toDelete);
-    }
-  }
+
+    if (upsertError) {
+      console.error('❌ 保存默认快照失败:', upsertError);
+      alert("❌ 保存默认快照失败：" + upsertError.message);
+      return;
     }
 
-    // ✅ 根据保存结果显示不同的提示
-    if (err2) {
-      console.log('✅ 默认快照保存完成（历史快照保存失败）');
-      // 提示已经在 err2 处理中显示，这里不再重复
+    console.log('✅ 默认快照保存成功');
+
+    const histKey = `snap_${now}`;
+    const { error: historyError } = await supabase.from(SUPABASE_TABLE).insert({
+      key: histKey,
+      payload,
+      owner_id: authUid,
+      updated_at: new Date(now).toISOString(),
+    });
+
+    if (historyError) {
+      console.warn('⚠️ 保存历史快照失败（不影响主流程）:', historyError);
     } else {
-      console.log('✅ 保存完成！');
-  alert(`✅ 已保存到云端\n操作人：${getCurrentUserName()}`);
+      console.log('✅ 历史快照保存成功，开始清理旧快照');
+      const { data: historyList, error: historyQueryError } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('key, updated_at')
+        .like('key', 'snap_%')
+        .eq('owner_id', authUid)
+        .order('updated_at', { ascending: false });
+
+      if (historyQueryError) {
+        console.error('⚠️ 查询历史快照失败（不影响主流程）:', historyQueryError);
+      } else if (Array.isArray(historyList) && historyList.length > 5) {
+        const toDelete = historyList.slice(5).map((item) => item.key);
+        if (toDelete.length) {
+          console.log('🗑️ 清理旧历史快照:', toDelete);
+          await supabase.from(SUPABASE_TABLE).delete().in('key', toDelete);
+        }
+      }
     }
-    
-  await renderCloudHistory();
-    
+
+    alert(`✅ 已保存到云端\n操作人：${getCurrentUserName()}`);
+    await renderCloudHistory();
   } catch (error) {
     console.error('❌ 保存云端时发生未捕获的错误:', error);
-    alert("保存失败：发生未知错误\n\n错误信息：" + (error.message || String(error)) + "\n\n请查看浏览器控制台（F12）获取详细信息");
+    alert(
+      "保存失败：发生未知错误\n\n" +
+      "错误信息：" + (error.message || String(error)) + "\n\n" +
+      "请查看浏览器控制台（F12）获取详细信息"
+    );
   }
 }
 

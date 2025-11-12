@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>XHSPHONE</title>
+  <title>号码管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="./icon/apple-touch-icon.png?v=20251107">
@@ -14,7 +14,7 @@
 
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="XHSPHONE" />
+  <meta name="apple-mobile-web-app-title" content="号码管理" />
 
   <link rel="stylesheet" href="./css/style.css" />
 
@@ -135,7 +135,7 @@
     <!-- 顶部导航 -->
     <div class="topbar">
       <div class="top-left">
-        <h1 id="appTitle">XHSPHONE</h1>
+        <h1 id="appTitle">号码管理</h1>
       </div>
       <div class="top-right">
         <span id="onlineStatus" style="display:none; margin-right: 10px; color: #34c759; font-size: 13px;"></span>
@@ -181,9 +181,9 @@
         <button id="btnAdmin" class="ghost function-btn" data-function="admin">管理页面</button>
         <div style="position: relative; display: inline-block;">
           <button id="btnImportExport" class="ghost function-btn" data-function="importExport">导入导出</button>
-          <div id="importExportMenu" style="display:none; position:absolute; right:0; background:#fff; border:1px solid #eee; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); z-index:1000; min-width:120px;">
-            <button id="menuImport" style="display:block; width:100%; padding:8px 16px; background:none; border:none; text-align:left; cursor:pointer; white-space:nowrap;">导入数据</button>
-            <button id="menuExport" style="display:block; width:100%; padding:8px 16px; background:none; border:none; text-align:left; cursor:pointer; white-space:nowrap;">导出数据</button>
+          <div id="importExportMenu" style="display:none; position:absolute; right:0; background:#fff; border:1px solid #eee; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); z-index:1000; min-width:100px; width:auto;">
+            <button id="menuImport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:center; cursor:pointer; font-size:14px; line-height:1.6; word-break:keep-all; white-space:normal; min-height:44px;">导入<br>数据</button>
+            <button id="menuExport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:center; cursor:pointer; font-size:14px; line-height:1.6; word-break:keep-all; white-space:normal; min-height:44px; border-top:1px solid #f0f0f0;">导出<br>数据</button>
           </div>
         </div>
         <!-- 隐藏的文件输入与兼容保留 -->

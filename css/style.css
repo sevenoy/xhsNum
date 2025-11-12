@@ -22,9 +22,9 @@
   --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
     "Helvetica Neue", Helvetica, Arial, sans-serif;
 
-  --w-phone: 120px;
-  --w-owner: 110px;
-  --w-real: 110px;
+  --w-phone: 200px; /* ✅ 优化：电话号码列宽200px */
+  --w-owner: 165px; /* ✅ 优化：所属人列宽165px */
+  --w-real: 185px; /* ✅ 优化：微信实名人列宽185px */
   --w-wx: 130px;
   --w-xhs: 160px;
   --w-note: 220px;
@@ -438,11 +438,11 @@ td.col-wx {
   width: calc(var(--w-wx) * var(--colScale));
 }
 
-/* ✅ 小红书名称：桌面右对齐 */
+/* ✅ 小红书名称：桌面左对齐 */
 th.col-xhs,
 td.col-xhs {
   width: calc(var(--w-xhs) * var(--colScale));
-  text-align: right;
+  text-align: left; /* ✅ 优化：改为左对齐 */
   max-width: 160px;
 }
 
@@ -767,8 +767,8 @@ td.col-cat select:focus {
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 96px; /* ✅ 优化：高度增加1倍（从48px到96px），确保下拉列表文字完整显示 */
-  height: 96px; /* ✅ 优化：固定高度，确保显示一致 */
+  min-height: 100px; /* ✅ 优化：高度设置为100px */
+  height: 100px; /* ✅ 优化：固定高度100px */
   line-height: 1.6; /* ✅ 优化：增加行高，优化文字显示 */
   box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
 }

@@ -55,15 +55,14 @@ async function initSupabase() {
 // 默认视图
 const DEFAULT_VIEW = Object.freeze({
   viewVersion: 8,
-  pad: 6,
-  colScale: 1,
+  pad: 4, // ✅ 优化：默认行高设为最小值
+  colScale: 0.7, // ✅ 优化：默认列宽缩放设为最小值
   zebraOn: true,
   zebraColor: "#e2f0ff",
-  fontFamily:
-    '-apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif',
-  titleText: "XHSPHONE",
-  titleColor: "#1990FF",
-  btnColor: "#E2F0FF",
+  fontFamily: "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif", // ✅ 优化：默认字体改为苹方
+  titleText: "号码管理", // ✅ 优化：默认标题改为"号码管理"
+  titleColor: "#208BEE", // ✅ 优化：默认标题颜色 RGB(32, 139, 238)
+  btnColor: "#639BD5", // ✅ 优化：默认按钮颜色 RGB(99, 155, 213)
 });
 
 // 默认分类
@@ -123,12 +122,12 @@ function applyView(v) {
   root.style.setProperty("--colScale", `${v.colScale}`);
   root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
   root.style.setProperty("--font-main", v.fontFamily);
-  root.style.setProperty("--btn-default", v.btnColor || "#E2F0FF");
+  root.style.setProperty("--btn-default", v.btnColor || "#639BD5"); // ✅ 优化：使用新的默认颜色
 
   const h1 = document.getElementById("appTitle");
   if (h1) {
     h1.textContent = v.titleText;
-    h1.style.color = v.titleColor || "#1990FF";
+    h1.style.color = v.titleColor || "#208BEE"; // ✅ 优化：使用新的默认颜色
   }
 }
 
@@ -1026,8 +1025,8 @@ async function cloudHealthCheck() {
   const dot = $("#cloudDot");
   const text = $("#cloudText");
   if (!supabase) {
-    dot.style.background = "#ffcc00";
-    text.textContent = "Base 数据连接：未配置";
+    dot.style.background = "#999"; // ✅ 优化：未连接状态使用灰色
+    text.textContent = "未链接"; // ✅ 优化：简化显示文字
     return;
   }
   try {
@@ -1037,11 +1036,11 @@ async function cloudHealthCheck() {
       .eq("key", SUPABASE_DEFAULT_KEY)
       .maybeSingle();
     if (error) throw error;
-    dot.style.background = "#30d158";
-    text.textContent = "Base 数据连接：已连接";
+    dot.style.background = "#30d158"; // ✅ 优化：已连接状态使用绿色
+    text.textContent = "已链接"; // ✅ 优化：简化显示文字
   } catch (e) {
-    dot.style.background = "#ff3b30";
-    text.textContent = "Base 数据连接：失败";
+    dot.style.background = "#999"; // ✅ 优化：失败状态使用灰色
+    text.textContent = "未链接"; // ✅ 优化：简化显示文字
     console.error(e);
   }
 }
@@ -1262,6 +1261,13 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   await refreshFilters();
   applyView(readView());
   await renderTable();
+  
+  // ✅ 优化：加载完成后自动关闭快照面板
+  const panel = $("#cloudHistoryPanel");
+  if (panel) {
+    panel.style.display = "none";
+  }
+  
   alert(`✅ 云端数据已加载\n最后保存人：${savedBy}`);
 }
 
@@ -1889,13 +1895,13 @@ function bindEvents() {
       pCat.style.display = "none";
       const v = readView();
       $("#titleText").value = v.titleText;
-      $("#titleColor").value = v.titleColor || "#1990FF";
+      $("#titleColor").value = v.titleColor || "#208BEE"; // ✅ 优化：使用新的默认颜色
       $("#fontFamily").value = v.fontFamily;
       $("#rowPad").value = v.pad;
       $("#colScale").value = v.colScale;
       $("#zebraOn").checked = v.zebraOn;
-      $("#zebraColor").value = v.zebraColor;
-      $("#btnColor").value = v.btnColor || "#E2F0FF";
+      $("#zebraColor").value = v.zebraColor || "#e2f0ff"; // ✅ 优化：确保有默认值
+      $("#btnColor").value = v.btnColor || "#639BD5"; // ✅ 优化：使用新的默认颜色
     } else {
       p.style.display = "none";
     }
@@ -1903,21 +1909,21 @@ function bindEvents() {
 
   $("#titleText").addEventListener("input", () => {
     const v = readView();
-    v.titleText = $("#titleText").value || "XHSPHONE";
+    v.titleText = $("#titleText").value || "号码管理"; // ✅ 优化：使用新的默认标题
     saveView(v);
     applyView(v);
   });
 
   $("#titleColor").addEventListener("input", () => {
     const v = readView();
-    v.titleColor = $("#titleColor").value || "#1990FF";
+    v.titleColor = $("#titleColor").value || "#208BEE"; // ✅ 优化：使用新的默认颜色
     saveView(v);
     applyView(v);
   });
 
   $("#btnColor").addEventListener("input", () => {
     const v = readView();
-    v.btnColor = $("#btnColor").value || "#E2F0FF";
+    v.btnColor = $("#btnColor").value || "#639BD5"; // ✅ 优化：使用新的默认颜色
     saveView(v);
     applyView(v);
   });

@@ -1899,16 +1899,32 @@ function bindEvents() {
       const titleColor = v.titleColor || "#208BEE";
       $("#titleColor").value = titleColor;
       $("#titleColor").setAttribute('value', titleColor); // ✅ 强制设置属性，确保移动端显示
+      // ✅ 延迟设置，确保DOM完全加载
+      setTimeout(() => {
+        $("#titleColor").value = titleColor;
+        $("#titleColor").setAttribute('value', titleColor);
+      }, 50);
+      
       $("#fontFamily").value = v.fontFamily || "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
       $("#rowPad").value = v.pad || 4;
       $("#colScale").value = v.colScale || 0.7;
       $("#zebraOn").checked = v.zebraOn !== false;
+      
       const zebraColor = v.zebraColor || "#e2f0ff";
       $("#zebraColor").value = zebraColor;
       $("#zebraColor").setAttribute('value', zebraColor); // ✅ 强制设置属性，确保移动端显示
+      setTimeout(() => {
+        $("#zebraColor").value = zebraColor;
+        $("#zebraColor").setAttribute('value', zebraColor);
+      }, 50);
+      
       const btnColor = v.btnColor || "#639BD5";
       $("#btnColor").value = btnColor;
       $("#btnColor").setAttribute('value', btnColor); // ✅ 强制设置属性，确保移动端显示
+      setTimeout(() => {
+        $("#btnColor").value = btnColor;
+        $("#btnColor").setAttribute('value', btnColor);
+      }, 50);
     } else {
       p.style.display = "none";
     }

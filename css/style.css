@@ -259,7 +259,7 @@ button.primary:active {
   height: 36px;
   padding: 0 16px;
   margin: 4px 8px;
-  background: rgb(226, 240, 255) !important;
+  background: rgb(32, 139, 238) !important; /* ✅ 优化：背景颜色改为 RGB(32, 139, 238) */
   color: #ffffff !important;
   border: none;
   border-radius: 18px;
@@ -275,14 +275,14 @@ button.primary:active {
 
 #menuImport:hover,
 #menuExport:hover {
-  background: rgb(200, 230, 255) !important;
+  background: rgb(24, 120, 220) !important; /* ✅ 优化：hover 状态颜色稍深 */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
 #menuImport:active,
 #menuExport:active {
-  background: rgb(180, 220, 255) !important;
+  background: rgb(20, 100, 200) !important; /* ✅ 优化：active 状态颜色更深 */
   transform: translateY(0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
@@ -538,7 +538,7 @@ td[contenteditable="true"]:focus-visible {
 
 td.col-cat select {
   width: 100%;
-  min-width: 100%; /* ✅ 优化：使用100%宽度，确保完整显示 */
+  min-width: 80px; /* ✅ 优化：增加最小宽度，确保至少显示2个中文字 */
   max-width: 100%; /* ✅ 优化：限制最大宽度，防止溢出 */
   font-size: 13px;
   height: 32px;
@@ -655,7 +655,7 @@ td.col-cat select:focus {
 }
 
 .m-row:hover .m-row-header {
-  background: #f5f7ff;
+  background: rgb(221, 127, 39); /* ✅ 优化：悬停颜色改为RGB(221, 127, 39) */
 }
 
 /* 头部主行：手机号 + 小红书名称 */
@@ -697,10 +697,11 @@ td.col-cat select:focus {
   font-size: 12px;
   color: var(--muted);
   width: 100%;
+  padding-left: 0; /* ✅ 优化：移除左边距，确保与电话号左对齐 */
 }
 
 .m-owner {
-  padding: 2px 8px;
+  padding: 2px 8px 2px 0; /* ✅ 优化：移除左边距，确保与电话号左对齐 */
   border-radius: 999px;
   background: transparent; /* ✅ 优化：背景色调整为透明，与表格背景一致 */
   color: #333;
@@ -754,7 +755,7 @@ td.col-cat select:focus {
   justify-content: space-between;
   align-items: center; /* ✅ 优化：改为 center 确保垂直对齐 */
   gap: 10px; /* ✅ 优化：增加间距，提高可读性 */
-  margin-bottom: 3px; /* ✅ 优化：每组和下方的高度距离改为3px */
+  margin-bottom: 1px; /* ✅ 优化：每组和下方的高度距离改为1px */
   min-height: 44px; /* ✅ 优化：设置最小高度，确保对齐一致 */
 }
 
@@ -801,7 +802,7 @@ td.col-cat select:focus {
 .m-input,
 .m-textarea {
   width: 100%;
-  padding: 8px 12px;
+  padding: 3px 12px; /* ✅ 优化：上下内边距改为3px */
   border: 1px solid #e5e5ea;
   border-radius: 10px;
   font-size: 14px;
@@ -809,6 +810,7 @@ td.col-cat select:focus {
   background: #ffffff;
   transition: all 0.2s ease;
   box-sizing: border-box;
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
 }
 
 .m-input:focus,
@@ -822,22 +824,22 @@ td.col-cat select:focus {
 .m-textarea {
   resize: vertical;
   min-height: 50px;
-  line-height: 1.5;
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
 }
 
 /* ✅ 移动端分类选择器增强 */
 .m-detail-value select {
   width: 100%;
-  padding: 6px 12px; /* ✅ 优化：调整内边距以适应30px高度 */
+  padding: 3px 12px; /* ✅ 优化：上下内边距改为3px */
   border: 1px solid #e5e5ea;
   border-radius: 10px;
   font-size: 14px;
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 30px; /* ✅ 优化：高度设置为30px */
-  height: 30px; /* ✅ 优化：固定高度30px */
-  line-height: 1.4; /* ✅ 优化：调整行高以适应30px高度 */
+  min-height: 66px; /* ✅ 优化：高度设置为66px */
+  height: 66px; /* ✅ 优化：固定高度66px */
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
   box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
 }
 
@@ -875,8 +877,9 @@ td.col-cat select:focus {
 
 .m-actions button {
   height: 26px;
-  padding: 2px 8px;
+  padding: 2px 16px; /* ✅ 优化：左右内边距从8px增加到16px（2倍） */
   font-size: 12px;
+  min-width: 60px; /* ✅ 优化：设置最小宽度，确保按钮宽度足够 */
 }
 
 /* 小屏优化 */
@@ -907,6 +910,11 @@ td.col-cat select:focus {
 
   #appTitle {
     font-size: 18px;
+  }
+
+  /* ✅ 优化：手机端字体默认粗体 */
+  body {
+    font-weight: bold !important;
   }
 
   input,

@@ -181,9 +181,9 @@
         <button id="btnAdmin" class="ghost function-btn" data-function="admin">管理页面</button>
         <div style="position: relative; display: inline-block;">
           <button id="btnImportExport" class="ghost function-btn" data-function="importExport">导入导出</button>
-          <div id="importExportMenu" style="display:none; position:absolute; right:0; background:#fff; border:1px solid #eee; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); z-index:1000; min-width:100px; width:auto;">
-            <button id="menuImport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:center; cursor:pointer; font-size:14px; line-height:1.6; word-break:keep-all; white-space:normal; min-height:44px;">导入<br>数据</button>
-            <button id="menuExport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:center; cursor:pointer; font-size:14px; line-height:1.6; word-break:keep-all; white-space:normal; min-height:44px; border-top:1px solid #f0f0f0;">导出<br>数据</button>
+          <div id="importExportMenu" style="display:none; position:absolute; right:0; background:#fff; border:1px solid #eee; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); z-index:1000; min-width:120px;">
+            <button id="menuImport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:left; cursor:pointer; font-size:14px; line-height:1.6; white-space:nowrap;">导入数据</button>
+            <button id="menuExport" style="display:block; width:100%; padding:10px 16px; background:none; border:none; text-align:left; cursor:pointer; font-size:14px; line-height:1.6; white-space:nowrap; border-top:1px solid #f0f0f0;">导出数据</button>
           </div>
         </div>
         <!-- 隐藏的文件输入与兼容保留 -->
@@ -194,10 +194,6 @@
 
       <!-- 云端历史快照下拉 -->
       <div id="cloudHistoryPanel" class="cloud-history-panel" style="display:none"></div>
-
-      <div class="status" id="statusText">
-        本地 + Supabase 模式：支持 CSV 导入/导出，支持云端快照备份（最多保留 5 个历史版本）。
-      </div>
     </div>
 
     <!-- 分类设置面板 -->

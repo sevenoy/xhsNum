@@ -22,7 +22,7 @@
   --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
     "Helvetica Neue", Helvetica, Arial, sans-serif;
 
-  --w-phone: 200px; /* ✅ 优化：电话号码列宽200px */
+  --w-phone: 120px; /* ✅ 优化：电话号码列宽设置为200px的3/5（120px） */
   --w-owner: 165px; /* ✅ 优化：所属人列宽165px */
   --w-real: 185px; /* ✅ 优化：微信实名人列宽185px */
   --w-wx: 130px;

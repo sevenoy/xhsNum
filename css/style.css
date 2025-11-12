@@ -655,7 +655,7 @@ td.col-cat select:focus {
 }
 
 .m-row:hover .m-row-header {
-  background: rgb(221, 127, 39); /* ✅ 优化：悬停颜色改为RGB(221, 127, 39) */
+  background: #f5c19c; /* ✅ 优化：悬停颜色改为RGB(221, 127, 39) */
 }
 
 /* 头部主行：手机号 + 小红书名称 */

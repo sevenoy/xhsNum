@@ -683,7 +683,7 @@ function makeRowTr(r) {
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
     <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" 
-        style="${bg ? `background:${bg};` : ""} text-align:right;" 
+        style="${bg ? `background:${bg};` : ""} text-align:left;" 
         title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
     ${tdEditable("col-note", r.note1, "note1", r.id)}
     ${tdSelectCat("col-cat", r.row_color, r.id)}

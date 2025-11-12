@@ -60,6 +60,7 @@ const DEFAULT_VIEW = Object.freeze({
   zebraOn: true,
   zebraColor: "#e2f0ff",
   fontFamily: "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif", // ✅ 优化：默认字体改为苹方
+  fontWeight: "normal", // ✅ 优化：默认字体粗细为normal
   titleText: "号码管理", // ✅ 优化：默认标题改为"号码管理"
   titleColor: "#208BEE", // ✅ 优化：默认标题颜色 RGB(32, 139, 238)
   btnColor: "#639BD5", // ✅ 优化：默认按钮颜色 RGB(99, 155, 213)
@@ -122,6 +123,7 @@ function applyView(v) {
   root.style.setProperty("--colScale", `${v.colScale}`);
   root.style.setProperty("--zebra", v.zebraOn ? v.zebraColor : "transparent");
   root.style.setProperty("--font-main", v.fontFamily);
+  root.style.setProperty("--font-weight", v.fontWeight || "normal"); // ✅ 优化：应用字体粗细设置
   root.style.setProperty("--btn-default", v.btnColor || "#639BD5"); // ✅ 优化：使用新的默认颜色
 
   const h1 = document.getElementById("appTitle");
@@ -1906,6 +1908,7 @@ function bindEvents() {
       }, 50);
       
       $("#fontFamily").value = v.fontFamily || "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
+      $("#fontBold").checked = v.fontWeight === "bold" || v.fontWeight === "700"; // ✅ 优化：设置粗体checkbox状态
       $("#rowPad").value = v.pad || 4;
       $("#colScale").value = v.colScale || 0.7;
       $("#zebraOn").checked = v.zebraOn !== false;
@@ -1960,6 +1963,13 @@ function bindEvents() {
   $("#fontFamily").addEventListener("change", () => {
     const v = readView();
     v.fontFamily = $("#fontFamily").value;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#fontBold").addEventListener("change", () => {
+    const v = readView();
+    v.fontWeight = $("#fontBold").checked ? "bold" : "normal"; // ✅ 优化：根据checkbox状态设置字体粗细
     saveView(v);
     applyView(v);
   });

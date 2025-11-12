@@ -685,16 +685,19 @@ td.col-cat select:focus {
   display: flex;
   justify-content: space-between;
   align-items: center; /* ✅ 优化：改为 center 确保垂直对齐 */
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 10px; /* ✅ 优化：增加间距，提高可读性 */
+  margin-bottom: 8px; /* ✅ 优化：增加底部间距 */
+  min-height: 44px; /* ✅ 优化：设置最小高度，确保对齐一致 */
 }
 
 .m-detail-label {
-  font-size: 12px;
+  font-size: 13px; /* ✅ 优化：稍微增大字体，提高可读性 */
   color: var(--muted);
-  flex: 0 0 80px;
+  flex: 0 0 85px; /* ✅ 优化：稍微增加宽度，确保文字完整显示 */
   padding-top: 0; /* ✅ 优化：移除 padding-top，确保对齐 */
-  line-height: 1.5; /* ✅ 优化：设置行高，确保与输入框对齐 */
+  line-height: 1.6; /* ✅ 优化：增加行高，与输入框对齐 */
+  display: flex; /* ✅ 优化：使用 flex 确保垂直居中 */
+  align-items: center; /* ✅ 优化：垂直居中对齐 */
 }
 
 .m-detail-value {
@@ -757,15 +760,17 @@ td.col-cat select:focus {
 /* ✅ 移动端分类选择器增强 */
 .m-detail-value select {
   width: 100%;
-  padding: 10px 12px; /* ✅ 优化：增加内边距，确保文字完整显示 */
+  padding: 12px 14px; /* ✅ 优化：增加内边距，确保文字完整显示 */
   border: 1px solid #e5e5ea;
   border-radius: 10px;
   font-size: 14px;
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 40px; /* ✅ 优化：设置最小高度，确保下拉列表有足够空间 */
-  line-height: 1.5; /* ✅ 优化：设置行高，优化文字显示 */
+  min-height: 48px; /* ✅ 优化：增加最小高度，确保下拉列表文字完整显示 */
+  height: 48px; /* ✅ 优化：固定高度，确保显示一致 */
+  line-height: 1.6; /* ✅ 优化：增加行高，优化文字显示 */
+  box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
 }
 
 .m-detail-value select:hover {

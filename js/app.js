@@ -54,7 +54,7 @@ async function initSupabase() {
 
 // 默认视图
 const DEFAULT_VIEW = Object.freeze({
-  viewVersion: 8,
+  viewVersion: 9, // ✅ 优化：升级版本号，强制重置所有用户的配置
   pad: 4, // ✅ 优化：默认行高设为最小值
   colScale: 0.7, // ✅ 优化：默认列宽缩放设为最小值
   zebraOn: true,
@@ -1894,14 +1894,21 @@ function bindEvents() {
       p.style.display = "block";
       pCat.style.display = "none";
       const v = readView();
-      $("#titleText").value = v.titleText;
-      $("#titleColor").value = v.titleColor || "#208BEE"; // ✅ 优化：使用新的默认颜色
-      $("#fontFamily").value = v.fontFamily;
-      $("#rowPad").value = v.pad;
-      $("#colScale").value = v.colScale;
-      $("#zebraOn").checked = v.zebraOn;
-      $("#zebraColor").value = v.zebraColor || "#e2f0ff"; // ✅ 优化：确保有默认值
-      $("#btnColor").value = v.btnColor || "#639BD5"; // ✅ 优化：使用新的默认颜色
+      // ✅ 优化：确保颜色选择器正确初始化（桌面端和移动端都适用）
+      $("#titleText").value = v.titleText || "号码管理";
+      const titleColor = v.titleColor || "#208BEE";
+      $("#titleColor").value = titleColor;
+      $("#titleColor").setAttribute('value', titleColor); // ✅ 强制设置属性，确保移动端显示
+      $("#fontFamily").value = v.fontFamily || "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
+      $("#rowPad").value = v.pad || 4;
+      $("#colScale").value = v.colScale || 0.7;
+      $("#zebraOn").checked = v.zebraOn !== false;
+      const zebraColor = v.zebraColor || "#e2f0ff";
+      $("#zebraColor").value = zebraColor;
+      $("#zebraColor").setAttribute('value', zebraColor); // ✅ 强制设置属性，确保移动端显示
+      const btnColor = v.btnColor || "#639BD5";
+      $("#btnColor").value = btnColor;
+      $("#btnColor").setAttribute('value', btnColor); // ✅ 强制设置属性，确保移动端显示
     } else {
       p.style.display = "none";
     }

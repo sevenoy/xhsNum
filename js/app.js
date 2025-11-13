@@ -59,6 +59,7 @@ const DEFAULT_VIEW = Object.freeze({
   colScale: 0.7, // ✅ 优化：默认列宽缩放设为最小值
   zebraOn: true,
   zebraColor: "#e2f0ff",
+  hoverColor: "#e9f3ff",
   fontFamily: "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif", // ✅ 优化：默认字体改为苹方
   fontWeight: "normal", // ✅ 优化：默认字体粗细为normal
   titleText: "号码管理", // ✅ 优化：默认标题改为"号码管理"
@@ -79,7 +80,7 @@ const state = {
   q: "",
   owner: "all",
   wxReal: "all",
-  sortBy: "order",
+  sortBy: "owner",
   precise: false,
   activeFunction: null,
 };
@@ -610,28 +611,26 @@ function applyFilters(rows) {
   }
   out = applySearchFilter(out);
   switch (state.sortBy) {
-    case "owner":
-      out.sort((a, b) => (a.owner || "").localeCompare(b.owner || "", "zh"));
-      break;
-    case "wx_real":
-      out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
-      break;
-    case "phone":
-      out.sort((a, b) => (a.phone || "").localeCompare(b.phone || "", "zh"));
-      break;
-    case "xhs_name":
-      out.sort((a, b) => (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh"));
-      break;
-    case "row_color": {
-      const cats = readCats();
-      out.sort((a, b) =>
-        catNameOf(cats, a.row_color).localeCompare(
-          catNameOf(cats, b.row_color),
-          "zh"
-        )
-      );
-      break;
-    }
+    case "owner": {
+  const counts = {};
+  for (const r of out) {
+    const key = r.owner || "";
+    if (!key) continue;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  out.sort((a, b) => {
+    const ca = counts[a.owner || ""] || 0;
+    const cb = counts[b.owner || ""] || 0;
+    if (cb !== ca) return cb - ca;
+    const aEmpty = !a.owner;
+    const bEmpty = !b.owner;
+    if (aEmpty && !bEmpty) return 1;
+    if (!aEmpty && bEmpty) return -1;
+    return (a.owner || "").localeCompare(b.owner || "", "zh");
+  });
+  break;
+}
+
     default:
       out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }

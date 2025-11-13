@@ -632,9 +632,20 @@ function applyFilters(rows) {
       );
       break;
     }
-    default:
-      out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
+ default: {
+  // 统计每个所属人出现次数
+  const ownerCount = {};
+  rows.forEach(r => {
+    if (r.owner) ownerCount[r.owner] = (ownerCount[r.owner] || 0) + 1;
+  });
+  // 按所属人出现次数降序排序；如果次数相同，保持原顺序
+  out.sort((a, b) => {
+    const ca = ownerCount[a.owner] || 0;
+    const cb = ownerCount[b.owner] || 0;
+    return cb - ca;
+  });
+  break;
+}
   return out;
 }
 

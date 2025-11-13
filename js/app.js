@@ -530,16 +530,43 @@ async function refreshFilters() {
   const ownerVal = ownerSel.value;
   const realVal = realSel.value;
 
+  const priority = ["olina", "嘉", "良", "齐", "齐注销", "宫"];
+  const priIndex = new Map(priority.map((name, idx) => [name, idx]));
+  const countBy = (rows, field) => {
+    const m = new Map();
+    for (const r of rows) {
+      const k = r[field] || "";
+      if (!k) continue;
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return m;
+  };
+  const sortNames = (arr, counts) =>
+    arr.sort((a, b) => {
+      const ap = priIndex.has(a) ? priIndex.get(a) : Infinity;
+      const bp = priIndex.has(b) ? priIndex.get(b) : Infinity;
+      if (ap !== bp) return ap - bp;
+      if (ap === Infinity) {
+        const ca = counts.get(a) || 0;
+        const cb = counts.get(b) || 0;
+        if (cb !== ca) return cb - ca;
+        const cmp = a.localeCompare(b, "zh");
+        if (cmp !== 0) return cmp;
+      }
+      return 0;
+    });
+
+  const ownerCounts = countBy(all, "owner");
   ownerSel.innerHTML =
     `<option value="all">所属人：全部</option>` +
-    Array.from(owners)
-      .sort((a, b) => a.localeCompare(b, "zh"))
+    sortNames(Array.from(owners), ownerCounts)
       .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
       .join("");
+
+  const wxCounts = countBy(all, "wx_real");
   realSel.innerHTML =
     `<option value="all">微信实名人：全部</option>` +
-    Array.from(wxreals)
-      .sort((a, b) => a.localeCompare(b, "zh"))
+    sortNames(Array.from(wxreals), wxCounts)
       .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
       .join("");
 
@@ -610,9 +637,34 @@ function applyFilters(rows) {
   }
   out = applySearchFilter(out);
   switch (state.sortBy) {
-    case "owner":
-      out.sort((a, b) => (b.owner || "").localeCompare(a.owner || "", "zh"));
+    case "owner": {
+      const priority = ["olina", "嘉", "良", "齐", "齐注销", "宫"];
+      const priIndex = new Map(priority.map((name, idx) => [name, idx]));
+      const counts = new Map();
+      for (const r of out) {
+        const key = r.owner || "";
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      out.sort((a, b) => {
+        const ao = a.owner || "";
+        const bo = b.owner || "";
+        const ap = priIndex.has(ao) ? priIndex.get(ao) : Infinity;
+        const bp = priIndex.has(bo) ? priIndex.get(bo) : Infinity;
+        if (ap !== bp) return ap - bp; // 先按优先名单固定顺序
+        if (ap === Infinity) {
+          // 非优先名单：按数量从多到少
+          const ca = counts.get(ao) || 0;
+          const cb = counts.get(bo) || 0;
+          if (cb !== ca) return cb - ca;
+          // 数量相同再按名称（中文）排序，稳定一些
+          const nameCmp = ao.localeCompare(bo, "zh");
+          if (nameCmp !== 0) return nameCmp;
+        }
+        // 同一所属人内：保持原 manual order（若无则按插入顺序）
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
       break;
+    }
     case "wx_real":
       out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
       break;

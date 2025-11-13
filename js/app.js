@@ -10,6 +10,36 @@ const DB_NAME = "xhs_phone_sheet_v7";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
+const DEFAULT_VIEW = Object.freeze({
+  viewVersion: 10, // ✅ 升级版本号，确保新设置生效
+  pad: 4,
+  colScale: 0.7,
+  zebraOn: true,
+  zebraColor: "#e2f0ff",
+  fontFamily: "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif",
+  fontWeight: "normal",
+  titleText: "号码管理",
+  titleColor: "#208BEE",
+  btnColor: "#639BD5",
+  btnActiveColor: "#1890FF",
+});
+
+const DEFAULT_CATS = Object.freeze([
+  { id: "enterprise", name: "企业号", color: "#007aff" },
+  { id: "olina", name: "Olina用", color: "#34c759" },
+  { id: "jasper", name: "嘉用", color: "#ff9f0a" },
+  { id: "usable", name: "可用", color: "#8e8e93" },
+]);
+
+const state = {
+  q: "",
+  owner: "all",
+  wxReal: "all",
+  sortBy: "order",
+  precise: false,
+  activeFunction: null,
+};
+
 // ✅ 如果本地还没有 Supabase 配置，则自动写入你提供的参数
 if (!localStorage.getItem("xhs_supabase_url")) {
   localStorage.setItem(
@@ -52,38 +82,6 @@ async function initSupabase() {
   }
 }
 
-// 默认视图
-const DEFAULT_VIEW = Object.freeze({
-  viewVersion: 9, // ✅ 优化：升级版本号，强制重置所有用户的配置
-  pad: 4, // ✅ 优化：默认行高设为最小值
-  colScale: 0.7, // ✅ 优化：默认列宽缩放设为最小值
-  zebraOn: true,
-  zebraColor: "#e2f0ff",
-  fontFamily: "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif", // ✅ 优化：默认字体改为苹方
-  fontWeight: "normal", // ✅ 优化：默认字体粗细为normal
-  titleText: "号码管理", // ✅ 优化：默认标题改为"号码管理"
-  titleColor: "#208BEE", // ✅ 优化：默认标题颜色 RGB(32, 139, 238)
-  btnColor: "#639BD5", // ✅ 优化：默认按钮颜色 RGB(99, 155, 213)
-});
-
-// 默认分类
-const DEFAULT_CATS = Object.freeze([
-  { id: "enterprise", name: "企业号", color: "#007aff" },
-  { id: "olina", name: "Olina用", color: "#34c759" },
-  { id: "jasper", name: "嘉用", color: "#ff9f0a" },
-  { id: "usable", name: "可用", color: "#8e8e93" },
-]);
-
-// 全局筛选状态
-const state = {
-  q: "",
-  owner: "all",
-  wxReal: "all",
-  sortBy: "order",
-  precise: false,
-  activeFunction: null,
-};
-
 /* =========================
  * 1. Dexie 初始化
  * ========================= */
@@ -117,6 +115,35 @@ function saveView(v) {
   localStorage.setItem(VIEW_KEY, JSON.stringify(v));
 }
 
+function lightenColor(hex, factor = 0.2) {
+  if (typeof hex !== "string") return hex;
+  let color = hex.trim();
+  if (!color) return hex;
+  if (color.startsWith("#")) color = color.slice(1);
+  if (color.length === 3) {
+    color = color
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  }
+  if (color.length !== 6) return hex;
+  const num = parseInt(color, 16);
+  if (Number.isNaN(num)) return hex;
+  const clamp = (value) => Math.min(255, Math.max(0, Math.round(value)));
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  const mix = (channel) => clamp(channel + (255 - channel) * factor);
+  const nr = mix(r);
+  const ng = mix(g);
+  const nb = mix(b);
+  const hexString = ((1 << 24) + (nr << 16) + (ng << 8) + nb)
+    .toString(16)
+    .slice(1)
+    .toUpperCase();
+  return `#${hexString}`;
+}
+
 function applyView(v) {
   const root = document.documentElement;
   root.style.setProperty("--pad", `${v.pad}px`);
@@ -125,6 +152,9 @@ function applyView(v) {
   root.style.setProperty("--font-main", v.fontFamily);
   root.style.setProperty("--font-weight", v.fontWeight || "normal"); // ✅ 优化：应用字体粗细设置
   root.style.setProperty("--btn-default", v.btnColor || "#639BD5"); // ✅ 优化：使用新的默认颜色
+  const activeColor = v.btnActiveColor || "#1890FF";
+  root.style.setProperty("--btn-active", activeColor);
+  root.style.setProperty("--btn-hover", lightenColor(activeColor, 0.25));
 
   const h1 = document.getElementById("appTitle");
   if (h1) {
@@ -1928,10 +1958,18 @@ function bindEvents() {
         $("#btnColor").value = btnColor;
         $("#btnColor").setAttribute('value', btnColor);
       }, 50);
-    } else {
-      p.style.display = "none";
-    }
-  });
+
+      const btnActiveColor = v.btnActiveColor || "#1890FF";
+      $("#btnActiveColor").value = btnActiveColor;
+      $("#btnActiveColor").setAttribute('value', btnActiveColor);
+      setTimeout(() => {
+        $("#btnActiveColor").value = btnActiveColor;
+        $("#btnActiveColor").setAttribute('value', btnActiveColor);
+      }, 50);
+     } else {
+       p.style.display = "none";
+     }
+   });
 
   $("#titleText").addEventListener("input", () => {
     const v = readView();
@@ -1956,6 +1994,15 @@ function bindEvents() {
     v.btnColor = newColor;
     // ✅ 优化：实时同步颜色选择器显示
     $("#btnColor").value = newColor;
+    saveView(v);
+    applyView(v);
+  });
+
+  $("#btnActiveColor").addEventListener("input", (e) => {
+    const v = readView();
+    const newColor = e.target.value || "#1890FF";
+    v.btnActiveColor = newColor;
+    $("#btnActiveColor").value = newColor;
     saveView(v);
     applyView(v);
   });

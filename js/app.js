@@ -79,7 +79,7 @@ const state = {
   q: "",
   owner: "all",
   wxReal: "all",
-  sortBy: "order",
+  sortBy: "owner",
   precise: false,
   activeFunction: null,
 };
@@ -611,7 +611,7 @@ function applyFilters(rows) {
   out = applySearchFilter(out);
   switch (state.sortBy) {
     case "owner":
-      out.sort((a, b) => (a.owner || "").localeCompare(b.owner || "", "zh"));
+      out.sort((a, b) => (b.owner || "").localeCompare(a.owner || "", "zh"));
       break;
     case "wx_real":
       out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));

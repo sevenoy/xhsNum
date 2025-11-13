@@ -459,8 +459,11 @@ tbody.zebra tr:nth-child(even) td {
 
 /* hover 行 */
 
+/* ✅ 表格 hover 行颜色（可在显示设置中调节） */
 tbody tr:hover td {
-  background: #e9f3ff;
+  background: var(--hover, #e9f3ff);
+}
+
 }
 
 /* 列宽 */

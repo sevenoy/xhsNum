@@ -530,12 +530,13 @@ async function refreshFilters() {
   const ownerVal = ownerSel.value;
   const realVal = realSel.value;
 
-  const priority = ["olina", "嘉", "良", "齐", "齐注销", "宫"];
-  const priIndex = new Map(priority.map((name, idx) => [name, idx]));
+  const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
   const countBy = (rows, field) => {
     const m = new Map();
     for (const r of rows) {
-      const k = r[field] || "";
+      const k = norm(r[field]);
       if (!k) continue;
       m.set(k, (m.get(k) || 0) + 1);
     }
@@ -543,12 +544,14 @@ async function refreshFilters() {
   };
   const sortNames = (arr, counts) =>
     arr.sort((a, b) => {
-      const ap = priIndex.has(a) ? priIndex.get(a) : Infinity;
-      const bp = priIndex.has(b) ? priIndex.get(b) : Infinity;
+      const an = norm(a);
+      const bn = norm(b);
+      const ap = priIndex.has(an) ? priIndex.get(an) : Infinity;
+      const bp = priIndex.has(bn) ? priIndex.get(bn) : Infinity;
       if (ap !== bp) return ap - bp;
       if (ap === Infinity) {
-        const ca = counts.get(a) || 0;
-        const cb = counts.get(b) || 0;
+        const ca = counts.get(an) || 0;
+        const cb = counts.get(bn) || 0;
         if (cb !== ca) return cb - ca;
         const cmp = a.localeCompare(b, "zh");
         if (cmp !== 0) return cmp;
@@ -638,25 +641,29 @@ function applyFilters(rows) {
   out = applySearchFilter(out);
   switch (state.sortBy) {
     case "owner": {
-      const priority = ["olina", "嘉", "良", "齐", "齐注销", "宫"];
-      const priIndex = new Map(priority.map((name, idx) => [name, idx]));
+      const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
+      const norm = (s) => String(s || "").trim().toLowerCase();
+      const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
       const counts = new Map();
       for (const r of out) {
-        const key = r.owner || "";
+        const key = norm(r.owner);
+        if (!key) continue;
         counts.set(key, (counts.get(key) || 0) + 1);
       }
       out.sort((a, b) => {
         const ao = a.owner || "";
         const bo = b.owner || "";
-        const ap = priIndex.has(ao) ? priIndex.get(ao) : Infinity;
-        const bp = priIndex.has(bo) ? priIndex.get(bo) : Infinity;
-        if (ap !== bp) return ap - bp; // 先按优先名单固定顺序
+        const an = norm(ao);
+        const bn = norm(bo);
+        const ap = priIndex.has(an) ? priIndex.get(an) : Infinity;
+        const bp = priIndex.has(bn) ? priIndex.get(bn) : Infinity;
+        if (ap !== bp) return ap - bp; // 先按优先名单固定顺序（Olina 最前）
         if (ap === Infinity) {
-          // 非优先名单：按数量从多到少
-          const ca = counts.get(ao) || 0;
-          const cb = counts.get(bo) || 0;
+          // 非优先名单：按数量从多到少（基于归一化后的名字聚合）
+          const ca = counts.get(an) || 0;
+          const cb = counts.get(bn) || 0;
           if (cb !== ca) return cb - ca;
-          // 数量相同再按名称（中文）排序，稳定一些
+          // 数量相同再按原始名称（中文）排序
           const nameCmp = ao.localeCompare(bo, "zh");
           if (nameCmp !== 0) return nameCmp;
         }

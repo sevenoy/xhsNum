@@ -842,8 +842,8 @@ td.col-cat select:focus {
   background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-height: 66px; /* ✅ 优化：高度设置为66px */
-  height: 66px; /* ✅ 优化：固定高度66px */
+  min-height: 45px; /* ✅ 优化：高度设置为45px */
+  height: 45px; /* ✅ 优化：固定高度45px */
   line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
   box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
 }

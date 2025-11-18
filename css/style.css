@@ -82,10 +82,8 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 6px 4px 10px;
-  position: sticky;
-  top: 0;
-  top: env(safe-area-inset-top);
-  z-index: 1000;
+  position: relative;
+  z-index: 1;
   background: #ffffff;
 }
 
@@ -929,6 +927,9 @@ td.col-cat select:focus {
 
   .topbar {
     padding-bottom: 6px;
+    position: static;
+    top: auto;
+    z-index: auto;
   }
 
   #appTitle {

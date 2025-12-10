@@ -1,0 +1,24 @@
+# macOS 系统文件
+._*
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+npm-debug.log*
+
+# 依赖目录
+node_modules/
+
+# 临时文件
+*.tmp
+*.temp
+

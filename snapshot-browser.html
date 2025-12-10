@@ -586,11 +586,12 @@
       grid.innerHTML = '<div class="loading-state"><div style="font-size: 32px; margin-bottom: 10px;">⏳</div><div>加载中...</div></div>';
 
       try {
-        // 查询所有可访问的快照
+        // 查询所有可访问的快照（限制最新 50 条）
         const { data: snapshots, error } = await supabaseClient
           .from(SUPABASE_TABLE)
           .select('key,payload,updated_at,owner_id')
-          .order('updated_at', { ascending: false });
+          .order('updated_at', { ascending: false })
+          .limit(50); // ✅ 限制加载数量，提高性能
 
         if (error) throw error;
 

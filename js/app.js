@@ -372,6 +372,12 @@ function isAdmin() {
  * ========================= */
 
 function setActiveFunction(functionName) {
+  // ✅ 如果点击的是已激活的按钮，则取消激活
+  if (state.activeFunction === functionName) {
+    clearActiveFunction();
+    return;
+  }
+  
   state.activeFunction = functionName;
   document.querySelectorAll(".function-btn").forEach((btn) => {
     btn.classList.remove("active");
@@ -787,6 +793,12 @@ function applyFilters(rows) {
   let out = rows.slice();
   const norm = (s) => String(s || "").trim().toLowerCase();
   
+  // ✅ 确保排序方式有效，如果无效则默认使用 "owner"
+  if (!state.sortBy || (state.sortBy !== "owner" && state.sortBy !== "wx_real" && state.sortBy !== "phone" && state.sortBy !== "xhs_name" && state.sortBy !== "row_color" && state.sortBy !== "order")) {
+    console.warn('⚠️ 无效的排序方式，使用默认值 "owner"', state.sortBy);
+    state.sortBy = "owner";
+  }
+  
   // ✅ 筛选时使用小写比较，实现大小写不区分
   if (state.owner !== "all") {
     out = out.filter((r) => norm(r.owner) === norm(state.owner));
@@ -797,23 +809,29 @@ function applyFilters(rows) {
   out = applySearchFilter(out);
   
   // ✅ 优先排序：order 为 0 的行（新行）始终在最上面
-  // 这个函数确保 order 为 0 的行始终排在最前面，无论其他排序条件
+  // 这个函数仅负责将 order=0 的行置顶，其他行返回 0 以便后续逻辑排序
   const sortByOrder = (a, b) => {
-    const aOrder = a.order ?? 0;
-    const bOrder = b.order ?? 0;
-    // 如果一个是 0，另一个不是，0 的排在前面
-    if (aOrder === 0 && bOrder !== 0) return -1;
-    if (aOrder !== 0 && bOrder === 0) return 1;
-    // 如果都是 0，保持原顺序（按创建时间或 ID）
-    if (aOrder === 0 && bOrder === 0) {
-      return (a.created_at || 0) - (b.created_at || 0);
+    // 只有在手动排序模式下，才强制所有行按 order 排序
+    if (state.sortBy === "order") {
+      const aOrder = a.order ?? 0;
+      const bOrder = b.order ?? 0;
+      // 保持新行（order=0）置顶逻辑
+      if (aOrder === 0 && bOrder !== 0) return -1;
+      if (aOrder !== 0 && bOrder === 0) return 1;
+      if (aOrder === 0 && bOrder === 0) {
+        return (a.created_at || 0) - (b.created_at || 0);
+      }
+      return aOrder - bOrder;
     }
-    // 如果都不是 0，按 order 排序
-    return aOrder - bOrder;
+
+    // 在其他排序模式下，不再强制置顶 order=0 的行
+    // 直接返回 0，让后续的字段排序逻辑（如 owner, phone 等）接管所有行
+    return 0;
   };
   
   switch (state.sortBy) {
     case "owner": {
+      console.log("🔍 执行按所属人排序，数据量:", out.length);
       const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
       const norm = (s) => String(s || "").trim().toLowerCase();
       const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
@@ -848,6 +866,7 @@ function applyFilters(rows) {
         // ✅ 第三优先级：同一所属人内按 order 排序
         return (a.order ?? 0) - (b.order ?? 0);
       });
+      console.log("✅ 按所属人排序完成");
       break;
     }
     case "wx_real":
@@ -960,11 +979,16 @@ function makeRowTr(r) {
 
 async function renderTable() {
   console.log("🎨 renderTable 被调用");
+  console.log("🔍 当前排序方式:", state.sortBy);
   const tbody = $("#gridBody");
   const all = await getAllRows();
   console.log(`📊 总共 ${all.length} 行数据`);
   const rows = applyFilters(all);
   console.log(`📊 过滤后 ${rows.length} 行数据`);
+  // ✅ 调试：显示前几条数据的所属人，验证排序是否正确
+  if (rows.length > 0 && state.sortBy === "owner") {
+    console.log("🔍 排序验证（前5条数据的所属人）:", rows.slice(0, 5).map(r => r.owner || "(空)"));
+  }
 
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
@@ -1000,7 +1024,9 @@ function renderMobileList(rows) {
       // ✅ 使用 hexToRgba 计算pill背景色
       const pillBg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "rgba(0, 122, 255, 0.09)";
       const catName = catNameOf(cats, r.row_color);
-      const xhsDisplay = truncateText(r.xhs_name, 10);
+      // ✅ 移除空格并尽量完整显示小红书名称
+      const xhsNameClean = (r.xhs_name || "").replace(/\s+/g, "");
+      const xhsDisplay = truncateText(xhsNameClean, 20); /* ✅ 增加显示长度到20个字符 */
       
       // ✅ 检查是否是最近一个月内新增的（30天），一个月后自动取消标记
       const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
@@ -1024,7 +1050,7 @@ function renderMobileList(rows) {
           ${mobileDetailInput("所属人", r.owner, "owner", r.id)}
           ${mobileDetailInput("微信实名人", r.wx_real, "wx_real", r.id)}
           ${mobileDetailInput("对应微信名", r.wx_name, "wx_name", r.id)}
-          ${mobileDetailInput("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobileDetailTextarea("小红书名称", r.xhs_name, "xhs_name", r.id)}
           ${mobileDetailTextarea("备注", r.note1, "note1", r.id)}
           ${mobileCat(r.row_color, r.id)}
           <div class="m-edit-actions" style="display:flex;justify-content:space-between;gap:8px;padding:12px 0 6px;border-top:1px solid #f0f0f0;margin-top:10px;">
@@ -1416,7 +1442,8 @@ async function cloudSave() {
           wx_name: String(r.wx_name || '').trim(),
           xhs_name: String(r.xhs_name || '').trim(),
           note1: String(r.note1 || '').trim(),
-          row_color: String(r.row_color || '').trim()
+          row_color: String(r.row_color || '').trim(),
+          order: String(r.order || 0) // ✅ 添加 order 字段参与比较
         };
       };
       
@@ -1487,17 +1514,19 @@ async function cloudSave() {
         // 移除不影响数据的字段
         delete normalized.updated_at;
         delete normalized.viewVersion;
-        // 确保所有值都是字符串或数字
-        Object.keys(normalized).forEach(key => {
-          if (normalized[key] === null || normalized[key] === undefined) {
-            normalized[key] = '';
-          } else if (typeof normalized[key] === 'number') {
-            // 保持数字类型
+        
+        // 确保所有值都是字符串或数字，并按键排序
+        return Object.keys(normalized).sort().reduce((acc, key) => {
+          const val = normalized[key];
+          if (val === null || val === undefined) {
+            acc[key] = '';
+          } else if (typeof val === 'number') {
+            acc[key] = val;
           } else {
-            normalized[key] = String(normalized[key]);
+            acc[key] = String(val);
           }
-        });
-        return normalized;
+          return acc;
+        }, {});
       };
       
       const currentViewData = normalizeViewData(view);
@@ -1550,7 +1579,7 @@ async function cloudSave() {
           currentRowsSample: JSON.stringify(currentRowsData.slice(0, 1)),
           latestRowsSample: JSON.stringify(latestRowsData.slice(0, 1))
         });
-        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。');
+        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n请修改数据后再保存到云端。');
         return; // ✅ 关键：直接返回，不继续执行后续代码
       }
       
@@ -1801,7 +1830,7 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   alert(`✅ 云端数据已加载\n最后保存人：${savedBy}`);
 }
 
-async function renderCloudHistory() {
+async function renderCloudHistory(maxCount = 3) {
   const panel = $("#cloudHistoryPanel");
   if (!panel) return;
   if (!supabase) {
@@ -1820,7 +1849,7 @@ async function renderCloudHistory() {
     .from(SUPABASE_TABLE)
       .select("key,payload,updated_at,owner_id")
     .order("updated_at", { ascending: false })
-      .limit(20); // 增加数量以包含更多快照
+      .limit(Math.max(maxCount + 5, 20)); // 查询稍多一些以确保有足够的数据
     
   if (error) {
       console.error('❌ 加载历史失败:', error);
@@ -1852,12 +1881,12 @@ async function renderCloudHistory() {
       }
     }
     
-    // ✅ 只显示我的快照，不显示授权快照
-    const mySnapshots = data.filter(s => s.owner_id === currentUserId);
+    // ✅ 只显示我的快照，不显示授权快照，并限制显示数量
+    const mySnapshots = data.filter(s => s.owner_id === currentUserId).slice(0, maxCount);
     
     let html = '';
     
-    // 显示我的快照
+    // 显示我的快照（限制数量）
     if (mySnapshots.length > 0) {
       html += mySnapshots.map((row, index) => {
         const name = (row.payload?.snapshot_label || row.key).trim();
@@ -1886,6 +1915,15 @@ async function renderCloudHistory() {
     if (html === '') {
       panel.innerHTML = `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
       return;
+    }
+    
+    // ✅ 如果快照数量达到限制，添加提示信息
+    const totalCount = data.filter(s => s.owner_id === currentUserId).length;
+    if (totalCount > maxCount) {
+      html += `<div style="padding:8px 10px;color:#666;font-size:12px;text-align:center;border-top:1px solid #eee;">
+        显示最新 ${maxCount} 条，共 ${totalCount} 条快照<br/>
+        <a href="admin.html" style="color:#1990FF;text-decoration:none;">前往管理中心查看全部 →</a>
+      </div>`;
     }
     
     panel.innerHTML = html;
@@ -2453,18 +2491,21 @@ function bindEvents() {
   }
 
   $("#btnCategories").addEventListener("click", () => {
+    const wasActive = state.activeFunction === "categories";
     setActiveFunction("categories");
     const p = $("#panelCategories");
     const pView = $("#panelView");
     
-    // ✅ 互斥展开：关闭显示设置面板
-    if (p.style.display === "none") {
-      p.style.display = "block";
-      pView.style.display = "none";
-      renderCatList();
-    } else {
+    // ✅ 如果按钮被取消激活（再次点击），关闭面板
+    if (wasActive) {
       p.style.display = "none";
+      return;
     }
+    
+    // ✅ 互斥展开：关闭显示设置面板
+    p.style.display = "block";
+    pView.style.display = "none";
+    renderCatList();
   });
 
   $("#btnCatAdd").addEventListener("click", () => {
@@ -2483,50 +2524,53 @@ function bindEvents() {
   });
 
   $("#btnView").addEventListener("click", () => {
+    const wasActive = state.activeFunction === "view";
     setActiveFunction("view");
     const p = $("#panelView");
     const pCat = $("#panelCategories");
     
-    // ✅ 互斥展开：关闭分类设置面板
-    if (p.style.display === "none") {
-      p.style.display = "block";
-      pCat.style.display = "none";
-      const v = readView();
-      // ✅ 优化：确保颜色选择器正确初始化（桌面端和移动端都适用）
-      $("#titleText").value = v.titleText || "号码管理";
-      const titleColor = v.titleColor || "#208BEE";
-      $("#titleColor").value = titleColor;
-      $("#titleColor").setAttribute('value', titleColor); // ✅ 强制设置属性，确保移动端显示
-      // ✅ 延迟设置，确保DOM完全加载
-      setTimeout(() => {
-        $("#titleColor").value = titleColor;
-        $("#titleColor").setAttribute('value', titleColor);
-      }, 50);
-      
-      $("#fontFamily").value = v.fontFamily || "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
-      $("#fontBold").checked = v.fontWeight === "bold" || v.fontWeight === "700"; // ✅ 优化：设置粗体checkbox状态
-      $("#rowPad").value = v.pad || 4;
-      $("#colScale").value = v.colScale || 0.7;
-      $("#zebraOn").checked = v.zebraOn !== false;
-      
-      const zebraColor = v.zebraColor || "#e2f0ff";
-      $("#zebraColor").value = zebraColor;
-      $("#zebraColor").setAttribute('value', zebraColor); // ✅ 强制设置属性，确保移动端显示
-      setTimeout(() => {
-        $("#zebraColor").value = zebraColor;
-        $("#zebraColor").setAttribute('value', zebraColor);
-      }, 50);
-      
-      const btnColor = v.btnColor || "#639BD5";
-      $("#btnColor").value = btnColor;
-      $("#btnColor").setAttribute('value', btnColor); // ✅ 强制设置属性，确保移动端显示
-      setTimeout(() => {
-        $("#btnColor").value = btnColor;
-        $("#btnColor").setAttribute('value', btnColor);
-      }, 50);
-    } else {
+    // ✅ 如果按钮被取消激活（再次点击），关闭面板
+    if (wasActive) {
       p.style.display = "none";
+      return;
     }
+    
+    // ✅ 互斥展开：关闭分类设置面板
+    p.style.display = "block";
+    pCat.style.display = "none";
+    const v = readView();
+    // ✅ 优化：确保颜色选择器正确初始化（桌面端和移动端都适用）
+    $("#titleText").value = v.titleText || "号码管理";
+    const titleColor = v.titleColor || "#208BEE";
+    $("#titleColor").value = titleColor;
+    $("#titleColor").setAttribute('value', titleColor); // ✅ 强制设置属性，确保移动端显示
+    // ✅ 延迟设置，确保DOM完全加载
+    setTimeout(() => {
+      $("#titleColor").value = titleColor;
+      $("#titleColor").setAttribute('value', titleColor);
+    }, 50);
+    
+    $("#fontFamily").value = v.fontFamily || "PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
+    $("#fontBold").checked = v.fontWeight === "bold" || v.fontWeight === "700"; // ✅ 优化：设置粗体checkbox状态
+    $("#rowPad").value = v.pad || 4;
+    $("#colScale").value = v.colScale || 0.7;
+    $("#zebraOn").checked = v.zebraOn !== false;
+    
+    const zebraColor = v.zebraColor || "#e2f0ff";
+    $("#zebraColor").value = zebraColor;
+    $("#zebraColor").setAttribute('value', zebraColor); // ✅ 强制设置属性，确保移动端显示
+    setTimeout(() => {
+      $("#zebraColor").value = zebraColor;
+      $("#zebraColor").setAttribute('value', zebraColor);
+    }, 50);
+    
+    const btnColor = v.btnColor || "#639BD5";
+    $("#btnColor").value = btnColor;
+    $("#btnColor").setAttribute('value', btnColor); // ✅ 强制设置属性，确保移动端显示
+    setTimeout(() => {
+      $("#btnColor").value = btnColor;
+      $("#btnColor").setAttribute('value', btnColor);
+    }, 50);
   });
 
   $("#titleText").addEventListener("input", () => {
@@ -2622,11 +2666,49 @@ function bindEvents() {
   });
   
   // ✅ 用户相关功能
-  // 显示当前用户名
-  const currentUserName = $("#currentUserName");
-  if (currentUserName && window.currentUser) {
-    currentUserName.textContent = `👤 ${window.currentUser.name}`;
-  }
+  // 显示当前用户名（使用 getCurrentUserName 确保能获取到用户名）
+  const updateUserNameDisplay = () => {
+    const currentUserNameEl = $("#currentUserName");
+    if (!currentUserNameEl) return;
+    
+    const userName = getCurrentUserName();
+    if (userName && userName !== '匿名用户') {
+      currentUserNameEl.textContent = `👤 ${userName}`;
+      currentUserNameEl.style.display = 'inline-block';
+      currentUserNameEl.style.visibility = 'visible';
+      currentUserNameEl.style.opacity = '1';
+    } else {
+      // 如果还没有用户名，尝试从 localStorage 获取
+      const storedName = localStorage.getItem('xhs_user_name');
+      if (storedName) {
+        currentUserNameEl.textContent = `👤 ${storedName}`;
+        currentUserNameEl.style.display = 'inline-block';
+        currentUserNameEl.style.visibility = 'visible';
+        currentUserNameEl.style.opacity = '1';
+      } else {
+        // 如果还是没有，隐藏元素
+        currentUserNameEl.style.display = 'none';
+      }
+    }
+  };
+  
+  // 立即尝试更新一次
+  updateUserNameDisplay();
+  
+  // ✅ 延迟更新（等待 window.currentUser 设置）
+  setTimeout(() => {
+    updateUserNameDisplay();
+  }, 300);
+  
+  // ✅ 定期检查并更新（每500ms检查一次，最多检查10次）
+  let checkCount = 0;
+  const checkInterval = setInterval(() => {
+    checkCount++;
+    updateUserNameDisplay();
+    if (checkCount >= 10 || getCurrentUserName() !== '匿名用户') {
+      clearInterval(checkInterval);
+    }
+  }, 500);
   
   // 退出登录
   const btnLogout = $("#btnLogout");
@@ -2873,6 +2955,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   
   applyView(readView());
+  
+  // ✅ 在 bindEvents 之前先确保排序设置正确
+  const sortSelect = $("#sortBy");
+  if (sortSelect) {
+    // 强制设置为 "owner"（按所属人排序）
+    state.sortBy = "owner";
+    sortSelect.value = "owner";
+    console.log('✅ 初始化排序设置: 按所属人排序 (owner)');
+  } else {
+    // 如果下拉框不存在（可能在手机端被隐藏），也确保 state.sortBy 是 "owner"
+    state.sortBy = "owner";
+    console.log('✅ 初始化排序设置: 按所属人排序 (owner) - 下拉框不存在');
+  }
+  
   bindEvents();
   
   // ✅ 添加全局事件监听器：按钮失去焦点时清除active状态
@@ -2895,7 +2991,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   
+  // ✅ 在渲染之前再次确认排序设置
   await refreshFilters();
+  console.log('🔍 渲染前最终确认排序方式:', state.sortBy);
   await renderTable();
   
   await initSupabase();

@@ -79,7 +79,7 @@ const state = {
   q: "",
   owner: "all",
   wxReal: "all",
-  sortBy: "order",
+  sortBy: "owner",
   precise: false,
   activeFunction: null,
 };
@@ -1747,10 +1747,35 @@ function bindEvents() {
     }
   });
   
-  $("#q").addEventListener("input", async (e) => {
-    state.q = e.target.value || "";
+  // 清除搜索图标
+  const clearSearchBtn = document.getElementById("clearSearch");
+  const searchInput = $("#q");
+  
+  function updateClearButton() {
+    if (clearSearchBtn && searchInput) {
+      if (searchInput.value) {
+        clearSearchBtn.classList.add("show");
+      } else {
+        clearSearchBtn.classList.remove("show");
+      }
+    }
+  }
+  
+  clearSearchBtn?.addEventListener("click", async () => {
+    searchInput.value = "";
+    state.q = "";
+    updateClearButton();
     await renderTable();
   });
+  
+  $("#q").addEventListener("input", async (e) => {
+    state.q = e.target.value || "";
+    updateClearButton();
+    await renderTable();
+  });
+  
+  // 初始化清除按钮状态
+  updateClearButton();
 
   $("#btnSearchMode").addEventListener("click", async () => {
     setActiveFunction("search");

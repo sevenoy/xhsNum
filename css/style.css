@@ -87,6 +87,19 @@ body {
   background: #ffffff;
 }
 
+.topbar .top-left {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.topbar .top-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 #appTitle {
   font-size: 20px;
   font-weight: 650;
@@ -190,6 +203,41 @@ table select,
 #q {
   min-width: 220px;
   flex: 1 1 180px;
+}
+
+/* 搜索框清除按钮 */
+.search-wrapper {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 220px;
+}
+
+#clearSearch {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  display: none;
+  color: #999;
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+#clearSearch:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+#clearSearch.show {
+  display: flex;
 }
 
 /* 标签式控件 */
@@ -930,6 +978,45 @@ td.col-cat select:focus {
     position: static;
     top: auto;
     z-index: auto;
+    flex-wrap: wrap;
+  }
+
+  .topbar .top-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar .top-right {
+    display: flex !important;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .topbar .top-right #currentUserName {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-size: 12px;
+    margin-right: 6px;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+    flex-shrink: 0;
+  }
+
+  .topbar .top-right #btnLogout {
+    font-size: 12px;
+    padding: 3px 10px;
+    height: auto;
+  }
+
+  .topbar .top-right #cloudStatus {
+    font-size: 11px;
+    padding: 3px 8px;
   }
 
   .wrap {
@@ -939,6 +1026,11 @@ td.col-cat select:focus {
 
   #appTitle {
     font-size: 18px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ✅ 优化：手机端字体默认粗体 */
@@ -953,6 +1045,11 @@ td.col-cat select:focus {
     height: 30px;
   }
 
+  /* 防止手机端点击输入框时自动放大 */
+  #q {
+    font-size: 16px !important;
+  }
+
   th,
   td {
     font-size: 13px;
@@ -960,6 +1057,21 @@ td.col-cat select:focus {
 }
 
 @media (max-width: 480px) {
+  .topbar .top-right #currentUserName {
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
+  .topbar .top-right #btnLogout {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  .topbar .top-right #cloudStatus {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
   .toolbar {
     gap: 6px;
   }
@@ -967,6 +1079,7 @@ td.col-cat select:focus {
   #q {
     min-width: 0;
     flex: 1 1 140px;
+    font-size: 16px !important;
   }
 
   .cloud-status {

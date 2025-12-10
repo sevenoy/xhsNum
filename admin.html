@@ -69,12 +69,14 @@
         'user-management.html': { requiresAdmin: true },
         'permission-management.html': { requiresAdmin: true },
         'snapshot-browser.html': { requiresAdmin: false },
+        'recent-changes.html': { requiresAdmin: false },
       };
       // 控制导航可见性
       const btnApproval = document.getElementById('btnApproval');
       const btnUser = document.getElementById('btnUser');
       const btnPerm = document.getElementById('btnPerm');
       const btnSnap = document.getElementById('btnSnap');
+      const btnRecent = document.getElementById('btnRecent');
       if (!isAdmin) {
         if (btnApproval) btnApproval.style.display = 'none';
         if (btnUser) btnUser.style.display = 'none';
@@ -87,7 +89,7 @@
         switchModule('snapshot-browser.html', btnSnap);
       }
       // 导航点击拦截
-      [btnApproval, btnUser, btnPerm, btnSnap].forEach((btn) => {
+      [btnApproval, btnUser, btnPerm, btnSnap, btnRecent].forEach((btn) => {
         if (!btn) return;
         btn.addEventListener('click', (e) => {
           const url = btn.getAttribute('onclick') ? null : null;
@@ -113,7 +115,8 @@
         'permission-management.html':'btnPerm',
         'snapshot-browser.html':'btnSnap',
         'approval-management.html':'btnApproval',
-        'user-management.html':'btnUser'
+        'user-management.html':'btnUser',
+        'recent-changes.html':'btnRecent'
       };
       const id = map[url];
       if (id) document.getElementById(id).classList.add('active');
@@ -131,6 +134,7 @@
       <button id="btnUser" onclick="switchModule('user-management.html', this)">👥 用户管理</button>
       <button id="btnPerm" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
       <button id="btnSnap" onclick="switchModule('snapshot-browser.html', this)">📂 快照浏览器</button>
+      <button id="btnRecent" onclick="switchModule('recent-changes.html', this)">📝 最近修改</button>
     </div>
     <div class="panel">
       <iframe id="adminFrame" title="管理模块"></iframe>

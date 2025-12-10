@@ -215,7 +215,16 @@
     const { createClient } = supabase;
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // 检查是否已登录
+    // ✅ 检查是否已登录，如果 URL 中有 logout 参数，强制清除 session
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('logout')) {
+      // 退出登录后，清除所有 session
+      await supabaseClient.auth.signOut();
+      // 清除记住的用户名
+      localStorage.removeItem('xhs_remembered_username');
+      localStorage.removeItem('xhs_remember_me');
+    }
+    
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
       window.location.href = 'index.html';

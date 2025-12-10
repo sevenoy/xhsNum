@@ -810,12 +810,14 @@ td.col-cat select:focus {
 }
 
 .m-row:hover .m-row-header {
-  background: #e6f3ff; /* ✅ 悬停颜色改为蓝色 */
+  background: #1990FF; /* ✅ 悬停颜色改为 primary 按钮的蓝色 */
+  color: #fff;
 }
 
 .m-row:active .m-row-header,
 .m-row-header:active {
-  background: #d0e7ff; /* ✅ 点击时使用更深的蓝色 */
+  background: #1478d7; /* ✅ 点击时使用更深的蓝色 */
+  color: #fff;
 }
 
 /* 头部主行：手机号 + 小红书名称 */

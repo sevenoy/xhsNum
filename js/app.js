@@ -1342,6 +1342,239 @@ async function cloudSave() {
 
     const isAdminUser = isAdmin();
 
+    // ✅ 先获取当前本地数据（用于比较）
+    const rows = await getAllRows();
+    const cats = readCats();
+    const view = readView();
+
+    // ✅ 获取最新的快照（用于数据比较）- 查询所有快照，按时间排序
+    console.log('🔍 开始检查数据改动...', { authUid });
+    
+    // 先查询默认快照（用于比较）
+    const { data: defaultSnapshot, error: defaultError } = await supabase
+      .from(SUPABASE_TABLE)
+      .select('key, owner_id, payload, updated_at')
+      .eq('key', SUPABASE_DEFAULT_KEY)
+      .eq('owner_id', authUid)
+      .maybeSingle();
+    
+    // 再查询最新的历史快照
+    const { data: historySnapshots, error: historyError } = await supabase
+      .from(SUPABASE_TABLE)
+      .select('key, owner_id, payload, updated_at')
+      .like('key', 'snap_%')
+      .eq('owner_id', authUid)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    
+    // 确定哪个是最新的快照（比较 updated_at）
+    let latestSnapshot = null;
+    let latestUpdatedAt = null;
+    
+    if (defaultSnapshot && defaultSnapshot.updated_at) {
+      latestSnapshot = defaultSnapshot;
+      latestUpdatedAt = new Date(defaultSnapshot.updated_at).getTime();
+    }
+    
+    if (historySnapshots && historySnapshots.length > 0 && historySnapshots[0]) {
+      const historyTime = new Date(historySnapshots[0].updated_at).getTime();
+      if (!latestUpdatedAt || historyTime > latestUpdatedAt) {
+        latestSnapshot = historySnapshots[0];
+        latestUpdatedAt = historyTime;
+      }
+    }
+    
+    console.log('📦 最新快照查询结果:', {
+      hasDefault: !!defaultSnapshot,
+      hasHistory: !!(historySnapshots && historySnapshots.length > 0),
+      latestKey: latestSnapshot?.key,
+      latestUpdatedAt: latestSnapshot?.updated_at,
+      hasPayload: !!latestSnapshot?.payload
+    });
+
+    if (defaultError) {
+      console.warn('⚠️ 查询默认快照失败:', defaultError);
+    }
+    if (historyError) {
+      console.warn('⚠️ 查询历史快照失败:', historyError);
+    }
+    
+    // ✅ 检查是否有数据改动：比较当前数据和最新快照（在 prompt 之前检查）
+    if (latestSnapshot && latestSnapshot.payload) {
+      console.log('✅ 找到最新快照，开始比较数据...');
+      const latestRows = latestSnapshot.payload.rows || [];
+      const latestCats = latestSnapshot.payload.cats || [];
+      const latestView = latestSnapshot.payload.view || {};
+      
+      // 比较 rows：只比较数据字段，忽略元数据
+      const normalizeRow = (r) => {
+        if (!r) return null;
+        return {
+          phone: String(r.phone || '').trim(),
+          owner: String(r.owner || '').trim(),
+          wx_real: String(r.wx_real || '').trim(),
+          wx_name: String(r.wx_name || '').trim(),
+          xhs_name: String(r.xhs_name || '').trim(),
+          note1: String(r.note1 || '').trim(),
+          row_color: String(r.row_color || '').trim()
+        };
+      };
+      
+      // 标准化并排序 rows（按 phone 排序，确保顺序一致）
+      const sortRows = (rowsData) => {
+        return rowsData
+          .map(normalizeRow)
+          .filter(r => r !== null)
+          .sort((a, b) => {
+            const phoneA = a.phone || '';
+            const phoneB = b.phone || '';
+            if (phoneA !== phoneB) return phoneA.localeCompare(phoneB);
+            // 如果 phone 相同，按其他字段排序
+            const ownerA = a.owner || '';
+            const ownerB = b.owner || '';
+            if (ownerA !== ownerB) return ownerA.localeCompare(ownerB);
+            return (a.xhs_name || '').localeCompare(b.xhs_name || '');
+          });
+      };
+      
+      const currentRowsData = sortRows(rows);
+      const latestRowsData = sortRows(latestRows);
+      
+      // 比较 rows（使用 JSON.stringify 比较，确保顺序一致）
+      const currentRowsStr = JSON.stringify(currentRowsData);
+      const latestRowsStr = JSON.stringify(latestRowsData);
+      const rowsEqual = currentRowsStr === latestRowsStr;
+      
+      // 如果 JSON 比较失败，输出详细信息用于调试
+      if (!rowsEqual) {
+        console.log('📊 Rows 数据不同:', {
+          currentCount: currentRowsData.length,
+          latestCount: latestRowsData.length,
+          currentFirst: currentRowsData[0],
+          latestFirst: latestRowsData[0]
+        });
+      }
+      
+      // 比较 cats（标准化后比较）
+      const normalizeCats = (catsData) => {
+        if (!Array.isArray(catsData)) return [];
+        return catsData
+          .map(c => ({
+            id: String(c.id || ''),
+            name: String(c.name || '').trim(),
+            color: String(c.color || '').trim()
+          }))
+          .sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      };
+      
+      const currentCatsData = normalizeCats(cats);
+      const latestCatsData = normalizeCats(latestCats);
+      const currentCatsStr = JSON.stringify(currentCatsData);
+      const latestCatsStr = JSON.stringify(latestCatsData);
+      const catsEqual = currentCatsStr === latestCatsStr;
+      
+      if (!catsEqual) {
+        console.log('📊 Cats 数据不同:', {
+          current: currentCatsData,
+          latest: latestCatsData
+        });
+      }
+      
+      // 比较 view（排除时间戳和版本号等字段）
+      const normalizeViewData = (v) => {
+        if (!v) return {};
+        const normalized = { ...v };
+        // 移除不影响数据的字段
+        delete normalized.updated_at;
+        delete normalized.viewVersion;
+        // 确保所有值都是字符串或数字
+        Object.keys(normalized).forEach(key => {
+          if (normalized[key] === null || normalized[key] === undefined) {
+            normalized[key] = '';
+          } else if (typeof normalized[key] === 'number') {
+            // 保持数字类型
+          } else {
+            normalized[key] = String(normalized[key]);
+          }
+        });
+        return normalized;
+      };
+      
+      const currentViewData = normalizeViewData(view);
+      const latestViewData = normalizeViewData(latestView);
+      const currentViewStr = JSON.stringify(currentViewData);
+      const latestViewStr = JSON.stringify(latestViewData);
+      const viewEqual = currentViewStr === latestViewStr;
+      
+      if (!viewEqual) {
+        console.log('📊 View 数据不同:', {
+          current: currentViewData,
+          latest: latestViewData,
+          currentStr: currentViewStr.substring(0, 100),
+          latestStr: latestViewStr.substring(0, 100)
+        });
+      }
+      
+      // 如果所有数据都相同，提示用户并直接返回
+      console.log('🔍 数据比较结果:', {
+        rowsEqual,
+        catsEqual,
+        viewEqual,
+        rowsCount: currentRowsData.length,
+        latestRowsCount: latestRowsData.length,
+        allEqual: rowsEqual && catsEqual && viewEqual
+      });
+      
+      // ✅ 关键检查：如果所有数据都相同，必须阻止保存
+      const allDataEqual = rowsEqual && catsEqual && viewEqual;
+      
+      console.log('🔍 最终数据比较结果:', {
+        rowsEqual,
+        catsEqual,
+        viewEqual,
+        allDataEqual,
+        currentRowsCount: currentRowsData.length,
+        latestRowsCount: latestRowsData.length,
+        currentRowsStrLength: currentRowsStr?.length || 0,
+        latestRowsStrLength: latestRowsStr?.length || 0
+      });
+      
+      if (allDataEqual) {
+        console.log('❌ 数据未改动，阻止保存并返回');
+        console.log('📊 详细比较信息:', {
+          rowsEqual,
+          catsEqual,
+          viewEqual,
+          currentRowsCount: currentRowsData.length,
+          latestRowsCount: latestRowsData.length,
+          currentRowsSample: JSON.stringify(currentRowsData.slice(0, 1)),
+          latestRowsSample: JSON.stringify(latestRowsData.slice(0, 1))
+        });
+        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。');
+        return; // ✅ 关键：直接返回，不继续执行后续代码
+      }
+      
+      // 只有数据有改动时才继续
+      console.log('✅ 数据有改动，继续保存流程：', {
+        rowsChanged: !rowsEqual,
+        catsChanged: !catsEqual,
+        viewChanged: !viewEqual
+      });
+    } else {
+      // 没有找到最新快照或快照没有 payload
+      if (!latestSnapshot) {
+        console.log('ℹ️ 没有找到历史快照，允许保存（首次保存）');
+      } else if (!latestSnapshot.payload) {
+        console.log('⚠️ 最新快照没有 payload 数据，允许保存');
+      } else {
+        console.log('⚠️ 最新快照检查失败，但继续保存流程', {
+          hasSnapshot: !!latestSnapshot,
+          hasPayload: !!latestSnapshot?.payload
+        });
+      }
+    }
+
+    // ✅ 获取默认快照（用于权限检查和快照名称）
     const { data: existingSnapshot, error: existingError } = await supabase
       .from(SUPABASE_TABLE)
       .select('owner_id, payload')
@@ -1406,9 +1639,6 @@ async function cloudSave() {
       snapshotName = autoLabel;
     }
 
-    const rows = await getAllRows();
-    const cats = readCats();
-    const view = readView();
     const now = Date.now();
 
     console.log('✅ 数据收集完成，准备构建 payload');
@@ -1444,15 +1674,15 @@ async function cloudSave() {
     console.log('✅ 默认快照保存成功');
 
     const histKey = `snap_${now}`;
-    const { error: historyError } = await supabase.from(SUPABASE_TABLE).insert({
+    const { error: historyInsertError } = await supabase.from(SUPABASE_TABLE).insert({
       key: histKey,
       payload,
       owner_id: authUid,
       updated_at: new Date(now).toISOString(),
     });
 
-    if (historyError) {
-      console.warn('⚠️ 保存历史快照失败（不影响主流程）:', historyError);
+    if (historyInsertError) {
+      console.warn('⚠️ 保存历史快照失败（不影响主流程）:', historyInsertError);
     } else {
       console.log('✅ 历史快照保存成功，开始清理旧快照');
       const { data: historyList, error: historyQueryError } = await supabase
@@ -1622,22 +1852,20 @@ async function renderCloudHistory() {
       }
     }
     
-    // ✅ 分组显示：我的快照 和 授权快照
+    // ✅ 只显示我的快照，不显示授权快照
     const mySnapshots = data.filter(s => s.owner_id === currentUserId);
-    const sharedSnapshots = data.filter(s => s.owner_id !== currentUserId);
     
     let html = '';
     
     // 显示我的快照
     if (mySnapshots.length > 0) {
-      html += `<div style="padding:8px 10px;font-weight:600;color:#1990FF;font-size:13px;border-bottom:1px solid #e5e5ea;">📁 我的快照</div>`;
       html += mySnapshots.map((row, index) => {
         const name = (row.payload?.snapshot_label || row.key).trim();
-      const t = fmtTime(row.updated_at);
+        const t = fmtTime(row.updated_at);
         const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
-      const metaCount = Array.isArray(row.payload?.rows)
-        ? `${row.payload.rows.length} 条`
-        : "";
+        const metaCount = Array.isArray(row.payload?.rows)
+          ? `${row.payload.rows.length} 条`
+          : "";
         const isDefault = row.key === 'default';
         const displayName = isDefault ? '📌 默认快照' : name;
         // ✅ 第一个（最新的）快照添加 latest 类和"最新"标记
@@ -1645,38 +1873,10 @@ async function renderCloudHistory() {
         const latestClass = isLatest ? ' latest' : '';
         const latestBadge = isLatest ? '<span class="cloud-item-latest-badge">最新</span>' : '';
         
-      return `<div class="cloud-item${latestClass}" data-key="${row.key}">
-        <div class="cloud-item-main">
-            <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
-          <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
-        </div>
-        <div class="cloud-item-time">${escapeHtml(t)}</div>
-      </div>`;
-      }).join("");
-    }
-    
-    // 显示授权给我的快照
-    if (sharedSnapshots.length > 0) {
-      html += `<div style="padding:8px 10px;font-weight:600;color:#34c759;font-size:13px;border-bottom:1px solid #e5e5ea;margin-top:10px;">🔓 授权快照</div>`;
-      html += sharedSnapshots.map((row, index) => {
-        const name = (row.payload?.snapshot_label || row.key).trim();
-        const t = fmtTime(row.updated_at);
-        const ownerName = ownerMap[row.owner_id] || '未知';
-        const userName = row.payload?.updated_by_name || ownerName;
-        const metaCount = Array.isArray(row.payload?.rows)
-          ? `${row.payload.rows.length} 条`
-          : "";
-        const isDefault = row.key === 'default';
-        const displayName = isDefault ? `📌 ${ownerName}的默认快照` : name;
-        // ✅ 第一个（最新的）授权快照也添加 latest 类和"最新"标记
-        const isLatest = index === 0;
-        const latestClass = isLatest ? ' latest' : '';
-        const latestBadge = isLatest ? '<span class="cloud-item-latest-badge">最新</span>' : '';
-        
-        return `<div class="cloud-item${latestClass}" data-key="${row.key}" style="background:#f0fff4;">
+        return `<div class="cloud-item${latestClass}" data-key="${row.key}">
           <div class="cloud-item-main">
             <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
-            <div class="cloud-item-meta">所有者：${escapeHtml(ownerName)} · ${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
+            <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
           </div>
           <div class="cloud-item-time">${escapeHtml(t)}</div>
         </div>`;
@@ -1709,7 +1909,7 @@ async function renderCloudHistory() {
     });
   });
     
-    console.log(`✅ 云端历史加载成功: ${mySnapshots.length} 个我的快照, ${sharedSnapshots.length} 个授权快照`);
+    console.log(`✅ 云端历史加载成功: ${mySnapshots.length} 个我的快照`);
     
   } catch (err) {
     console.error('❌ 渲染云端历史失败:', err);
@@ -2176,21 +2376,81 @@ function bindEvents() {
     }
   });
 
-  $("#btnClearAll").addEventListener("click", async () => {
-    setActiveFunction("clear");
-    if (!confirm("确定清空本地所有数据？此操作不可恢复。")) return;
-    const btn = $("#btnClearAll");
-    const original = btn.textContent;
-    try {
-      btn.disabled = true; btn.textContent = '⏳ 清空中...';
-      await db.rows.clear();
-      await refreshFilters();
-      await renderTable();
-      btn.textContent = '✅ 已清空';
-    } finally {
-      setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 800);
-    }
-  });
+  // 删除数据菜单切换
+  const btnDeleteData = $("#btnDeleteData");
+  const deleteDataMenu = $("#deleteDataMenu");
+  if (btnDeleteData && deleteDataMenu) {
+    btnDeleteData.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteDataMenu.style.display = deleteDataMenu.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener("click", () => {
+      deleteDataMenu.style.display = 'none';
+    });
+    
+    // 清空全部数据
+    $("#menuClearAll").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      deleteDataMenu.style.display = 'none';
+      clearActiveFunction();
+      if (!confirm("确定清空本地所有数据？此操作不可恢复。")) {
+        return;
+      }
+      const btn = $("#btnDeleteData");
+      const original = btn.textContent;
+      try {
+        btn.disabled = true; btn.textContent = '⏳ 清空中...';
+        await db.rows.clear();
+        await refreshFilters();
+        await renderTable();
+        btn.textContent = '✅ 已清空';
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 800);
+      }
+    });
+    
+    // 删除空白数据
+    $("#menuDeleteEmpty").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      deleteDataMenu.style.display = 'none';
+      clearActiveFunction();
+      
+      const all = await getAllRows();
+      const emptyRows = all.filter(r => {
+        const phone = (r.phone || '').trim();
+        const owner = (r.owner || '').trim();
+        const wx_real = (r.wx_real || '').trim();
+        const wx_name = (r.wx_name || '').trim();
+        const xhs_name = (r.xhs_name || '').trim();
+        const note1 = (r.note1 || '').trim();
+        const row_color = (r.row_color || '').trim();
+        
+        return !phone && !owner && !wx_real && !wx_name && !xhs_name && !note1 && !row_color;
+      });
+      
+      if (emptyRows.length === 0) {
+        alert('ℹ️ 没有空白数据');
+        return;
+      }
+      
+      if (!confirm(`确定删除 ${emptyRows.length} 条空白数据？此操作不可恢复。`)) {
+        return;
+      }
+      
+      const btn = $("#btnDeleteData");
+      const original = btn.textContent;
+      try {
+        btn.disabled = true; btn.textContent = '⏳ 删除中...';
+        const ids = emptyRows.map(r => r.id);
+        await db.rows.bulkDelete(ids);
+        await refreshFilters();
+        await renderTable();
+        btn.textContent = '✅ 已删除';
+      } finally {
+        setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 800);
+      }
+    });
+  }
 
   $("#btnCategories").addEventListener("click", () => {
     setActiveFunction("categories");
@@ -2596,6 +2856,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   applyView(readView());
   bindEvents();
+  
+  // ✅ 添加全局事件监听器：按钮失去焦点时清除active状态
+  document.addEventListener('click', (e) => {
+    // 如果点击的不是按钮，清除所有按钮的active状态
+    if (!e.target.closest('button.function-btn') && !e.target.closest('button.ghost')) {
+      clearActiveFunction();
+    }
+  });
+  
+  // ✅ 按钮失去焦点时清除active状态
+  document.addEventListener('focusout', (e) => {
+    if (e.target.classList.contains('function-btn') || e.target.classList.contains('ghost')) {
+      // 延迟清除，避免与其他事件冲突
+      setTimeout(() => {
+        if (document.activeElement !== e.target) {
+          e.target.classList.remove('active');
+        }
+      }, 100);
+    }
+  });
+  
   await refreshFilters();
   await renderTable();
   

@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
 
-  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/style.css?v=20250115" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -179,7 +179,13 @@
 
       <div class="toolbar">
         <button id="btnAdd" class="primary function-btn" data-function="add">新增号码</button>
-        <button id="btnClearAll" class="ghost function-btn" data-function="clear">清空全部</button>
+        <div style="position: relative; display: inline-block;">
+          <button id="btnDeleteData" class="ghost function-btn" data-function="deleteData">删除数据</button>
+          <div id="deleteDataMenu" style="display:none; position:absolute; left:50%; transform:translateX(-50%); top:100%; margin-top:4px; background:#fff; border:1px solid #eee; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.08); z-index:1000; min-width:140px; padding:4px 0;">
+            <button id="menuClearAll">清空全部数据</button>
+            <button id="menuDeleteEmpty">删除空白数据</button>
+          </div>
+        </div>
         <button id="btnSaveCloud" class="ghost function-btn" data-function="saveCloud">保存云端</button>
         <button id="btnLoadCloud" class="ghost function-btn" data-function="loadCloud">云端加载</button>
         <button id="btnCategories" class="ghost function-btn" data-function="categories">分类设置</button>
@@ -218,19 +224,11 @@
     <!-- 显示设置面板 -->
     <div class="panel" id="panelView" style="display:none">
       <div class="toolbar toolbar-wrap">
-        <label class="label-inline">
+        <label class="label-inline label-group-row1">
           标题文字
           <input id="titleText" />
         </label>
-        <label class="label-inline">
-          标题颜色
-          <input id="titleColor" type="color" />
-        </label>
-        <label class="label-inline">
-          按钮颜色
-          <input id="btnColor" type="color" />
-        </label>
-        <label class="label-inline">
+        <label class="label-inline label-group-row1">
           字体
           <select id="fontFamily">
             <option value="-apple-system,BlinkMacSystemFont,&quot;SF Pro Text&quot;,Helvetica,Arial,sans-serif">
@@ -247,31 +245,42 @@
             </option>
           </select>
         </label>
-        <label class="label-inline">
+        <label class="label-inline label-group-row2">
+          标题颜色
+          <input id="titleColor" type="color" />
+        </label>
+        <label class="label-inline label-group-row2">
+          按钮颜色
+          <input id="btnColor" type="color" />
+        </label>
+        <label class="label-inline label-group-row5">
           <input id="fontBold" type="checkbox" />
           粗体
+        </label>
+        <label class="label-inline label-group-row5">
+          隔行颜色
+          <input id="zebraColor" type="color" />
+        </label>
+        <label class="label-inline label-group-row5">
+          <input id="zebraOn" type="checkbox" />
+          隔行着色
         </label>
       </div>
 
       <div class="toolbar toolbar-wrap">
-        <label class="label-inline">
+        <label class="label-inline label-group-row3">
           行高
           <input id="rowPad" type="range" min="4" max="14" step="1" />
         </label>
-        <label class="label-inline">
+        <label class="label-inline label-group-row3">
           列宽
           <input id="colScale" type="range" min="0.7" max="1.4" step="0.05" />
         </label>
-        <label class="label-inline">
-          <input id="zebraOn" type="checkbox" />
-          隔行着色
-        </label>
-        <label class="label-inline">
-          隔行颜色
-          <input id="zebraColor" type="color" />
-        </label>
-        <button id="btnCompact" class="ghost">一键紧凑</button>
-        <button id="btnResetSize" class="ghost">恢复默认</button>
+      </div>
+      
+      <div class="toolbar toolbar-wrap" style="justify-content: center;">
+        <button id="btnCompact" class="ghost btn-group-row4">一键紧凑</button>
+        <button id="btnResetSize" class="ghost btn-group-row4">恢复默认</button>
       </div>
     </div>
 
@@ -303,5 +312,181 @@
 
   <!-- 主脚本 -->
   <script type="module" src="./js/app.js"></script>
+
+  <!-- Service Worker 注册和自动更新检测 -->
+  <script>
+    // ✅ 应用版本号 - 每次更新代码时修改这个版本号
+    const APP_VERSION = '20250115.1';
+
+    // ✅ Service Worker 注册
+    if ('serviceWorker' in navigator) {
+      let registration = null;
+      let updateCheckInterval = null;
+
+      // 注册 Service Worker
+      navigator.serviceWorker.register('./sw.js', {
+        scope: './'
+      }).then((reg) => {
+        registration = reg;
+        console.log('✅ Service Worker 注册成功，版本:', APP_VERSION);
+
+        // 检查更新
+        checkForUpdate(reg);
+
+        // 监听 Service Worker 更新
+        reg.addEventListener('updatefound', () => {
+          console.log('🔄 发现新的 Service Worker 版本');
+          const newWorker = reg.installing;
+          
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // 新版本已安装，提示用户更新
+              showUpdateNotification();
+            }
+          });
+        });
+
+        // 定期检查更新（每5分钟）
+        updateCheckInterval = setInterval(() => {
+          checkForUpdate(reg);
+        }, 5 * 60 * 1000);
+
+        // 页面可见时检查更新
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && reg) {
+            checkForUpdate(reg);
+          }
+        });
+      }).catch((err) => {
+        console.error('❌ Service Worker 注册失败:', err);
+      });
+
+      // 检查更新函数
+      function checkForUpdate(reg) {
+        reg.update().then(() => {
+          console.log('✅ 更新检查完成');
+        }).catch((err) => {
+          console.warn('⚠️ 更新检查失败:', err);
+        });
+      }
+
+      // 显示更新通知
+      function showUpdateNotification() {
+        // 检查是否已经显示过通知
+        if (localStorage.getItem('update_notification_shown') === APP_VERSION) {
+          return;
+        }
+
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1990FF;
+          color: white;
+          padding: 16px 24px;
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+          z-index: 10000;
+          max-width: 90%;
+          text-align: center;
+          font-size: 14px;
+          line-height: 1.5;
+        `;
+        notification.innerHTML = `
+          <div style="margin-bottom: 12px; font-weight: 600;">🔄 发现新版本</div>
+          <div style="margin-bottom: 16px; opacity: 0.9;">点击下方按钮更新到最新版本</div>
+          <button id="btnUpdateNow" style="
+            background: white;
+            color: #1990FF;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 8px;
+          ">立即更新</button>
+          <button id="btnUpdateLater" style="
+            background: transparent;
+            color: white;
+            border: 1px solid white;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            font-size: 14px;
+          ">稍后</button>
+        `;
+        document.body.appendChild(notification);
+
+        // 立即更新按钮
+        document.getElementById('btnUpdateNow').addEventListener('click', async () => {
+          notification.style.opacity = '0.7';
+          notification.querySelector('#btnUpdateNow').textContent = '更新中...';
+          notification.querySelector('#btnUpdateNow').disabled = true;
+
+          try {
+            // 通知 Service Worker 跳过等待
+            if (registration && registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+
+            // 清除所有缓存
+            if (registration) {
+              const cacheNames = await caches.keys();
+              await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+
+            // 重新加载页面
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
+          } catch (err) {
+            console.error('更新失败:', err);
+            alert('更新失败，请手动刷新页面');
+            notification.remove();
+          }
+        });
+
+        // 稍后按钮
+        document.getElementById('btnUpdateLater').addEventListener('click', () => {
+          notification.style.animation = 'fadeOut 0.3s ease';
+          setTimeout(() => {
+            notification.remove();
+          }, 300);
+        });
+
+        // 记录已显示通知
+        localStorage.setItem('update_notification_shown', APP_VERSION);
+      }
+
+      // 监听 Service Worker 控制权变化
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          console.log('🔄 Service Worker 已更新，重新加载页面');
+          window.location.reload();
+        }
+      });
+    } else {
+      console.warn('⚠️ 浏览器不支持 Service Worker');
+    }
+
+    // ✅ 添加淡出动画
+    if (!document.querySelector('style[data-update-animation]')) {
+      const style = document.createElement('style');
+      style.setAttribute('data-update-animation', 'true');
+      style.textContent = `
+        @keyframes fadeOut {
+          from { opacity: 1; transform: translateX(-50%) translateY(0); }
+          to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  </script>
 </body>
 </html>

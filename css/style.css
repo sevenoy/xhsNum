@@ -10,7 +10,7 @@
   --highlight-blue: #e2f0ff;
   
   /* ✅ 按钮颜色变量 */
-  --btn-default: #E2F0FF;
+  --btn-default: #3C78D7; /* RGB(60, 120, 215) */
   --btn-active: #1890FF;
   --btn-hover: #40a9ff;
 
@@ -194,10 +194,14 @@ input::placeholder {
 }
 
 input:focus,
-select:focus,
-button:focus-visible {
+select:focus {
   border-color: var(--active);
   box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
+}
+
+/* ✅ 按钮失去焦点时不显示高亮 */
+button:focus-visible {
+  outline: none;
 }
 
 /* 下拉菜单统一白底 */
@@ -277,29 +281,79 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ✅ 功能按钮统一样式 - 默认灰色，点击变蓝色 */
+/* ✅ 功能按钮统一样式 - 默认蓝色 RGB(60, 120, 215) */
 button.ghost,
 button.function-btn {
-  background: var(--btn-default);
+  background: var(--btn-default) !important; /* RGB(60, 120, 215) */
   border-color: transparent;
   color: #fff;
   font-weight: 500;
 }
 
-button.ghost:hover,
-button.function-btn:hover {
-  background: var(--btn-hover);
-}
-
+/* ✅ 按钮激活状态（有active类时） */
 button.ghost.active,
 button.function-btn.active {
-  background: var(--btn-active);
+  background: var(--btn-active) !important;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }
 
-button.ghost:active,
-button.function-btn:active {
-  background: var(--btn-active);
+/* ✅ 按钮悬停状态（仅在鼠标悬停时） */
+button.ghost:hover:not(.active),
+button.function-btn:hover:not(.active) {
+  background: var(--btn-hover) !important;
+}
+
+/* ✅ 按钮点击瞬间的状态 */
+button.ghost:active:not(.active),
+button.function-btn:active:not(.active) {
+  background: var(--btn-active) !important;
+}
+
+/* ✅ 按钮失去焦点时恢复默认背景色（最高优先级） */
+button.ghost:not(:active):not(.active):not(:hover),
+button.function-btn:not(:active):not(.active):not(:hover) {
+  background: var(--btn-default) !important;
+}
+
+/* ✅ 按钮失去焦点时恢复默认背景色，不显示高亮 */
+button.ghost:focus,
+button.function-btn:focus,
+button.ghost:focus-visible,
+button.function-btn:focus-visible {
+  background: var(--btn-default) !important;
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ✅ 手机端：按钮点击后立即恢复默认背景色 */
+@media (max-width: 768px) {
+  /* ✅ 强制所有非激活状态的按钮使用默认背景色 */
+  button.ghost,
+  button.function-btn {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost.active,
+  button.function-btn.active {
+    background: var(--btn-active) !important;
+  }
+  
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost:hover:not(.active),
+  button.function-btn:hover:not(.active) {
+    background: var(--btn-hover) !important;
+  }
+  
+  /* ✅ 失去焦点时强制恢复默认背景色 */
+  button.ghost:not(:focus):not(.active):not(:hover):not(:active),
+  button.function-btn:not(:focus):not(.active):not(:hover):not(:active) {
+    background: var(--btn-default) !important;
+  }
 }
 
 /* ✅ 主操作按钮（新增一行） */
@@ -325,12 +379,15 @@ button.primary:active {
 
 /* ✅ iOS风格导入导出按钮 */
 #menuImport,
-#menuExport {
+#menuExport,
+#menuClearAll,
+#menuDeleteEmpty {
   display: block;
   width: auto;
   min-width: 100px;
   height: 36px;
   padding: 0 16px;
+  text-align: center;
   margin: 4px 8px;
   background: rgb(32, 139, 238) !important; /* ✅ 优化：背景颜色改为 RGB(32, 139, 238) */
   color: #ffffff !important;
@@ -347,20 +404,25 @@ button.primary:active {
 }
 
 #menuImport:hover,
-#menuExport:hover {
+#menuExport:hover,
+#menuClearAll:hover,
+#menuDeleteEmpty:hover {
   background: rgb(24, 120, 220) !important; /* ✅ 优化：hover 状态颜色稍深 */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
 #menuImport:active,
-#menuExport:active {
+#menuExport:active,
+#menuClearAll:active,
+#menuDeleteEmpty:active {
   background: rgb(20, 100, 200) !important; /* ✅ 优化：active 状态颜色更深 */
   transform: translateY(0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
-#importExportMenu {
+#importExportMenu,
+#deleteDataMenu {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1300,6 +1362,46 @@ td.col-cat select:focus {
     white-space: normal !important;
     word-break: break-word !important;
   }
+  
+  /* ✅ 小屏幕手机端设置页面布局优化 */
+  #panelView .label-inline.label-group-row1 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 90px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row2 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 90px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    margin-bottom: 12px;
+    margin-right: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3:last-child {
+    margin-right: 0;
+  }
+  
+  #panelView .label-inline.label-group-row5 {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 70px;
+    margin-bottom: 8px;
+    max-width: calc(33.333% - 4px);
+  }
+  
+  #panelView .btn-group-row4 {
+    flex: 0 0 auto;
+    min-width: 100px;
+    margin: 0 4px;
+  }
 
   /* ✅ 手机端新增号码模态框样式优化 */
   .add-number-modal {
@@ -1451,6 +1553,111 @@ td.col-cat select:focus {
   .label-inline input[type="color"],
   .label-inline input[type="checkbox"] {
     flex-shrink: 0;
+  }
+  
+  /* ✅ 手机端设置页面布局优化 - 必须覆盖上面的 .label-inline 规则 */
+  #panelView .label-inline.label-group-row1 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 100px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row2 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 100px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    margin-bottom: 12px;
+    margin-right: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3:last-child {
+    margin-right: 0;
+  }
+  
+  #panelView .label-inline.label-group-row5 {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 80px;
+    margin-bottom: 8px;
+    max-width: calc(33.333% - 4px);
+  }
+  
+  #panelView .btn-group-row4 {
+    flex: 0 0 auto;
+    min-width: 120px;
+    margin: 0 4px;
+  }
+  
+  /* ✅ 手机端按钮取消点击时不高亮 */
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+}
+
+/* ✅ 小屏幕手机端（480px）设置页面布局优化 */
+@media (max-width: 480px) {
+  #panelView .label-inline.label-group-row1 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 90px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row2 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 90px;
+    margin-bottom: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3 {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    margin-bottom: 12px;
+    margin-right: 8px;
+    max-width: calc(50% - 4px);
+  }
+  
+  #panelView .label-inline.label-group-row3:last-child {
+    margin-right: 0;
+  }
+  
+  #panelView .label-inline.label-group-row5 {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 70px;
+    margin-bottom: 8px;
+    max-width: calc(33.333% - 4px);
+  }
+  
+  #panelView .btn-group-row4 {
+    flex: 0 0 auto;
+    min-width: 100px;
+    margin: 0 4px;
+  }
+  
+  /* ✅ 小屏幕手机端：按钮取消点击时不高亮 */
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost:not(.active),
+  button.function-btn:not(.active) {
+    background: var(--btn-default) !important;
+  }
+  
+  /* ✅ 确保按钮失去焦点时恢复默认背景色 */
+  button.ghost:not(:focus):not(.active):not(:hover),
+  button.function-btn:not(:focus):not(.active):not(:hover) {
+    background: var(--btn-default) !important;
   }
 
   .cloud-status {

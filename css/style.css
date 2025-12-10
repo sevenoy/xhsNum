@@ -969,8 +969,10 @@ td.col-cat select:focus {
   }
 
   .panel {
-    border-radius: 14px;
-    padding: 8px 10px;
+    border-radius: 12px;
+    padding: 12px 10px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   .topbar {
@@ -1038,16 +1040,82 @@ td.col-cat select:focus {
     font-weight: bold !important;
   }
 
+  .toolbar {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .toolbar:last-child {
+    margin-bottom: 0;
+  }
+
   input,
   select,
   button {
     font-size: 13px;
-    height: 30px;
+    height: 32px;
+    padding: 6px 10px;
+    border-radius: 8px;
   }
 
   /* 防止手机端点击输入框时自动放大 */
   #q {
     font-size: 16px !important;
+    padding: 8px 36px 8px 12px;
+    height: 36px;
+  }
+
+  .search-wrapper {
+    min-width: 0;
+    flex: 1 1 100%;
+    margin-bottom: 6px;
+  }
+
+  /* 按钮在手机端优化 */
+  .toolbar button {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 下拉框在手机端优化 */
+  .toolbar select {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* 第一行工具栏：搜索和筛选 - 垂直排列 */
+  .toolbar:first-of-type {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar:first-of-type > * {
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .toolbar:first-of-type > *:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 第二行工具栏：按钮网格布局 */
+  .toolbar:nth-of-type(2) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .toolbar:nth-of-type(2) button {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 100%;
   }
 
   th,
@@ -1057,6 +1125,17 @@ td.col-cat select:focus {
 }
 
 @media (max-width: 480px) {
+  .wrap {
+    padding: 8px 6px 16px !important;
+  }
+
+  .panel {
+    border-radius: 10px;
+    padding: 10px 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+
   .topbar .top-right #currentUserName {
     font-size: 11px;
     margin-right: 4px;
@@ -1074,17 +1153,101 @@ td.col-cat select:focus {
 
   .toolbar {
     gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .toolbar:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 搜索框在小手机上全宽 */
+  .search-wrapper {
+    width: 100%;
+    margin-bottom: 8px;
+    min-width: 0;
   }
 
   #q {
     min-width: 0;
-    flex: 1 1 140px;
+    width: 100%;
     font-size: 16px !important;
+    padding: 8px 36px 8px 12px;
+    height: 36px;
+  }
+
+  /* 按钮在小手机上优化 - 两列网格布局 */
+  .toolbar:nth-of-type(2) {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .toolbar button {
+    font-size: 11px;
+    padding: 6px 8px;
+    height: 32px;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 第二行工具栏按钮：两列布局 */
+  .toolbar:nth-of-type(2) button {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* 下拉框在小手机上优化 */
+  .toolbar select {
+    font-size: 11px;
+    padding: 6px 8px;
+    height: 32px;
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .toolbar select:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 第一行工具栏：垂直排列 */
+  .toolbar:first-of-type {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar:first-of-type > * {
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .toolbar:first-of-type > *:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 标签式控件优化 */
+  .label-inline {
+    font-size: 11px;
+    flex: 1 1 100%;
+    margin-bottom: 8px;
+    min-width: 0;
+  }
+
+  .label-inline:last-child {
+    margin-bottom: 0;
+  }
+
+  .label-inline input[type="range"],
+  .label-inline input[type="color"],
+  .label-inline input[type="checkbox"] {
+    flex-shrink: 0;
   }
 
   .cloud-status {
-    font-size: 12px;
-    padding: 3px 8px;
+    font-size: 11px;
+    padding: 3px 6px;
   }
 
   .m-phone {

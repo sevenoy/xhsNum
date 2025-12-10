@@ -971,13 +971,16 @@ td.col-cat select:focus {
   justify-content: flex-end;
   gap: 6px;
   background: #fafafa;
+  flex-wrap: wrap; /* ✅ 允许按钮换行 */
+  min-height: 50px; /* ✅ 增加最小高度，确保有足够空间 */
 }
 
 .m-actions button {
   height: 26px;
-  padding: 2px 16px; /* ✅ 优化：左右内边距从8px增加到16px（2倍） */
+  padding: 2px 12px; /* ✅ 稍微减少内边距以适应小屏幕 */
   font-size: 12px;
-  min-width: 60px; /* ✅ 优化：设置最小宽度，确保按钮宽度足够 */
+  min-width: 50px; /* ✅ 稍微减少最小宽度 */
+  flex: 0 0 auto; /* ✅ 防止按钮被压缩 */
 }
 
 /* 小屏优化 */
@@ -1244,6 +1247,29 @@ td.col-cat select:focus {
   .topbar .top-right #cloudStatus {
     font-size: 10px;
     padding: 2px 6px;
+  }
+
+  /* ✅ 确保手机端最新快照高亮和标记正常显示 */
+  .cloud-item.latest {
+    background: #e6f3ff !important;
+    border: 1px solid #1990FF !important;
+  }
+
+  .cloud-item-latest-badge {
+    display: inline-block !important;
+    background: #1990FF !important;
+    color: white !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    margin-left: 6px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+  }
+
+  .cloud-item-name {
+    white-space: normal !important;
+    word-break: break-word !important;
   }
 
   .toolbar {

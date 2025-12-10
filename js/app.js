@@ -402,48 +402,186 @@ async function getAllRows() {
   return all;
 }
 
-async function addRow() {
-  const all = await getAllRows();
+// ✅ 显示新增号码的编辑页面
+async function showAddNumberModal() {
+  const cats = readCats();
   const now = Date.now();
   
-  // ✅ 获取当前用户 ID（用于记录）
-  const currentUserId = await getCurrentUserId() || 'unknown';
-  const currentUserName = getCurrentUserName();
+  // 创建模态框
+  const modal = document.createElement('div');
+  modal.className = 'add-number-modal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  `;
   
-  // ✅ 从顶部新增：新行的 order 设为 0，其他所有行的 order + 1
-  if (all.length > 0) {
-    // 更新所有现有行的 order，让它们下移
-    const updates = all.map(r => ({
-      ...r,
-      order: (r.order || 0) + 1,
+  const content = document.createElement('div');
+  content.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  `;
+  
+  content.innerHTML = `
+    <h2 style="margin: 0 0 20px 0; font-size: 20px; color: #1990FF;">新增号码</h2>
+    <div class="m-row-details" style="max-height: none; opacity: 1; padding: 0; border: none;">
+      <div class="m-detail-row">
+        <div class="m-detail-label">电话号</div>
+        <div class="m-detail-value">
+          <input type="tel" class="m-input" id="add-phone" placeholder="输入电话号" style="width: 100%;">
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">所属人</div>
+        <div class="m-detail-value">
+          <input type="text" class="m-input" id="add-owner" placeholder="输入所属人" style="width: 100%;">
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">微信实名人</div>
+        <div class="m-detail-value">
+          <input type="text" class="m-input" id="add-wx-real" placeholder="输入微信实名人" style="width: 100%;">
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">对应微信名</div>
+        <div class="m-detail-value">
+          <input type="text" class="m-input" id="add-wx-name" placeholder="输入对应微信名" style="width: 100%;">
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">小红书名称</div>
+        <div class="m-detail-value">
+          <input type="text" class="m-input" id="add-xhs-name" placeholder="输入小红书名称" style="width: 100%;">
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">备注</div>
+        <div class="m-detail-value">
+          <textarea class="m-textarea" id="add-note1" placeholder="输入备注" rows="2" style="width: 100%;"></textarea>
+        </div>
+      </div>
+      <div class="m-detail-row">
+        <div class="m-detail-label">分类</div>
+        <div class="m-detail-value">
+          <select id="add-row-color" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #e5e5ea;">
+            <option value="">未分类</option>
+            ${cats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e5ea;">
+      <button class="ghost" id="add-cancel" style="flex: 1; padding: 10px;">取消</button>
+      <button class="primary" id="add-save" style="flex: 1; padding: 10px;">💾 保存</button>
+    </div>
+  `;
+  
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  
+  // 点击背景关闭
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // 取消按钮
+  document.getElementById('add-cancel').addEventListener('click', () => {
+    modal.remove();
+  });
+  
+  // 保存按钮
+  document.getElementById('add-save').addEventListener('click', async () => {
+    const phone = document.getElementById('add-phone').value.trim();
+    const owner = document.getElementById('add-owner').value.trim();
+    const wxReal = document.getElementById('add-wx-real').value.trim();
+    const wxName = document.getElementById('add-wx-name').value.trim();
+    const xhsName = document.getElementById('add-xhs-name').value.trim();
+    const note1 = document.getElementById('add-note1').value.trim();
+    const rowColor = document.getElementById('add-row-color').value;
+    
+    // 验证电话号格式（如果有输入）
+    if (phone && !/^[\d\s\-()]+$/.test(phone)) {
+      alert('❌ 电话号格式不正确\n\n只能包含数字、空格、短横线和括号');
+      return;
+    }
+    
+    // 创建新行
+    const all = await getAllRows();
+    const currentUserId = await getCurrentUserId() || 'unknown';
+    const currentUserName = getCurrentUserName();
+    
+    // ✅ 从顶部新增：新行的 order 设为 0，其他所有行的 order + 1
+    if (all.length > 0) {
+      const updates = all.map(r => ({
+        ...r,
+        order: (r.order || 0) + 1,
+        updated_at: now,
+        updated_by: currentUserId,
+        updated_by_name: currentUserName
+      }));
+      await db.rows.bulkPut(updates);
+    }
+    
+    const row = {
+      id: uid(),
+      order: 0,
+      phone,
+      owner,
+      wx_real: wxReal,
+      wx_name: wxName,
+      xhs_name: xhsName,
+      note1,
+      row_color: rowColor,
+      created_at: now,
+      created_by: currentUserId,
+      created_by_name: currentUserName,
       updated_at: now,
       updated_by: currentUserId,
-      updated_by_name: currentUserName
-    }));
-    await db.rows.bulkPut(updates);
-  }
+      updated_by_name: currentUserName,
+    };
+    
+    await db.rows.add(row);
+    await refreshFilters();
+    
+    // ✅ 保存后根据所属人排序
+    state.sortBy = 'owner';
+    const sortSelect = document.getElementById('sortBy');
+    if (sortSelect) {
+      sortSelect.value = 'owner';
+    }
+    
+    await renderTable();
+    modal.remove();
+    showMobileToast('✅ 新增成功');
+  });
   
-  // 创建新行，order 为 0（顶部）
-  const row = {
-    id: uid(),
-    order: 0,
-    phone: "",
-    owner: "",
-    wx_real: "",
-    wx_name: "",
-    xhs_name: "",
-    note1: "",
-    row_color: "",
-    created_at: now,
-    created_by: currentUserId,
-    created_by_name: currentUserName,
-    updated_at: now,
-    updated_by: currentUserId,
-    updated_by_name: currentUserName,
-  };
-  await db.rows.add(row);
-  await refreshFilters();
-  await renderTable();
+  // 聚焦第一个输入框
+  setTimeout(() => {
+    document.getElementById('add-phone').focus();
+  }, 100);
+}
+
+async function addRow() {
+  // ✅ 改为显示新增号码的编辑页面
+  await showAddNumberModal();
 }
 
 // ✅ 简化 updateRow，参考原始版本
@@ -518,63 +656,73 @@ async function moveRow(id, dir) {
  * ========================= */
 
 async function refreshFilters() {
-  const owners = new Set();
-  const wxreals = new Set();
   const all = await getAllRows();
+  
+  // ✅ 名称归一化：将所有名称转换为小写进行分组，但保留原始显示名称
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  
+  // 所属人：按小写分组，保留最常见的原始大小写形式
+  const ownerMap = new Map(); // key: 小写, value: { original: 原始名称, count: 数量 }
   for (const r of all) {
-    if (r.owner) owners.add(r.owner);
-    if (r.wx_real) wxreals.add(r.wx_real);
+    if (!r.owner) continue;
+    const key = norm(r.owner);
+    if (!ownerMap.has(key)) {
+      ownerMap.set(key, { original: r.owner, count: 0 });
+    }
+    ownerMap.get(key).count++;
   }
+  
+  // 微信实名人：按小写分组
+  const wxRealMap = new Map();
+  for (const r of all) {
+    if (!r.wx_real) continue;
+    const key = norm(r.wx_real);
+    if (!wxRealMap.has(key)) {
+      wxRealMap.set(key, { original: r.wx_real, count: 0 });
+    }
+    wxRealMap.get(key).count++;
+  }
+  
   const ownerSel = $("#filterOwner");
   const realSel = $("#filterWxReal");
   const ownerVal = ownerSel.value;
   const realVal = realSel.value;
 
   const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
-  const norm = (s) => String(s || "").trim().toLowerCase();
   const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
-  const countBy = (rows, field) => {
-    const m = new Map();
-    for (const r of rows) {
-      const k = norm(r[field]);
-      if (!k) continue;
-      m.set(k, (m.get(k) || 0) + 1);
-    }
-    return m;
-  };
-  const sortNames = (arr, counts) =>
-    arr.sort((a, b) => {
-      const an = norm(a);
-      const bn = norm(b);
-      const ap = priIndex.has(an) ? priIndex.get(an) : Infinity;
-      const bp = priIndex.has(bn) ? priIndex.get(bn) : Infinity;
+  
+  const sortNames = (nameMap) => {
+    const arr = Array.from(nameMap.entries());
+    return arr.sort(([aKey, aVal], [bKey, bVal]) => {
+      const ap = priIndex.has(aKey) ? priIndex.get(aKey) : Infinity;
+      const bp = priIndex.has(bKey) ? priIndex.get(bKey) : Infinity;
       if (ap !== bp) return ap - bp;
       if (ap === Infinity) {
-        const ca = counts.get(an) || 0;
-        const cb = counts.get(bn) || 0;
-        if (cb !== ca) return cb - ca;
-        const cmp = a.localeCompare(b, "zh");
+        if (bVal.count !== aVal.count) return bVal.count - aVal.count;
+        const cmp = aVal.original.localeCompare(bVal.original, "zh");
         if (cmp !== 0) return cmp;
       }
       return 0;
     });
+  };
 
-  const ownerCounts = countBy(all, "owner");
+  const sortedOwners = sortNames(ownerMap);
   ownerSel.innerHTML =
     `<option value="all">所属人：全部</option>` +
-    sortNames(Array.from(owners), ownerCounts)
-      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+    sortedOwners
+      .map(([key, val]) => `<option value="${escapeHtml(key)}" data-original="${escapeHtml(val.original)}">${escapeHtml(val.original)}</option>`)
       .join("");
 
-  const wxCounts = countBy(all, "wx_real");
+  const sortedWxReals = sortNames(wxRealMap);
   realSel.innerHTML =
     `<option value="all">微信实名人：全部</option>` +
-    sortNames(Array.from(wxreals), wxCounts)
-      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+    sortedWxReals
+      .map(([key, val]) => `<option value="${escapeHtml(key)}" data-original="${escapeHtml(val.original)}">${escapeHtml(val.original)}</option>`)
       .join("");
 
-  ownerSel.value = ownerVal || "all";
-  realSel.value = realVal || "all";
+  // ✅ 保持选中值（使用小写键）
+  ownerSel.value = ownerVal ? norm(ownerVal) : "all";
+  realSel.value = realVal ? norm(realVal) : "all";
 }
 
 function tokenize(s) {
@@ -632,11 +780,14 @@ function applySearchFilter(rows) {
 
 function applyFilters(rows) {
   let out = rows.slice();
+  const norm = (s) => String(s || "").trim().toLowerCase();
+  
+  // ✅ 筛选时使用小写比较，实现大小写不区分
   if (state.owner !== "all") {
-    out = out.filter((r) => r.owner === state.owner);
+    out = out.filter((r) => norm(r.owner) === norm(state.owner));
   }
   if (state.wxReal !== "all") {
-    out = out.filter((r) => r.wx_real === state.wxReal);
+    out = out.filter((r) => norm(r.wx_real) === norm(state.wxReal));
   }
   out = applySearchFilter(out);
   
@@ -783,8 +934,13 @@ function makeRowTr(r) {
   const bg = r.row_color ? hexToRgba(catColorOf(cats, r.row_color) || "#ffffff", 0.18) : "";
   const xhsDisplay = truncateText(r.xhs_name, 12); /* ✅ 优化：显示12个汉字 */
   
+      // ✅ 检查是否是最近一个月内新增的（30天），一个月后自动取消标记
+      const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const isNewNumber = (r.created_at || 0) > oneMonthAgo;
+      const newNumberBadge = isNewNumber ? '<span style="display: inline-block; background: #1990FF; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-right: 6px; font-weight: 500; vertical-align: middle;">最近新增</span>' : '';
+  
   return `<tr data-id="${r.id}">
-    ${tdEditable("col-phone", r.phone, "phone", r.id)}
+    <td class="col-phone" contenteditable="true" data-field="phone" data-id="${r.id}">${newNumberBadge}${escapeHtml(r.phone || "")}</td>
     ${tdEditable("col-owner", r.owner, "owner", r.id)}
     ${tdEditable("col-real", r.wx_real, "wx_real", r.id)}
     ${tdEditable("col-wx", r.wx_name, "wx_name", r.id)}
@@ -841,10 +997,15 @@ function renderMobileList(rows) {
       const catName = catNameOf(cats, r.row_color);
       const xhsDisplay = truncateText(r.xhs_name, 10);
       
+      // ✅ 检查是否是最近一个月内新增的（30天），一个月后自动取消标记
+      const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const isNewNumber = (r.created_at || 0) > oneMonthAgo;
+      const newNumberBadge = isNewNumber ? '<span style="display: inline-block; background: #1990FF; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-right: 6px; font-weight: 500;">最近新增</span>' : '';
+      
       return `<div class="m-row" data-id="${r.id}" data-original-data='${JSON.stringify(r)}' style="--card-bg:${zebraBg}">
         <button class="m-row-header" data-id="${r.id}">
           <div class="m-main-line">
-            <span class="m-phone">${escapeHtml(r.phone || "")}</span>
+            <span class="m-phone">${newNumberBadge}${escapeHtml(r.phone || "")}</span>
             <span class="m-xhs" title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</span>
             <span class="m-arrow">▾</span>
           </div>
@@ -1670,7 +1831,12 @@ function bindEvents() {
     
     const id = td.getAttribute("data-id");
     const field = td.getAttribute("data-field");
-    const val = td.textContent.trim();
+    let val = td.textContent.trim();
+    
+    // ✅ 如果是电话号列，需要移除"最近新增"标记文本（如果存在）
+    if (field === 'phone') {
+      val = val.replace(/最近新增/g, '').trim();
+    }
     
     console.log(`📝 blur 事件: field=${field}, value=${val}`);
     

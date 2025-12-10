@@ -1211,21 +1211,33 @@ async function cloudSave() {
     const dateStr = `${year}${month}${day}`;
     const autoLabel = `${currentUserName} ${dateStr}`;
     
-    const defaultLabel = existingSnapshot?.payload?.snapshot_label || autoLabel;
-    const labelInput = prompt("输入快照名称（将自动添加用户名和时间）", defaultLabel);
-    if (labelInput == null) {
-      console.log('ℹ️ 用户取消了保存操作');
-      return;
-    }
-
-    let snapshotName = labelInput.trim();
-    if (!snapshotName) {
-      snapshotName = autoLabel;
-    } else {
-      // ✅ 如果用户输入的名称不包含用户名和时间，自动添加
-      if (!snapshotName.includes(currentUserName) && !snapshotName.includes(dateStr)) {
-        snapshotName = `${snapshotName} ${currentUserName} ${dateStr}`;
+    // ✅ 兼容性处理：某些浏览器不支持 prompt()，直接使用自动生成的名称
+    let snapshotName = autoLabel;
+    
+    // 尝试使用 prompt（如果支持）
+    try {
+      const defaultLabel = existingSnapshot?.payload?.snapshot_label || autoLabel;
+      if (typeof prompt !== 'undefined' && prompt !== null) {
+        const labelInput = prompt("输入快照名称（将自动添加用户名和时间）", defaultLabel);
+        if (labelInput == null) {
+          console.log('ℹ️ 用户取消了保存操作');
+          return;
+        }
+        
+        const trimmedInput = labelInput.trim();
+        if (trimmedInput) {
+          // ✅ 如果用户输入的名称不包含用户名和时间，自动添加
+          if (!trimmedInput.includes(currentUserName) && !trimmedInput.includes(dateStr)) {
+            snapshotName = `${trimmedInput} ${currentUserName} ${dateStr}`;
+          } else {
+            snapshotName = trimmedInput;
+          }
+        }
       }
+    } catch (e) {
+      // prompt 不支持或出错，使用自动生成的名称
+      console.log('ℹ️ prompt() 不支持，使用自动生成的快照名称:', autoLabel);
+      snapshotName = autoLabel;
     }
 
     const rows = await getAllRows();

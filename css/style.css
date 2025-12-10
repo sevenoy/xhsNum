@@ -1065,6 +1065,34 @@ td.col-cat select:focus {
     height: 36px;
   }
 
+  /* 防止手机端列表输入框自动放大 - 所有输入框字体至少16px */
+  .m-input,
+  .m-textarea,
+  .m-detail-value[contenteditable="true"] {
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+
+  .m-detail-value select {
+    font-size: 16px !important;
+  }
+
+  /* 调整输入框padding以适应16px字体 */
+  .m-input {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  .m-textarea {
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+
+  .m-detail-value[contenteditable="true"] {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
   .search-wrapper {
     min-width: 0;
     flex: 1 1 100%;
@@ -1090,29 +1118,45 @@ td.col-cat select:focus {
     padding: 6px 10px;
   }
 
-  /* 第一行工具栏：搜索和筛选 - 垂直排列 */
+  /* 第一行工具栏：搜索和筛选 - 重新布局 */
   .toolbar:first-of-type {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .toolbar:first-of-type > * {
-    width: 100%;
-    margin-bottom: 6px;
-  }
-
-  .toolbar:first-of-type > *:last-child {
-    margin-bottom: 0;
-  }
-
-  /* 第二行工具栏：按钮网格布局 */
-  .toolbar:nth-of-type(2) {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
 
-  .toolbar:nth-of-type(2) button {
+  /* 搜索框和搜索按钮在同一行 */
+  .toolbar:first-of-type .search-wrapper {
+    flex: 1 1 calc(100% - 140px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 1;
+  }
+
+  .toolbar:first-of-type #btnSearchMode {
+    flex: 0 0 130px;
+    white-space: nowrap;
+    margin-bottom: 0;
+    order: 2;
+  }
+
+  /* 三个下拉框在同一行，放在搜索行下面 */
+  .toolbar:first-of-type select {
+    flex: 1 1 calc(33.333% - 4px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 3;
+  }
+
+  /* 第二行工具栏：按钮网格布局 - 4列，2行 */
+  .toolbar:nth-of-type(2) {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .toolbar:nth-of-type(2) button,
+  .toolbar:nth-of-type(2) > div {
     width: 100%;
     max-width: 100%;
     flex: 1 1 100%;
@@ -1175,10 +1219,38 @@ td.col-cat select:focus {
     height: 36px;
   }
 
-  /* 按钮在小手机上优化 - 两列网格布局 */
+  /* 小手机上确保所有输入框字体至少16px */
+  .m-input,
+  .m-textarea,
+  .m-detail-value[contenteditable="true"] {
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+
+  .m-detail-value select {
+    font-size: 16px !important;
+  }
+
+  /* 调整输入框padding以适应16px字体 */
+  .m-input {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  .m-textarea {
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+
+  .m-detail-value[contenteditable="true"] {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  /* 按钮在小手机上优化 - 4列网格布局，2行 */
   .toolbar:nth-of-type(2) {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
   }
 
@@ -1193,10 +1265,12 @@ td.col-cat select:focus {
     text-overflow: ellipsis;
   }
 
-  /* 第二行工具栏按钮：两列布局 */
-  .toolbar:nth-of-type(2) button {
+  /* 第二行工具栏按钮：4列布局 */
+  .toolbar:nth-of-type(2) button,
+  .toolbar:nth-of-type(2) > div {
     width: 100%;
     max-width: 100%;
+    flex: 1 1 100%;
   }
 
   /* 下拉框在小手机上优化 */
@@ -1212,19 +1286,36 @@ td.col-cat select:focus {
     margin-bottom: 0;
   }
 
-  /* 第一行工具栏：垂直排列 */
+  /* 第一行工具栏：搜索和筛选 - 重新布局 */
   .toolbar:first-of-type {
-    flex-direction: column;
-    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
-  .toolbar:first-of-type > * {
-    width: 100%;
-    margin-bottom: 6px;
-  }
-
-  .toolbar:first-of-type > *:last-child {
+  /* 搜索框和搜索按钮在同一行 */
+  .toolbar:first-of-type .search-wrapper {
+    flex: 1 1 calc(100% - 120px);
+    min-width: 0;
     margin-bottom: 0;
+    order: 1;
+  }
+
+  .toolbar:first-of-type #btnSearchMode {
+    flex: 0 0 110px;
+    white-space: nowrap;
+    margin-bottom: 0;
+    order: 2;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  /* 三个下拉框在同一行 */
+  .toolbar:first-of-type select {
+    flex: 1 1 calc(33.333% - 4px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 3;
   }
 
   /* 标签式控件优化 */

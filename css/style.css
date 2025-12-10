@@ -748,12 +748,12 @@ td.col-cat select:focus {
 }
 
 .m-row:hover .m-row-header {
-  background: #f9ddcb; /* ✅ 优化：悬停颜色改为 #f9ddcb */
+  background: #e6f3ff; /* ✅ 悬停颜色改为蓝色 */
 }
 
 .m-row:active .m-row-header,
 .m-row-header:active {
-  background: #f9ddcb; /* ✅ 优化：点击时保持同色 */
+  background: #d0e7ff; /* ✅ 点击时使用更深的蓝色 */
 }
 
 /* 头部主行：手机号 + 小红书名称 */
@@ -1056,6 +1056,35 @@ td.col-cat select:focus {
     padding: 3px 8px;
   }
 
+  /* ✅ 确保手机端（768px）最新快照高亮和标记正常显示 */
+  .cloud-item.latest {
+    background: #e6f3ff !important;
+    border: 1px solid #1990FF !important;
+  }
+
+  .cloud-item-latest-badge {
+    display: inline-block !important;
+    background: #1990FF !important;
+    color: white !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    margin-left: 6px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+  }
+
+  /* ✅ 手机端新增号码模态框样式优化 */
+  .add-number-modal {
+    padding: 10px !important;
+  }
+
+  .add-number-modal > div {
+    max-width: 100% !important;
+    max-height: 95vh !important;
+    padding: 15px !important;
+  }
+
   .wrap {
     padding-top: calc(env(safe-area-inset-top) + 12px) !important;
     padding-bottom: calc(env(safe-area-inset-bottom) + 24px) !important;
@@ -1270,6 +1299,17 @@ td.col-cat select:focus {
   .cloud-item-name {
     white-space: normal !important;
     word-break: break-word !important;
+  }
+
+  /* ✅ 手机端新增号码模态框样式优化 */
+  .add-number-modal {
+    padding: 10px !important;
+  }
+
+  .add-number-modal > div {
+    max-width: 100% !important;
+    max-height: 95vh !important;
+    padding: 15px !important;
   }
 
   .toolbar {

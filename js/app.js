@@ -423,6 +423,8 @@ async function showAddNumberModal() {
     justify-content: center;
     padding: 20px;
     box-sizing: border-box;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   `;
   
   const content = document.createElement('div');
@@ -435,6 +437,9 @@ async function showAddNumberModal() {
     overflow-y: auto;
     padding: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    margin: auto;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
   `;
   
   content.innerHTML = `

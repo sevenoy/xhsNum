@@ -277,12 +277,12 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ✅ 功能按钮统一样式 - 默认灰色，点击变蓝色 */
+/* ✅ 功能按钮统一样式 - 默认透明背景（与 m-row-header 一致） */
 button.ghost,
 button.function-btn {
-  background: var(--btn-default);
+  background: transparent;
   border-color: transparent;
-  color: #fff;
+  color: #111;
   font-weight: 500;
 }
 
@@ -748,12 +748,14 @@ td.col-cat select:focus {
 }
 
 .m-row:hover .m-row-header {
-  background: #e6f3ff; /* ✅ 悬停颜色改为蓝色 */
+  background: #1990FF; /* ✅ 悬停颜色改为 primary 按钮的蓝色 */
+  color: #fff;
 }
 
 .m-row:active .m-row-header,
 .m-row-header:active {
-  background: #d0e7ff; /* ✅ 点击时使用更深的蓝色 */
+  background: #1478d7; /* ✅ 点击时使用更深的蓝色 */
+  color: #fff;
 }
 
 /* 头部主行：手机号 + 小红书名称 */

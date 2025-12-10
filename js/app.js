@@ -2374,15 +2374,33 @@ function bindEvents() {
     btnLogout.addEventListener("click", async () => {
       if (!confirm("确定要退出登录吗？")) return;
       
+      // ✅ 先清除所有本地登录数据
+      localStorage.removeItem('xhs_remember_me');
+      localStorage.removeItem('xhs_remembered_username');
+      localStorage.removeItem('xhs_user_name');
+      localStorage.removeItem('xhs_user_id');
+      localStorage.removeItem('xhs_user_email');
+      localStorage.removeItem('xhs_user_role');
+      localStorage.removeItem('xhs_is_admin');
+      localStorage.removeItem('xhs_last_login');
+      
+      // ✅ 清除 Supabase session
       if (supabase) {
-        await supabase.auth.signOut();
+        try {
+          await supabase.auth.signOut();
+          // 确保清除所有 session 数据
+          await supabase.auth.getSession().then(({ data }) => {
+            if (data.session) {
+              console.log('⚠️ Session 仍然存在，强制清除');
+            }
+          });
+        } catch (err) {
+          console.error('退出登录时出错:', err);
+        }
       }
       
-      // 清除本地数据
-      localStorage.removeItem('xhs_remember_me');
-      
-      // 跳转到登录页
-      window.location.href = 'login.html';
+      // ✅ 跳转到登录页，并添加时间戳防止缓存
+      window.location.href = 'login.html?logout=' + Date.now();
     });
   }
   

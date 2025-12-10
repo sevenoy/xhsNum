@@ -100,6 +100,15 @@ body {
   flex-shrink: 0;
 }
 
+#currentUserName {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 #appTitle {
   font-size: 20px;
   font-weight: 650;
@@ -432,6 +441,26 @@ button.primary:active {
   font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.cloud-item.latest {
+  background: #e6f3ff !important;
+  border: 1px solid #1990FF;
+}
+
+.cloud-item.latest:hover {
+  background: #d0e7ff !important;
+}
+
+.cloud-item-latest-badge {
+  display: inline-block;
+  background: #1990FF;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 500;
 }
 
 /* 分类列表 */
@@ -976,7 +1005,7 @@ td.col-cat select:focus {
   }
 
   .topbar {
-    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-top: calc(env(safe-area-inset-top) + 2px);
     padding-bottom: 6px;
     position: static;
     top: auto;
@@ -1009,6 +1038,8 @@ td.col-cat select:focus {
     text-overflow: clip;
     max-width: none;
     flex-shrink: 0;
+    min-width: 60px;
+    text-align: right;
   }
 
   .topbar .top-right #btnLogout {
@@ -1030,7 +1061,7 @@ td.col-cat select:focus {
   /* 确保 topbar 不与状态栏重合 */
   .topbar {
     margin-top: 0;
-    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-top: calc(env(safe-area-inset-top) + 2px);
   }
 
   #appTitle {
@@ -1198,6 +1229,11 @@ td.col-cat select:focus {
   .topbar .top-right #currentUserName {
     font-size: 11px;
     margin-right: 4px;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: 50px;
+    text-align: right;
   }
 
   .topbar .top-right #btnLogout {

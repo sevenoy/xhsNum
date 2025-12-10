@@ -639,6 +639,23 @@ function applyFilters(rows) {
     out = out.filter((r) => r.wx_real === state.wxReal);
   }
   out = applySearchFilter(out);
+  
+  // ✅ 优先排序：order 为 0 的行（新行）始终在最上面
+  // 这个函数确保 order 为 0 的行始终排在最前面，无论其他排序条件
+  const sortByOrder = (a, b) => {
+    const aOrder = a.order ?? 0;
+    const bOrder = b.order ?? 0;
+    // 如果一个是 0，另一个不是，0 的排在前面
+    if (aOrder === 0 && bOrder !== 0) return -1;
+    if (aOrder !== 0 && bOrder === 0) return 1;
+    // 如果都是 0，保持原顺序（按创建时间或 ID）
+    if (aOrder === 0 && bOrder === 0) {
+      return (a.created_at || 0) - (b.created_at || 0);
+    }
+    // 如果都不是 0，按 order 排序
+    return aOrder - bOrder;
+  };
+  
   switch (state.sortBy) {
     case "owner": {
       const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
@@ -651,6 +668,11 @@ function applyFilters(rows) {
         counts.set(key, (counts.get(key) || 0) + 1);
       }
       out.sort((a, b) => {
+        // ✅ 第一优先级：order 为 0 的行（新行）始终在最上面
+        const orderCmp = sortByOrder(a, b);
+        if (orderCmp !== 0) return orderCmp;
+        
+        // ✅ 第二优先级：按所属人排序
         const ao = a.owner || "";
         const bo = b.owner || "";
         const an = norm(ao);
@@ -667,31 +689,54 @@ function applyFilters(rows) {
           const nameCmp = ao.localeCompare(bo, "zh");
           if (nameCmp !== 0) return nameCmp;
         }
-        // 同一所属人内：保持原 manual order（若无则按插入顺序）
+        // ✅ 第三优先级：同一所属人内按 order 排序
         return (a.order ?? 0) - (b.order ?? 0);
       });
       break;
     }
     case "wx_real":
-      out.sort((a, b) => (a.wx_real || "").localeCompare(b.wx_real || "", "zh"));
+      out.sort((a, b) => {
+        const orderCmp = sortByOrder(a, b);
+        if (orderCmp !== 0) return orderCmp;
+        const wxCmp = (a.wx_real || "").localeCompare(b.wx_real || "", "zh");
+        if (wxCmp !== 0) return wxCmp;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
       break;
     case "phone":
-      out.sort((a, b) => (a.phone || "").localeCompare(b.phone || "", "zh"));
+      out.sort((a, b) => {
+        const orderCmp = sortByOrder(a, b);
+        if (orderCmp !== 0) return orderCmp;
+        const phoneCmp = (a.phone || "").localeCompare(b.phone || "", "zh");
+        if (phoneCmp !== 0) return phoneCmp;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
       break;
     case "xhs_name":
-      out.sort((a, b) => (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh"));
+      out.sort((a, b) => {
+        const orderCmp = sortByOrder(a, b);
+        if (orderCmp !== 0) return orderCmp;
+        const xhsCmp = (a.xhs_name || "").localeCompare(b.xhs_name || "", "zh");
+        if (xhsCmp !== 0) return xhsCmp;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
       break;
     case "row_color": {
       const cats = readCats();
-      out.sort((a, b) =>
-        catNameOf(cats, a.row_color).localeCompare(
+      out.sort((a, b) => {
+        const orderCmp = sortByOrder(a, b);
+        if (orderCmp !== 0) return orderCmp;
+        const catCmp = catNameOf(cats, a.row_color).localeCompare(
           catNameOf(cats, b.row_color),
           "zh"
-        )
-      );
+        );
+        if (catCmp !== 0) return catCmp;
+        return (a.order ?? 0) - (b.order ?? 0);
+      });
       break;
     }
     default:
+      // 手动排序：直接按 order 排序
       out.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
   return out;
@@ -1157,17 +1202,30 @@ async function cloudSave() {
       }
     }
 
-    const defaultLabel = existingSnapshot?.payload?.snapshot_label || "快照";
-    const labelInput = prompt("输入快照名称（只保存名称，时间将显示在右侧）", defaultLabel);
+    // ✅ 自动生成快照名称：用户名 + 当前时间（年月日）
+    const currentUserName = getCurrentUserName();
+    const nowDate = new Date();
+    const year = nowDate.getFullYear();
+    const month = String(nowDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nowDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+    const autoLabel = `${currentUserName} ${dateStr}`;
+    
+    const defaultLabel = existingSnapshot?.payload?.snapshot_label || autoLabel;
+    const labelInput = prompt("输入快照名称（将自动添加用户名和时间）", defaultLabel);
     if (labelInput == null) {
       console.log('ℹ️ 用户取消了保存操作');
       return;
     }
 
-    const snapshotName = labelInput.trim();
+    let snapshotName = labelInput.trim();
     if (!snapshotName) {
-      alert("快照名称不能为空");
-      return;
+      snapshotName = autoLabel;
+    } else {
+      // ✅ 如果用户输入的名称不包含用户名和时间，自动添加
+      if (!snapshotName.includes(currentUserName) && !snapshotName.includes(dateStr)) {
+        snapshotName = `${snapshotName} ${currentUserName} ${dateStr}`;
+      }
     }
 
     const rows = await getAllRows();
@@ -1323,6 +1381,9 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   applyView(readView());
   await renderTable();
   
+  // ✅ 加载后刷新历史列表，显示最新的快照高亮
+  await renderCloudHistory();
+  
   // ✅ 优化：加载完成后自动关闭快照面板
   const panel = $("#cloudHistoryPanel");
   if (panel) {
@@ -1392,7 +1453,7 @@ async function renderCloudHistory() {
     // 显示我的快照
     if (mySnapshots.length > 0) {
       html += `<div style="padding:8px 10px;font-weight:600;color:#1990FF;font-size:13px;border-bottom:1px solid #e5e5ea;">📁 我的快照</div>`;
-      html += mySnapshots.map((row) => {
+      html += mySnapshots.map((row, index) => {
         const name = (row.payload?.snapshot_label || row.key).trim();
       const t = fmtTime(row.updated_at);
         const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
@@ -1401,10 +1462,14 @@ async function renderCloudHistory() {
         : "";
         const isDefault = row.key === 'default';
         const displayName = isDefault ? '📌 默认快照' : name;
+        // ✅ 第一个（最新的）快照添加 latest 类和"最新"标记
+        const isLatest = index === 0;
+        const latestClass = isLatest ? ' latest' : '';
+        const latestBadge = isLatest ? '<span class="cloud-item-latest-badge">最新</span>' : '';
         
-      return `<div class="cloud-item" data-key="${row.key}">
+      return `<div class="cloud-item${latestClass}" data-key="${row.key}">
         <div class="cloud-item-main">
-            <div class="cloud-item-name">${escapeHtml(displayName)}</div>
+            <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
           <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
         </div>
         <div class="cloud-item-time">${escapeHtml(t)}</div>
@@ -1415,7 +1480,7 @@ async function renderCloudHistory() {
     // 显示授权给我的快照
     if (sharedSnapshots.length > 0) {
       html += `<div style="padding:8px 10px;font-weight:600;color:#34c759;font-size:13px;border-bottom:1px solid #e5e5ea;margin-top:10px;">🔓 授权快照</div>`;
-      html += sharedSnapshots.map((row) => {
+      html += sharedSnapshots.map((row, index) => {
         const name = (row.payload?.snapshot_label || row.key).trim();
         const t = fmtTime(row.updated_at);
         const ownerName = ownerMap[row.owner_id] || '未知';
@@ -1425,10 +1490,14 @@ async function renderCloudHistory() {
           : "";
         const isDefault = row.key === 'default';
         const displayName = isDefault ? `📌 ${ownerName}的默认快照` : name;
+        // ✅ 第一个（最新的）授权快照也添加 latest 类和"最新"标记
+        const isLatest = index === 0;
+        const latestClass = isLatest ? ' latest' : '';
+        const latestBadge = isLatest ? '<span class="cloud-item-latest-badge">最新</span>' : '';
         
-        return `<div class="cloud-item" data-key="${row.key}" style="background:#f0fff4;">
+        return `<div class="cloud-item${latestClass}" data-key="${row.key}" style="background:#f0fff4;">
           <div class="cloud-item-main">
-            <div class="cloud-item-name">${escapeHtml(displayName)}</div>
+            <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
             <div class="cloud-item-meta">所有者：${escapeHtml(ownerName)} · ${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
           </div>
           <div class="cloud-item-time">${escapeHtml(t)}</div>

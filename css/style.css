@@ -295,23 +295,23 @@ button.function-btn:active {
 
 /* ✅ 主操作按钮（新增一行） */
 button.primary {
-  background: var(--btn-default);
+  background: #1990FF;
   color: #fff;
   border-color: transparent;
   font-weight: 500;
 }
 
 button.primary:hover {
-  background: var(--btn-hover);
+  background: #1478d7;
 }
 
 button.primary.active {
-  background: var(--btn-active);
-  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+  background: #1990FF;
+  box-shadow: 0 2px 8px rgba(25, 144, 255, 0.3);
 }
 
 button.primary:active {
-  background: var(--btn-active);
+  background: #1478d7;
 }
 
 /* ✅ iOS风格导入导出按钮 */

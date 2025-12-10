@@ -49,6 +49,41 @@
       gap: 15px;
       margin-bottom: 20px;
     }
+    /* 手机端统计框一排显示 */
+    @media (max-width: 768px) {
+      .stats {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .stat-card {
+        padding: 12px 8px;
+      }
+      .stat-card h3 {
+        font-size: 11px;
+        margin-bottom: 6px;
+      }
+      .stat-card .number {
+        font-size: 20px;
+      }
+    }
+    @media (max-width: 480px) {
+      .stats {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .stat-card {
+        padding: 10px 6px;
+      }
+      .stat-card h3 {
+        font-size: 10px;
+        margin-bottom: 4px;
+      }
+      .stat-card .number {
+        font-size: 18px;
+      }
+    }
     .stat-card {
       background: white;
       padding: 20px;
@@ -217,7 +252,7 @@
     <div class="header">
       <h1>📝 最近修改</h1>
       <div style="display: flex; gap: 10px;">
-        <button class="ghost" onclick="location.href='index.html'">返回主页</button>
+        <button class="primary" onclick="location.href='index.html'">返回主页</button>
       </div>
     </div>
 

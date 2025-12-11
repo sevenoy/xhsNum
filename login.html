@@ -240,18 +240,19 @@
       localStorage.removeItem('xhs_remember_me');
     }
     
-    // ✅ 检查是否有退出标志，如果有则不自动跳转
+    // ✅ 检查是否有退出标志，如果有则清除（但不阻止后续代码执行）
     const isLoggingOut = sessionStorage.getItem('xhs_logging_out') === 'true';
     if (isLoggingOut) {
-      console.log('⚠️ 检测到退出标志，不自动跳转');
+      console.log('⚠️ 检测到退出标志，清除并阻止自动跳转');
       sessionStorage.removeItem('xhs_logging_out');
-      return;
     }
     
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-      // ✅ 只有在没有退出标志的情况下才自动跳转
-      window.location.href = 'index.html';
+    // ✅ 只有在没有退出标志的情况下才检查 session 并自动跳转
+    if (!isLoggingOut) {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        window.location.href = 'index.html';
+      }
     }
 
     // ✅ 标签页切换功能已移除（只保留登录页面）
@@ -337,6 +338,9 @@
           // Supabase 会自动管理 session，这里确保记住用户
           localStorage.setItem('xhs_last_login', Date.now().toString());
         }
+        
+        // ✅ 清除退出标志（如果存在），确保登录后可以正常跳转
+        sessionStorage.removeItem('xhs_logging_out');
         
         showMessage('✅ 登录成功！正在跳转...', 'success');
         

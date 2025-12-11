@@ -253,7 +253,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20250115.5';
+    const APP_VERSION = '20250115.6';
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {
@@ -408,15 +408,15 @@
                   current: APP_VERSION, 
                   server: versionMatch[1] 
                 });
-                // ✅ 如果版本不匹配，强制重新注册
-                navigator.serviceWorker.getRegistrations().then(registrations => {
-                  registrations.forEach(reg => {
-                    reg.unregister().then(() => {
-                      console.log('✅ 已注销旧 Service Worker，将重新注册');
-                      location.reload();
-                    });
-                  });
-                });
+                // ✅ 如果版本不匹配，显示更新提示（而不是直接刷新）
+                // 这样可以确保用户能看到更新内容并确认
+                showUpdateNotification();
+              } else if (versionMatch && versionMatch[1] === APP_VERSION) {
+                // ✅ 版本匹配，检查是否有等待中的更新
+                if (reg.waiting) {
+                  console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
+                  showUpdateNotification();
+                }
               }
             }
           } catch (err) {
@@ -429,8 +429,12 @@
 
       // ✅ 显示更新通知（改进版：显示更新内容）
       async function showUpdateNotification() {
-        // 检查是否已经显示过通知
-        if (localStorage.getItem('update_notification_shown') === APP_VERSION) {
+        // ✅ 检查是否已经显示过通知（但允许同一版本多次显示，如果用户刷新了页面）
+        const lastShownVersion = localStorage.getItem('update_notification_shown');
+        // 如果已经显示过当前版本，且用户已经点击了确定，则不重复显示
+        // 但如果版本号变化了，一定会显示
+        if (lastShownVersion === APP_VERSION && pendingUpdate === false) {
+          console.log('✅ 当前版本已显示过更新提示，跳过');
           return;
         }
         

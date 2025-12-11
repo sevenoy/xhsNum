@@ -147,6 +147,15 @@ body {
   margin-left: 2px; /* ✅ 向右移动2px */
 }
 
+/* ✅ 版本号样式（桌面端） */
+#appVersion {
+  font-size: 12px;
+  color: #999;
+  font-weight: normal;
+  margin-left: 8px;
+  vertical-align: baseline;
+}
+
 .cloud-status {
   display: inline-flex;
   align-items: center;
@@ -1562,6 +1571,12 @@ td.col-cat select:focus {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  
+  /* ✅ 版本号样式（移动端） */
+  #appVersion {
+    font-size: 11px !important;
+    margin-left: 6px !important;
   }
 
   /* ✅ 优化：手机端字体默认粗体 */

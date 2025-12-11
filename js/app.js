@@ -2733,6 +2733,9 @@ function bindEvents() {
     btnLogout.addEventListener("click", async () => {
       if (!confirm("确定要退出登录吗？")) return;
       
+      // ✅ 设置退出标志（使用 sessionStorage，刷新后自动清除）
+      sessionStorage.setItem('xhs_logging_out', 'true');
+      
       // ✅ 先清除所有本地登录数据
       localStorage.removeItem('xhs_remember_me');
       localStorage.removeItem('xhs_remembered_username');
@@ -2747,19 +2750,15 @@ function bindEvents() {
       if (supabase) {
         try {
           await supabase.auth.signOut();
-          // 确保清除所有 session 数据
-          await supabase.auth.getSession().then(({ data }) => {
-            if (data.session) {
-              console.log('⚠️ Session 仍然存在，强制清除');
-            }
-          });
+          console.log('✅ Supabase session 已清除');
         } catch (err) {
           console.error('退出登录时出错:', err);
         }
       }
       
       // ✅ 跳转到登录页，并添加时间戳防止缓存
-      window.location.href = 'login.html?logout=' + Date.now();
+      // 使用 replace 而不是 href，避免浏览器历史记录问题
+      window.location.replace('login.html?logout=' + Date.now());
     });
   }
   

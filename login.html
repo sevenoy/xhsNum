@@ -218,15 +218,39 @@
     // ✅ 检查是否已登录，如果 URL 中有 logout 参数，强制清除 session
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('logout')) {
-      // 退出登录后，清除所有 session
+      // 退出登录后，清除所有 session 和本地数据
       await supabaseClient.auth.signOut();
+      
+      // ✅ 清除所有登录相关的 localStorage
+      localStorage.removeItem('xhs_user_name');
+      localStorage.removeItem('xhs_user_id');
+      localStorage.removeItem('xhs_user_email');
+      localStorage.removeItem('xhs_user_role');
+      localStorage.removeItem('xhs_is_admin');
+      localStorage.removeItem('xhs_remember_me');
+      localStorage.removeItem('xhs_remembered_username');
+      localStorage.removeItem('xhs_last_login');
+      
+      // ✅ 清除退出标志
+      sessionStorage.removeItem('xhs_logging_out');
+      
+      console.log('✅ 已清除所有登录数据');
       // 清除记住的用户名
       localStorage.removeItem('xhs_remembered_username');
       localStorage.removeItem('xhs_remember_me');
     }
     
+    // ✅ 检查是否有退出标志，如果有则不自动跳转
+    const isLoggingOut = sessionStorage.getItem('xhs_logging_out') === 'true';
+    if (isLoggingOut) {
+      console.log('⚠️ 检测到退出标志，不自动跳转');
+      sessionStorage.removeItem('xhs_logging_out');
+      return;
+    }
+    
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
+      // ✅ 只有在没有退出标志的情况下才自动跳转
       window.location.href = 'index.html';
     }
 

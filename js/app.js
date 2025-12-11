@@ -2060,21 +2060,24 @@ function renderCatList() {
   }
   
   // ✅ 生成 HTML 内容
+  // 第一排：序号、分类名称、颜色
+  // 第二排：上移、下移、删除按钮
   const htmlContent = cats
     .map(
       (c, i) => `<div class="cat-row" data-id="${c.id}">
-        <span class="cat-color-preview" style="background:${escapeHtml(
-          c.color
-        )}"></span>
-        <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
+        <div class="cat-row-main">
+          <span class="cat-index">${i + 1}</span>
+          <div class="cat-name" contenteditable="true">${escapeHtml(c.name)}</div>
+          <div class="cat-color-input">
+            <span class="cat-color-preview" style="background:${escapeHtml(c.color)}"></span>
+            <input type="color" value="${escapeHtml(c.color)}" data-act="color" class="cat-color-picker" />
+          </div>
+        </div>
         <div class="cat-actions">
           <button class="ghost" data-act="up" ${i === 0 ? "disabled" : ""}>上移</button>
           <button class="ghost" data-act="down" ${
             i === cats.length - 1 ? "disabled" : ""
           }>下移</button>
-          <input type="color" value="${escapeHtml(
-            c.color
-          )}" data-act="color" style="height:28px;border-radius:8px;border:1px solid #e5e5ea;padding:0 2px;">
           <button class="btn-danger" data-act="del">删除</button>
         </div>
       </div>`
@@ -2148,7 +2151,7 @@ function renderCatList() {
   });
 
   list
-    .querySelectorAll('input[type="color"][data-act="color"]')
+    .querySelectorAll('.cat-color-picker')
     .forEach((el) => {
       el.addEventListener("change", () => {
         const row = el.closest(".cat-row");
@@ -2158,7 +2161,11 @@ function renderCatList() {
         if (idx < 0) return;
         cats[idx] = { ...cats[idx], color: el.value };
         saveCats(cats);
-        renderCatList();
+        // 更新颜色预览
+        const preview = row.querySelector('.cat-color-preview');
+        if (preview) {
+          preview.style.background = el.value;
+        }
         renderTable();
       });
     });
@@ -2611,32 +2618,8 @@ function bindEvents() {
   }
 
   $("#btnCategories").addEventListener("click", () => {
-    const wasActive = state.activeFunction === "categories";
-    setActiveFunction("categories");
-    const p = $("#panelCategories");
-    const pView = $("#panelView"); // 可能不存在（显示设置已移至独立页面）
-    
-    // ✅ 如果按钮被取消激活（再次点击），关闭面板
-    if (wasActive) {
-      p.style.display = "none";
-      return;
-    }
-    
-    // ✅ 互斥展开：关闭显示设置面板（如果存在）
-    p.style.display = "block";
-    if (pView) {
-      pView.style.display = "none";
-    }
-    
-    // ✅ 调试：检查 localStorage 中的原始分类数据
-    const rawCats = localStorage.getItem(CATS_KEY);
-    console.log('🔍 分类设置面板打开，检查原始数据:', {
-      key: CATS_KEY,
-      rawData: rawCats,
-      parsedData: rawCats ? JSON.parse(rawCats) : null
-    });
-    
-    renderCatList();
+    // ✅ 跳转到管理中心的分类设置页面
+    window.location.href = 'admin.html?module=category-settings.html';
   });
 
   $("#btnCatAdd").addEventListener("click", () => {

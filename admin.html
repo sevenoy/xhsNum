@@ -62,6 +62,16 @@
       box-shadow:0 2px 8px rgba(0,0,0,0.06);
       flex-shrink: 0;
     }
+    /* 手机端：确保按钮按指定顺序排列 */
+    @media (max-width: 480px) {
+      .nav {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      /* Grid布局会按照DOM顺序自动排列，由于管理员按钮会被移除，
+         普通用户看到的顺序就是：快照浏览器、显示设置、分类设置、最近修改 */
+    }
     .nav button {
       padding:8px 16px; 
       border:none; 
@@ -138,17 +148,17 @@
       }
       .nav {
         padding: 6px;
-        gap: 4px;
+        gap: 6px;
         margin-bottom: 8px;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        overflow: visible;
       }
       .nav button {
         padding: 6px 10px;
         font-size: 14px; /* ✅ 统一字体大小 */
-        flex-shrink: 0;
         white-space: nowrap;
+        width: 100%;
       }
     }
   </style>
@@ -161,18 +171,26 @@
       const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       const { data: { session } } = await client.auth.getSession();
       if (!session) { alert('请先登录'); location.href='login.html'; return; }
-      // 读取用户是否管理员：用户名为 sevenoy 或本地已标记管理员
-      let isAdmin = localStorage.getItem('xhs_is_admin') === 'true';
+      // ✅ 修复权限检查：优先从数据库查询，确保只有sevenoy管理员才能看到管理按钮
+      let isAdmin = false;
       try {
         const { data: profile } = await client
           .from('user_profiles')
-          .select('username')
+          .select('username, role')
           .eq('user_id', session.user.id)
           .maybeSingle();
-        if (profile?.username && profile.username.toLowerCase() === 'sevenoy') {
-          isAdmin = true;
+        // 只有用户名为 sevenoy 或 role 为 super_admin 才是管理员
+        if (profile) {
+          const username = (profile.username || '').toLowerCase();
+          isAdmin = username === 'sevenoy' || profile.role === 'super_admin';
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('查询管理员权限失败:', err);
+        // 查询失败时，明确设置为非管理员
+        isAdmin = false;
+      }
+      // 同步更新localStorage，但以数据库查询为准
+      localStorage.setItem('xhs_is_admin', isAdmin ? 'true' : 'false');
       // 路由元数据（权限）
       const ROUTES = {
         'approval-management.html': { requiresAdmin: true },
@@ -181,18 +199,54 @@
         'snapshot-browser.html': { requiresAdmin: false },
         'view-settings.html': { requiresAdmin: false },
         'recent-changes.html': { requiresAdmin: false },
+        'category-settings.html': { requiresAdmin: false },
       };
-      // 控制导航可见性
+      // 控制导航可见性 - 确保只有sevenoy管理员才能看到管理按钮
       const btnApproval = document.getElementById('btnApproval');
       const btnUser = document.getElementById('btnUser');
       const btnPerm = document.getElementById('btnPerm');
       const btnSnap = document.getElementById('btnSnap');
       const btnView = document.getElementById('btnView');
       const btnRecent = document.getElementById('btnRecent');
+      const btnCategory = document.getElementById('btnCategory');
+      // ✅ 强制隐藏管理员按钮，除非明确是sevenoy管理员
+      // 使用多重保护：设置display、添加隐藏类、移除DOM元素
       if (!isAdmin) {
-        if (btnApproval) btnApproval.style.display = 'none';
-        if (btnUser) btnUser.style.display = 'none';
-        if (btnPerm) btnPerm.style.display = 'none';
+        if (btnApproval) {
+          btnApproval.style.display = 'none';
+          btnApproval.style.visibility = 'hidden';
+          btnApproval.setAttribute('hidden', 'true');
+          btnApproval.remove(); // 彻底移除DOM元素
+        }
+        if (btnUser) {
+          btnUser.style.display = 'none';
+          btnUser.style.visibility = 'hidden';
+          btnUser.setAttribute('hidden', 'true');
+          btnUser.remove();
+        }
+        if (btnPerm) {
+          btnPerm.style.display = 'none';
+          btnPerm.style.visibility = 'hidden';
+          btnPerm.setAttribute('hidden', 'true');
+          btnPerm.remove();
+        }
+      } else {
+        // 如果是管理员，确保按钮可见
+        if (btnApproval) {
+          btnApproval.style.display = '';
+          btnApproval.style.visibility = '';
+          btnApproval.removeAttribute('hidden');
+        }
+        if (btnUser) {
+          btnUser.style.display = '';
+          btnUser.style.visibility = '';
+          btnUser.removeAttribute('hidden');
+        }
+        if (btnPerm) {
+          btnPerm.style.display = '';
+          btnPerm.style.visibility = '';
+          btnPerm.removeAttribute('hidden');
+        }
       }
       // 默认打开：管理员→权限管理；普通用户→快照浏览器
       // 如果 URL 中有 module 参数，则打开指定模块
@@ -204,7 +258,8 @@
         'view-settings.html':'btnView',
         'approval-management.html':'btnApproval',
         'user-management.html':'btnUser',
-        'recent-changes.html':'btnRecent'
+        'recent-changes.html':'btnRecent',
+        'category-settings.html':'btnCategory'
       };
       if (moduleParam) {
         const btnId = map[moduleParam];
@@ -225,7 +280,7 @@
         switchModule('snapshot-browser.html', btnSnap);
       }
       // 导航点击拦截
-      [btnApproval, btnUser, btnPerm, btnSnap, btnView, btnRecent].forEach((btn) => {
+      [btnApproval, btnUser, btnPerm, btnSnap, btnView, btnRecent, btnCategory].forEach((btn) => {
         if (!btn) return;
         btn.addEventListener('click', (e) => {
           const url = btn.getAttribute('onclick') ? null : null;
@@ -263,11 +318,14 @@
       <button class="primary" onclick="location.href='index.html'">返回主页</button>
     </div>
     <div class="nav">
+      <!-- 管理员专用按钮（只有sevenoy管理员可见） -->
       <button id="btnApproval" onclick="switchModule('approval-management.html', this)">📋 审核管理</button>
       <button id="btnUser" onclick="switchModule('user-management.html', this)">👥 用户管理</button>
       <button id="btnPerm" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
+      <!-- 普通用户可见的按钮（按手机端布局顺序） -->
       <button id="btnSnap" onclick="switchModule('snapshot-browser.html', this)">📂 快照浏览器</button>
       <button id="btnView" onclick="switchModule('view-settings.html', this)">⚙️ 显示设置</button>
+      <button id="btnCategory" onclick="switchModule('category-settings.html', this)">🏷️ 分类设置</button>
       <button id="btnRecent" onclick="switchModule('recent-changes.html', this)">📝 最近修改</button>
     </div>
     <div class="panel">

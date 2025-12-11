@@ -38,17 +38,25 @@ let hasSupabase = false;
 
 async function initSupabase() {
   hasSupabase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  if (!hasSupabase) return;
+  if (!hasSupabase) {
+    console.warn('⚠️ Supabase 配置缺失，跳过初始化');
+    return;
+  }
 
   try {
+    console.log('⏳ 开始初始化 Supabase 连接...');
     const { createClient } = await import(
       "https://esm.sh/@supabase/supabase-js@2"
     );
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // ✅ 执行健康检查，确保连接正常
     await cloudHealthCheck();
+    console.log('✅ Supabase 连接已建立');
   } catch (err) {
-    console.error("Supabase 初始化失败：", err);
+    console.error("❌ Supabase 初始化失败：", err);
     supabase = null;
+    // ✅ 即使初始化失败，也继续执行，避免阻塞应用
   }
 }
 
@@ -91,6 +99,28 @@ const state = {
 const db = new Dexie(DB_NAME);
 db.version(1).stores({
   rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
+});
+
+// ✅ 确保数据库连接已打开（针对新添加桌面标签网站的情况）
+// 在页面加载时立即打开数据库，避免后续操作时数据库未就绪
+let dbReadyPromise = db.open().then(() => {
+  console.log('✅ IndexedDB 数据库连接已就绪');
+  return true;
+}).catch((err) => {
+  console.error('❌ IndexedDB 数据库连接失败:', err);
+  // 即使连接失败，也返回 true，避免阻塞应用
+  return true;
+});
+
+// ✅ 确保数据库连接已打开（针对新添加桌面标签网站的情况）
+let dbReady = false;
+db.open().then(() => {
+  dbReady = true;
+  console.log('✅ IndexedDB 数据库连接已就绪');
+}).catch((err) => {
+  console.error('❌ IndexedDB 数据库连接失败:', err);
+  // 即使连接失败，也标记为就绪，避免阻塞
+  dbReady = true;
 });
 
 /* =========================
@@ -439,6 +469,10 @@ function clearActiveFunction() {
  * ========================= */
 
 async function getAllRows() {
+  // ✅ 确保数据库已打开（针对新添加桌面标签网站的情况）
+  if (!db.isOpen()) {
+    await dbReadyPromise;
+  }
   const all = await db.rows.toArray();
   all.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   return all;
@@ -2916,6 +2950,21 @@ class OnlineStatusManager {
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("✅ 应用启动");
   
+  // ✅ 确保 IndexedDB 数据库已打开（针对新添加桌面标签网站的情况）
+  try {
+    await dbReadyPromise;
+    if (!db.isOpen()) {
+      console.log('⏳ 等待 IndexedDB 数据库打开...');
+      await db.open();
+      console.log('✅ IndexedDB 数据库已打开');
+    } else {
+      console.log('✅ IndexedDB 数据库已就绪');
+    }
+  } catch (err) {
+    console.error('❌ IndexedDB 数据库打开失败:', err);
+    // 继续执行，避免阻塞应用
+  }
+  
   // ✅ 等待一下，确保 window.isAdmin 已经设置（增加等待时间）
   await new Promise(resolve => setTimeout(resolve, 200));
   
@@ -2974,12 +3023,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   
+  // ✅ 确保 Supabase 连接已初始化（在渲染之前）
+  await initSupabase();
+  
   // ✅ 在渲染之前再次确认排序设置
   await refreshFilters();
   console.log('🔍 渲染前最终确认排序方式:', state.sortBy);
   await renderTable();
-  
-  await initSupabase();
   
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";

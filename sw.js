@@ -1,7 +1,7 @@
 // Service Worker - 自动更新缓存控制
 // 版本号：每次更新代码时，修改下面的 VERSION 值即可强制更新
 
-const VERSION = '20251212.3'; // ✅ 每次更新代码时，修改这个版本号
+const VERSION = '20251212.4'; // ✅ 每次更新代码时，修改这个版本号
 const CACHE_NAME = `xhsnum-cache-v${VERSION}`;
 
 // 需要缓存的资源列表（关键资源）

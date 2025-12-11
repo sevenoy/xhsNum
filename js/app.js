@@ -128,7 +128,10 @@ function applyView(v) {
 
   const h1 = document.getElementById("appTitle");
   if (h1) {
-    h1.textContent = v.titleText;
+    // ✅ 修复：保留版本号，只更新标题文本
+    const versionEl = h1.querySelector("#appVersion");
+    const versionText = versionEl ? versionEl.textContent : (window.APP_VERSION ? `v${window.APP_VERSION}` : "");
+    h1.innerHTML = `${v.titleText}${versionText ? `<span id="appVersion">${versionText}</span>` : ""}`;
     h1.style.color = v.titleColor || "#208BEE"; // ✅ 优化：使用新的默认颜色
   }
 }

@@ -43,6 +43,7 @@ cd xhsNum
 
 ## 📚 文档
 
+- [技术说明文档](./TECHNICAL_DOCUMENTATION.md) - **技术架构、核心功能模块和可复用组件详解** ⭐
 - [更新日志](./CHANGELOG.md) - 详细的更新历史记录
 - [更新指南](./UPDATE_GUIDE.md) - iOS Web App 自动更新指南
 - [强制刷新指南](./FORCE_REFRESH.md) - 缓存刷新方法

@@ -63,7 +63,8 @@ setTimeout(() => location.reload(true), 1000);
 
 ## 当前版本
 
-- Service Worker 版本：`20250115.2`
-- Manifest 版本：`20250115.2`
+- Service Worker 版本：`20250115.3`
+- Manifest 版本：`20250115.3`
 
 如果以上方法都不行，请检查文件是否已正确保存。
+

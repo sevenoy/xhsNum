@@ -2688,6 +2688,14 @@ function bindEvents() {
     const currentUserNameEl = $("#currentUserName");
     if (!currentUserNameEl) return;
     
+    // ✅ 检查是否有退出标志，如果有则隐藏用户名
+    const isLoggingOut = sessionStorage.getItem('xhs_logging_out') === 'true';
+    if (isLoggingOut) {
+      currentUserNameEl.style.display = 'none';
+      currentUserNameEl.textContent = '';
+      return;
+    }
+    
     const userName = getCurrentUserName();
     if (userName && userName !== '匿名用户') {
       currentUserNameEl.textContent = `👤 ${userName}`;

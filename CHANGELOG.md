@@ -2,6 +2,26 @@
 
 ## [最新更新] - 2025-01-15
 
+### 🔧 问题修复
+
+#### 1. 修复移动端列表点击边框问题
+- **问题**: 在移动端点击列表项时，会出现一个长方形的焦点边框
+- **修复内容**:
+  - 在 `.m-row` 和 `.m-row-header` 中添加 `outline: none !important`
+  - 添加 `-webkit-tap-highlight-color: transparent` 移除移动端点击高亮
+  - 为所有焦点状态（`:focus`、`:focus-visible`、`:focus-within`、`:active`）添加样式移除
+  - 确保点击时不会出现任何焦点轮廓或边框变化
+- **文件**: `css/style.css`
+
+#### 2. 统一所有iPhone型号的topbar间距
+- **问题**: iPhone X 在 standalone 模式下，topbar 与状态栏之间有空白间距，而 iPhone 16 Pro Max 是紧贴状态栏的
+- **修复内容**:
+  - 统一所有手机尺寸下的 topbar 间距为 `calc(env(safe-area-inset-top) + 2px) !important`
+  - 移除 `.wrap` 的 `padding-top`，避免与 topbar 的 `padding-top` 叠加造成双重间距
+  - 在 768px 和 480px 媒体查询中都统一了间距设置
+  - 确保所有 iPhone 型号（包括 iPhone X、iPhone 16 Pro Max 等）在 standalone 模式下都紧贴状态栏，无空白间距
+- **文件**: `css/style.css`
+
 ### ✨ 功能优化
 
 #### 1. 管理中心添加刷新按钮

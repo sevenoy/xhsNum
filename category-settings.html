@@ -35,18 +35,9 @@
       margin: 0 auto;
       padding: 20px;
     }
+    /* ✅ 标题已删除，保留样式以防其他地方使用 */
     .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 2px solid #e5e5ea;
-    }
-    .header h1 {
-      font-size: 24px;
-      color: #1990FF;
-      margin: 0;
+      display: none; /* 隐藏标题区域 */
     }
     
     /* 新增分类表单 */
@@ -308,9 +299,6 @@
       .container {
         padding: 16px;
       }
-      .header h1 {
-        font-size: 20px;
-      }
       .add-form {
         padding: 14px;
       }
@@ -365,13 +353,6 @@
       .container {
         padding: 12px;
       }
-      .header {
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-      }
-      .header h1 {
-        font-size: 18px;
-      }
       .add-form {
         padding: 12px;
         margin-bottom: 16px;
@@ -410,10 +391,6 @@
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1>🏷️ 分类设置</h1>
-    </div>
-
     <!-- 新增分类表单 -->
     <div class="add-form">
       <div class="add-form-row">

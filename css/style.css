@@ -266,6 +266,64 @@ table select,
   color: #333;
 }
 
+/* ✅ 显示设置面板布局优化 */
+#panelView .view-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#panelView .view-settings-row:last-child {
+  margin-bottom: 0;
+}
+
+#panelView .view-settings-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* 2列布局：每个占50%减去gap */
+#panelView .view-settings-item-2col {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 120px;
+  max-width: calc(50% - 4px);
+}
+
+/* 3列布局：每个占33.333%减去gap */
+#panelView .view-settings-item-3col {
+  flex: 1 1 calc(33.333% - 6px);
+  min-width: 90px;
+  max-width: calc(33.333% - 6px);
+}
+
+/* 确保输入框和选择框不会超出容器 */
+#panelView .view-settings-item input,
+#panelView .view-settings-item select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 按钮行样式 */
+#panelView .view-settings-buttons {
+  justify-content: center;
+  gap: 12px;
+}
+
+#panelView .view-settings-btn {
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
 /* ✅ 按钮基础样式 */
 
 button {
@@ -1394,43 +1452,31 @@ td.col-cat select:focus {
   }
   
   /* ✅ 小屏幕手机端设置页面布局优化 */
-  #panelView .label-inline.label-group-row1 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 90px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
   }
   
-  #panelView .label-inline.label-group-row2 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 90px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 100px !important;
+    max-width: calc(50% - 3px) !important;
   }
   
-  #panelView .label-inline.label-group-row3 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    margin-bottom: 12px;
-    margin-right: 8px;
-    max-width: calc(50% - 4px);
-  }
-  
-  #panelView .label-inline.label-group-row3:last-child {
-    margin-right: 0;
-  }
-  
-  #panelView .label-inline.label-group-row5 {
+  #panelView .view-settings-item-3col {
     flex: 1 1 calc(33.333% - 4px) !important;
-    min-width: 70px;
-    margin-bottom: 8px;
-    max-width: calc(33.333% - 4px);
+    min-width: 80px !important;
+    max-width: calc(33.333% - 4px) !important;
   }
   
-  #panelView .btn-group-row4 {
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
     flex: 0 0 auto;
     min-width: 100px;
-    margin: 0 4px;
   }
 
   /* ✅ 手机端新增号码模态框样式优化 */
@@ -1585,44 +1631,32 @@ td.col-cat select:focus {
     flex-shrink: 0;
   }
   
-  /* ✅ 手机端设置页面布局优化 - 必须覆盖上面的 .label-inline 规则 */
-  #panelView .label-inline.label-group-row1 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 100px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  /* ✅ 手机端设置页面布局优化 - 使用新的view-settings样式 */
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
   }
   
-  #panelView .label-inline.label-group-row2 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 100px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 100px !important;
+    max-width: calc(50% - 3px) !important;
   }
   
-  #panelView .label-inline.label-group-row3 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    margin-bottom: 12px;
-    margin-right: 8px;
-    max-width: calc(50% - 4px);
-  }
-  
-  #panelView .label-inline.label-group-row3:last-child {
-    margin-right: 0;
-  }
-  
-  #panelView .label-inline.label-group-row5 {
+  #panelView .view-settings-item-3col {
     flex: 1 1 calc(33.333% - 4px) !important;
-    min-width: 80px;
-    margin-bottom: 8px;
-    max-width: calc(33.333% - 4px);
+    min-width: 80px !important;
+    max-width: calc(33.333% - 4px) !important;
   }
   
-  #panelView .btn-group-row4 {
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
     flex: 0 0 auto;
-    min-width: 120px;
-    margin: 0 4px;
+    min-width: 100px;
   }
   
   /* ✅ 手机端按钮取消点击时不高亮 */
@@ -1634,43 +1668,32 @@ td.col-cat select:focus {
 
 /* ✅ 小屏幕手机端（480px）设置页面布局优化 */
 @media (max-width: 480px) {
-  #panelView .label-inline.label-group-row1 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 90px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  /* ✅ 小屏幕手机端设置页面布局优化 - 使用新的view-settings样式 */
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
   }
   
-  #panelView .label-inline.label-group-row2 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 90px;
-    margin-bottom: 8px;
-    max-width: calc(50% - 4px);
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 90px !important;
+    max-width: calc(50% - 3px) !important;
   }
   
-  #panelView .label-inline.label-group-row3 {
-    flex: 1 1 calc(50% - 4px) !important;
-    min-width: 0 !important;
-    margin-bottom: 12px;
-    margin-right: 8px;
-    max-width: calc(50% - 4px);
-  }
-  
-  #panelView .label-inline.label-group-row3:last-child {
-    margin-right: 0;
-  }
-  
-  #panelView .label-inline.label-group-row5 {
+  #panelView .view-settings-item-3col {
     flex: 1 1 calc(33.333% - 4px) !important;
-    min-width: 70px;
-    margin-bottom: 8px;
-    max-width: calc(33.333% - 4px);
+    min-width: 70px !important;
+    max-width: calc(33.333% - 4px) !important;
   }
   
-  #panelView .btn-group-row4 {
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
     flex: 0 0 auto;
     min-width: 100px;
-    margin: 0 4px;
   }
   
   /* ✅ 小屏幕手机端：按钮取消点击时不高亮 */

@@ -221,69 +221,6 @@
       <div id="catList"></div>
     </div>
 
-    <!-- 显示设置面板 -->
-    <div class="panel" id="panelView" style="display:none">
-      <div class="toolbar toolbar-wrap">
-        <label class="label-inline label-group-row1">
-          标题文字
-          <input id="titleText" />
-        </label>
-        <label class="label-inline label-group-row1">
-          字体
-          <select id="fontFamily">
-            <option value="-apple-system,BlinkMacSystemFont,&quot;SF Pro Text&quot;,Helvetica,Arial,sans-serif">
-              系统默认
-            </option>
-            <option value="PingFang SC, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
-              苹方
-            </option>
-            <option value="Helvetica Neue, Helvetica, Arial, sans-serif">
-              Helvetica
-            </option>
-            <option value="Arial, sans-serif">
-              Arial
-            </option>
-          </select>
-        </label>
-        <label class="label-inline label-group-row2">
-          标题颜色
-          <input id="titleColor" type="color" />
-        </label>
-        <label class="label-inline label-group-row2">
-          按钮颜色
-          <input id="btnColor" type="color" />
-        </label>
-        <label class="label-inline label-group-row5">
-          <input id="fontBold" type="checkbox" />
-          粗体
-        </label>
-        <label class="label-inline label-group-row5">
-          隔行颜色
-          <input id="zebraColor" type="color" />
-        </label>
-        <label class="label-inline label-group-row5">
-          <input id="zebraOn" type="checkbox" />
-          隔行着色
-        </label>
-      </div>
-
-      <div class="toolbar toolbar-wrap">
-        <label class="label-inline label-group-row3">
-          行高
-          <input id="rowPad" type="range" min="4" max="14" step="1" />
-        </label>
-        <label class="label-inline label-group-row3">
-          列宽
-          <input id="colScale" type="range" min="0.7" max="1.4" step="0.05" />
-        </label>
-      </div>
-      
-      <div class="toolbar toolbar-wrap" style="justify-content: center;">
-        <button id="btnCompact" class="ghost btn-group-row4">一键紧凑</button>
-        <button id="btnResetSize" class="ghost btn-group-row4">恢复默认</button>
-      </div>
-    </div>
-
     <!-- 数据面板 -->
     <div class="panel">
       <!-- 桌面版表格 -->
@@ -316,7 +253,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20250115.1';
+    const APP_VERSION = '20250115.3';
 
     // ✅ Service Worker 注册
     if ('serviceWorker' in navigator) {

@@ -20,52 +20,104 @@
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
   <link rel="stylesheet" href="./css/style.css">
   <style>
-    body { background:#f5f5f7; }
-    .admin-wrap { max-width: 1400px; margin: 20px auto; padding: 20px; }
+    /* ✅ 覆盖 style.css 中的全局样式 */
+    body { 
+      background:#f5f5f7 !important; 
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .admin-wrap { 
+      max-width: 1400px; 
+      margin: 0 auto; 
+      padding: 16px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
     .admin-header {
-      display:flex; justify-content: space-between; align-items:center;
-      background:#fff; border-radius:16px; padding:16px 20px;
+      display:flex; 
+      justify-content: space-between; 
+      align-items:center;
+      background:#fff; 
+      border-radius:12px; 
+      padding:12px 16px;
       box-shadow:0 2px 8px rgba(0,0,0,0.08);
+      flex-shrink: 0;
+      margin-bottom: 12px;
     }
     .admin-header h1 {
-      font-size: 20px;
+      font-size: 20px; /* ✅ 保持副标题大小，这是唯一的大标题 */
+      margin: 0;
+      color: #1990FF;
     }
     .nav {
-      display:flex; gap:10px; flex-wrap:wrap; margin:20px 0;
-      background:#fff; border-radius:12px; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+      display:flex; 
+      gap:8px; 
+      flex-wrap:wrap; 
+      margin-bottom: 12px;
+      background:#fff; 
+      border-radius:12px; 
+      padding:10px; 
+      box-shadow:0 2px 8px rgba(0,0,0,0.06);
+      flex-shrink: 0;
     }
     .nav button {
-      padding:8px 16px; border:none; border-radius:999px; cursor:pointer; background:#f5f5f7;
+      padding:8px 16px; 
+      border:none; 
+      border-radius:999px; 
+      cursor:pointer; 
+      background:#f5f5f7;
       font-weight:500;
+      font-size: 14px; /* ✅ 统一字体大小 */
+      transition: all 0.2s ease;
     }
-    .nav button.active { background:#1990FF; color:#fff; }
+    .nav button:hover {
+      background: #e5e5ea;
+    }
+    .nav button.active { 
+      background:#1990FF; 
+      color:#fff; 
+    }
     .panel {
-      background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06);
-      overflow:hidden; height: calc(100vh - 220px);
+      background:#fff !important; /* ✅ 强制白色背景 */
+      border-radius:12px; 
+      box-shadow:0 2px 8px rgba(0,0,0,0.06);
+      overflow:hidden; 
+      flex: 1;
+      min-height: 0;
+      display: flex;
     }
-    .panel iframe { width:100%; height:100%; border:0; }
+    .panel iframe { 
+      width:100%; 
+      height:100%; 
+      border:0; 
+      display: block;
+      background: #fff !important; /* ✅ 强制白色背景 */
+      pointer-events: auto !important; /* ✅ 确保可以交互和选择元素 */
+      user-select: text; /* ✅ 允许选择文本 */
+      -webkit-user-select: text; /* ✅ Safari 支持 */
+      -moz-user-select: text; /* ✅ Firefox 支持 */
+    }
     /* 手机端优化 */
     @media (max-width: 768px) {
       .admin-wrap {
         padding: 12px;
       }
       .admin-header {
-        padding: 12px 16px;
+        padding: 10px 12px;
       }
       .admin-header h1 {
         font-size: 18px;
       }
       .nav {
-        padding: 10px;
-        gap: 8px;
-        margin: 16px 0;
+        padding: 8px;
+        gap: 6px;
+        margin-bottom: 10px;
       }
       .nav button {
         padding: 6px 12px;
-        font-size: 13px;
-      }
-      .panel {
-        height: calc(100vh - 180px);
+        font-size: 14px; /* ✅ 统一字体大小 */
       }
     }
     @media (max-width: 480px) {
@@ -73,9 +125,9 @@
         padding: 8px;
       }
       .admin-header {
-        padding: 10px 12px;
+        padding: 8px 10px;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
       }
       .admin-header h1 {
         font-size: 16px;
@@ -85,22 +137,18 @@
         padding: 6px 10px;
       }
       .nav {
-        padding: 8px;
-        gap: 6px;
-        margin: 12px 0;
+        padding: 6px;
+        gap: 4px;
+        margin-bottom: 8px;
         flex-wrap: nowrap;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
       }
       .nav button {
         padding: 6px 10px;
-        font-size: 12px;
+        font-size: 14px; /* ✅ 统一字体大小 */
         flex-shrink: 0;
         white-space: nowrap;
-      }
-      .panel {
-        height: calc(100vh - 160px);
-        border-radius: 10px;
       }
     }
   </style>
@@ -131,6 +179,7 @@
         'user-management.html': { requiresAdmin: true },
         'permission-management.html': { requiresAdmin: true },
         'snapshot-browser.html': { requiresAdmin: false },
+        'view-settings.html': { requiresAdmin: false },
         'recent-changes.html': { requiresAdmin: false },
       };
       // 控制导航可见性
@@ -138,6 +187,7 @@
       const btnUser = document.getElementById('btnUser');
       const btnPerm = document.getElementById('btnPerm');
       const btnSnap = document.getElementById('btnSnap');
+      const btnView = document.getElementById('btnView');
       const btnRecent = document.getElementById('btnRecent');
       if (!isAdmin) {
         if (btnApproval) btnApproval.style.display = 'none';
@@ -145,21 +195,46 @@
         if (btnPerm) btnPerm.style.display = 'none';
       }
       // 默认打开：管理员→权限管理；普通用户→快照浏览器
-      if (isAdmin) {
+      // 如果 URL 中有 module 参数，则打开指定模块
+      const urlParams = new URLSearchParams(window.location.search);
+      const moduleParam = urlParams.get('module');
+      const map = {
+        'permission-management.html':'btnPerm',
+        'snapshot-browser.html':'btnSnap',
+        'view-settings.html':'btnView',
+        'approval-management.html':'btnApproval',
+        'user-management.html':'btnUser',
+        'recent-changes.html':'btnRecent'
+      };
+      if (moduleParam) {
+        const btnId = map[moduleParam];
+        const btn = btnId ? document.getElementById(btnId) : null;
+        if (btn) {
+          switchModule(moduleParam, btn);
+        } else {
+          // 如果找不到对应的按钮，使用默认逻辑
+          if (isAdmin) {
+            switchModule('permission-management.html', btnPerm);
+          } else {
+            switchModule('snapshot-browser.html', btnSnap);
+          }
+        }
+      } else if (isAdmin) {
         switchModule('permission-management.html', btnPerm);
       } else {
         switchModule('snapshot-browser.html', btnSnap);
       }
       // 导航点击拦截
-      [btnApproval, btnUser, btnPerm, btnSnap, btnRecent].forEach((btn) => {
+      [btnApproval, btnUser, btnPerm, btnSnap, btnView, btnRecent].forEach((btn) => {
         if (!btn) return;
         btn.addEventListener('click', (e) => {
           const url = btn.getAttribute('onclick') ? null : null;
         });
       });
-      // 暴露权限与路由
+      // 暴露权限与路由和按钮映射
       window.__isAdmin = isAdmin;
       window.__ROUTES = ROUTES;
+      window.__BUTTON_MAP = map;
     });
     function switchModule(url, el) {
       // 基于路由元数据做权限拦截
@@ -172,16 +247,12 @@
       frame.src = url;
       document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
       if (el) el.classList.add('active');
-      // 高亮
-      const map = {
-        'permission-management.html':'btnPerm',
-        'snapshot-browser.html':'btnSnap',
-        'approval-management.html':'btnApproval',
-        'user-management.html':'btnUser',
-        'recent-changes.html':'btnRecent'
-      };
-      const id = map[url];
-      if (id) document.getElementById(id).classList.add('active');
+      // 高亮（map 在外部作用域已定义）
+      const id = (window.__BUTTON_MAP && window.__BUTTON_MAP[url]) || null;
+      if (id) {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.add('active');
+      }
     }
   </script>
   </head>
@@ -196,10 +267,11 @@
       <button id="btnUser" onclick="switchModule('user-management.html', this)">👥 用户管理</button>
       <button id="btnPerm" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
       <button id="btnSnap" onclick="switchModule('snapshot-browser.html', this)">📂 快照浏览器</button>
+      <button id="btnView" onclick="switchModule('view-settings.html', this)">⚙️ 显示设置</button>
       <button id="btnRecent" onclick="switchModule('recent-changes.html', this)">📝 最近修改</button>
     </div>
     <div class="panel">
-      <iframe id="adminFrame" title="管理模块"></iframe>
+      <iframe id="adminFrame" title="管理模块" style="background: #fff !important; pointer-events: auto !important;"></iframe>
     </div>
   </div>
 </body>

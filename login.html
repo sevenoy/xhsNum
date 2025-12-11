@@ -217,9 +217,24 @@
 
     // ✅ 检查是否已登录，如果 URL 中有 logout 参数，强制清除 session
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('logout')) {
+    const hasLogoutParam = urlParams.get('logout');
+    
+    if (hasLogoutParam) {
       // 退出登录后，清除所有 session 和本地数据
-      await supabaseClient.auth.signOut();
+      try {
+        await supabaseClient.auth.signOut();
+        // ✅ 等待一下，确保 session 已清除
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // ✅ 再次检查并清除 session
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+          console.log('⚠️ Session 仍然存在，再次清除');
+          await supabaseClient.auth.signOut();
+        }
+      } catch (err) {
+        console.error('清除 session 失败:', err);
+      }
       
       // ✅ 清除所有登录相关的 localStorage
       localStorage.removeItem('xhs_user_name');
@@ -235,9 +250,9 @@
       sessionStorage.removeItem('xhs_logging_out');
       
       console.log('✅ 已清除所有登录数据');
-      // 清除记住的用户名
-      localStorage.removeItem('xhs_remembered_username');
-      localStorage.removeItem('xhs_remember_me');
+      
+      // ✅ 清除 URL 中的 logout 参数，避免刷新时重复处理
+      window.history.replaceState({}, '', 'login.html');
     }
     
     // ✅ 检查是否有退出标志，如果有则清除（但不阻止后续代码执行）
@@ -247,8 +262,8 @@
       sessionStorage.removeItem('xhs_logging_out');
     }
     
-    // ✅ 只有在没有退出标志的情况下才检查 session 并自动跳转
-    if (!isLoggingOut) {
+    // ✅ 只有在没有退出标志和 logout 参数的情况下才检查 session 并自动跳转
+    if (!isLoggingOut && !hasLogoutParam) {
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
         window.location.href = 'index.html';

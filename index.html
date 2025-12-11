@@ -38,6 +38,13 @@
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       
+      // ✅ 检查 URL 参数，如果有 logout 参数，说明是从登录页跳转过来的，直接跳转回登录页
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('logout')) {
+        window.location.href = 'login.html';
+        return;
+      }
+      
       // ✅ 检查是否有退出标志（从 sessionStorage 检查）
       const isLoggingOut = sessionStorage.getItem('xhs_logging_out') === 'true';
       if (isLoggingOut) {
@@ -55,6 +62,8 @@
         // 清除 Supabase session
         try {
           await supabase.auth.signOut();
+          // ✅ 等待一下，确保 session 已清除
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (err) {
           console.error('清除 session 失败:', err);
         }
@@ -278,7 +287,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20251212.6';
+    const APP_VERSION = '20251212.7';
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {

@@ -2746,11 +2746,26 @@ function bindEvents() {
       localStorage.removeItem('xhs_is_admin');
       localStorage.removeItem('xhs_last_login');
       
-      // ✅ 清除 Supabase session
+      // ✅ 清除用户名显示
+      const currentUserNameEl = $("#currentUserName");
+      if (currentUserNameEl) {
+        currentUserNameEl.style.display = 'none';
+        currentUserNameEl.textContent = '';
+      }
+      
+      // ✅ 清除 Supabase session（多次尝试确保清除）
       if (supabase) {
         try {
           await supabase.auth.signOut();
           console.log('✅ Supabase session 已清除');
+          
+          // ✅ 等待一下，再次检查并清除
+          await new Promise(resolve => setTimeout(resolve, 200));
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.log('⚠️ Session 仍然存在，再次清除');
+            await supabase.auth.signOut();
+          }
         } catch (err) {
           console.error('退出登录时出错:', err);
         }

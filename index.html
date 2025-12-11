@@ -253,7 +253,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20250115.6';
+    const APP_VERSION = '20251212.1';
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {
@@ -429,6 +429,18 @@
 
       // ✅ 显示更新通知（改进版：显示更新内容）
       async function showUpdateNotification() {
+        // ✅ 如果正在刷新，不显示提示
+        if (refreshing) {
+          console.log('⚠️ 正在刷新中，跳过显示更新提示');
+          return;
+        }
+        
+        // ✅ 检查是否已经有提示框在显示（优先检查，防止重复创建）
+        if (document.getElementById('updateOverlay')) {
+          console.log('⚠️ 更新提示框已显示，跳过重复显示');
+          return;
+        }
+        
         // ✅ 检查是否已经显示过通知（但允许同一版本多次显示，如果用户刷新了页面）
         const lastShownVersion = localStorage.getItem('update_notification_shown');
         // 如果已经显示过当前版本，且用户已经点击了确定，则不重复显示
@@ -438,13 +450,7 @@
           return;
         }
         
-        // ✅ 检查是否已经有提示框在显示
-        if (document.getElementById('updateOverlay')) {
-          console.log('⚠️ 更新提示框已显示，跳过重复显示');
-          return;
-        }
-        
-        // ✅ 标记有待处理的更新
+        // ✅ 标记有待处理的更新（在检查之后设置，防止重复）
         pendingUpdate = true;
 
         // ✅ 从更新日志文件读取更新内容
@@ -483,6 +489,8 @@
           align-items: center;
           justify-content: center;
           padding: 20px;
+          touch-action: none;
+          -webkit-overflow-scrolling: touch;
         `;
 
         // ✅ 创建更新提示框（居中显示）
@@ -494,8 +502,11 @@
           max-width: 90%;
           max-height: 80vh;
           overflow-y: auto;
-          z-index: 10000;
+          z-index: 100000;
+          position: relative;
           animation: slideIn 0.3s ease;
+          touch-action: pan-y;
+          -webkit-overflow-scrolling: touch;
         `;
         
         notification.innerHTML = `
@@ -505,7 +516,7 @@
               ${updateInfo.title || '发现新版本'}
             </div>
             <div style="font-size: 14px; color: #666; margin-bottom: 20px;">
-              版本 ${APP_VERSION} • ${updateInfo.date || '2025-01-15'}
+              版本 ${APP_VERSION} • ${updateInfo.date || new Date().toISOString().split('T')[0]}
             </div>
             <div style="
               background: #f5f5f5;
@@ -524,14 +535,22 @@
               background: #1990FF;
               color: white;
               border: none;
-              padding: 12px 32px;
+              padding: 16px 32px;
               border-radius: 8px;
               font-weight: 600;
               cursor: pointer;
               font-size: 16px;
               width: 100%;
               max-width: 200px;
+              min-height: 48px;
               transition: background 0.2s;
+              -webkit-tap-highlight-color: transparent;
+              touch-action: manipulation;
+              user-select: none;
+              -webkit-user-select: none;
+              pointer-events: auto;
+              z-index: 100001;
+              position: relative;
             " onmouseover="this.style.background='#1580E0'" onmouseout="this.style.background='#1990FF'">
               确定
             </button>
@@ -541,14 +560,36 @@
         overlay.appendChild(notification);
         document.body.appendChild(overlay);
 
-        // ✅ 确定按钮点击事件
-        document.getElementById('btnUpdateConfirm').addEventListener('click', async () => {
-          const btn = document.getElementById('btnUpdateConfirm');
-          btn.textContent = '更新中...';
-          btn.disabled = true;
-          btn.style.opacity = '0.7';
+        // ✅ 等待 DOM 更新后再绑定事件
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const btnUpdateConfirm = document.getElementById('btnUpdateConfirm');
+        if (!btnUpdateConfirm) {
+          console.error('❌ 未找到确定按钮');
+          return;
+        }
+
+        // ✅ 确定按钮点击事件（支持移动端触摸）
+        const handleConfirm = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // ✅ 防止重复点击
+          if (btnUpdateConfirm.disabled) {
+            return;
+          }
+          
+          btnUpdateConfirm.disabled = true;
+          btnUpdateConfirm.textContent = '更新中...';
+          btnUpdateConfirm.style.opacity = '0.7';
+          btnUpdateConfirm.style.pointerEvents = 'none';
 
           try {
+            // ✅ 立即移除提示框，防止重复显示
+            if (overlay && overlay.parentNode) {
+              overlay.remove();
+            }
+            
             // 记录已显示通知（在刷新前记录，避免重复显示）
             localStorage.setItem('update_notification_shown', APP_VERSION);
             
@@ -576,14 +617,37 @@
             alert('更新失败，请手动刷新页面');
             refreshing = false;
             pendingUpdate = false;
-            overlay.remove();
+            if (overlay && overlay.parentNode) {
+              overlay.remove();
+            }
           }
+        };
+        
+        // ✅ 绑定多种事件，确保移动端和桌面端都能响应
+        btnUpdateConfirm.addEventListener('click', handleConfirm);
+        btnUpdateConfirm.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          handleConfirm(e);
         });
 
         // ✅ 点击遮罩层不关闭，必须点击确定按钮才能更新
         overlay.addEventListener('click', (e) => {
           if (e.target === overlay) {
             // 点击遮罩层不关闭，必须点击确定按钮
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        });
+        
+        // ✅ 防止触摸事件穿透
+        overlay.addEventListener('touchstart', (e) => {
+          if (e.target === overlay) {
+            e.stopPropagation();
+          }
+        });
+        
+        overlay.addEventListener('touchmove', (e) => {
+          if (e.target === overlay) {
             e.stopPropagation();
           }
         });

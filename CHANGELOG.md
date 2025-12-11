@@ -4,7 +4,22 @@
 
 ### 🔧 问题修复
 
-#### 1. 修复更新提示框按钮问题
+#### 1. 修复刷新循环问题
+- **问题**: 点击确定更新按钮后，网站不停地刷新，无法正常使用
+- **原因分析**:
+  - 点击确定按钮时调用 `skipWaiting()` 触发 Service Worker 激活
+  - `controllerchange` 事件监听器检测到 Service Worker 更新后再次触发刷新
+  - 形成刷新循环：点击确定 → 刷新 → controllerchange → 再次刷新 → 循环
+- **修复内容**:
+  - 使用 `sessionStorage` 持久化刷新标志，防止刷新循环
+  - 添加 `controllerchange` 事件防抖机制（`controllerChangeHandled` 标志），确保只刷新一次
+  - 优化刷新逻辑：移除延迟刷新（`setTimeout`），直接刷新避免事件冲突
+  - 页面加载时自动清除刷新标志（如果存在且是最近 5 秒内设置的）
+  - 在 `controllerchange` 监听器中检查 `sessionStorage` 刷新标志，如果存在则跳过刷新
+- **文件**: `index.html`
+- **版本**: 20251212.2
+
+#### 2. 修复更新提示框按钮问题
 - **问题**: 
   - iPhone 16 Pro Max：弹出提示但无法点击确定按钮，按钮样式有问题（高度不够，边距不一致）
   - iPhone X：弹出提示但无法点击确定，一直在反复弹出提示，无法选中

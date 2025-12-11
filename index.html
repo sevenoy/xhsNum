@@ -271,8 +271,10 @@
       let registration = null;
       let updateCheckInterval = null;
 
-      // 注册 Service Worker（添加版本号查询参数，确保浏览器能检测到文件变化）
-      navigator.serviceWorker.register('./sw.js?v=' + APP_VERSION, {
+      // 注册 Service Worker（添加版本号和时间戳查询参数，确保浏览器能检测到文件变化）
+      // ✅ 使用时间戳确保每次都能获取最新版本
+      const swUrl = './sw.js?v=' + APP_VERSION + '&t=' + Date.now();
+      navigator.serviceWorker.register(swUrl, {
         scope: './',
         updateViaCache: 'none' // ✅ 禁用 Service Worker 脚本的 HTTP 缓存
       }).then((reg) => {
@@ -347,21 +349,35 @@
         // ✅ 页面加载完成后立即检查更新
         window.addEventListener('load', () => {
           console.log('📄 页面加载完成，立即检查更新');
-          checkForUpdate(reg);
+          // ✅ 延迟检查，确保 Service Worker 已完全初始化
+          setTimeout(() => {
+            checkForUpdate(reg);
+          }, 500);
         });
+        
+        // ✅ 页面首次加载时强制检查（针对不同设备的缓存问题）
+        setTimeout(() => {
+          console.log('⏰ 延迟强制检查更新（1秒后）');
+          checkForUpdate(reg);
+        }, 1000);
       }).catch((err) => {
         console.error('❌ Service Worker 注册失败:', err);
       });
 
-      // ✅ 检查更新函数（增强版）
-      function checkForUpdate(reg) {
+      // ✅ 检查更新函数（增强版 - 强制检测版本变化）
+      async function checkForUpdate(reg) {
         if (!reg) {
           console.warn('⚠️ Service Worker 注册对象不存在');
           return;
         }
         
-        reg.update().then(() => {
+        try {
+          // ✅ 强制更新检查（忽略缓存）
+          await reg.update();
           console.log('✅ 更新检查完成');
+          
+          // ✅ 延迟检查，确保状态已更新
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           // ✅ 检查是否有等待中的新版本
           if (reg.waiting) {
@@ -380,9 +396,35 @@
               }
             });
           }
-        }).catch((err) => {
+          
+          // ✅ 检查当前 Service Worker 的版本（通过 fetch 获取 sw.js 内容）
+          try {
+            const swResponse = await fetch('./sw.js?v=' + Date.now(), { cache: 'no-store' });
+            if (swResponse.ok) {
+              const swText = await swResponse.text();
+              const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/);
+              if (versionMatch && versionMatch[1] !== APP_VERSION) {
+                console.log('🔄 检测到版本不匹配:', { 
+                  current: APP_VERSION, 
+                  server: versionMatch[1] 
+                });
+                // ✅ 如果版本不匹配，强制重新注册
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                  registrations.forEach(reg => {
+                    reg.unregister().then(() => {
+                      console.log('✅ 已注销旧 Service Worker，将重新注册');
+                      location.reload();
+                    });
+                  });
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('⚠️ 检查 Service Worker 版本失败:', err);
+          }
+        } catch (err) {
           console.warn('⚠️ 更新检查失败:', err);
-        });
+        }
       }
 
       // ✅ 显示更新通知（改进版：显示更新内容）
@@ -408,7 +450,10 @@
         };
 
         try {
-          const response = await fetch('./update-log.json?v=' + APP_VERSION);
+          // ✅ 添加时间戳，确保获取最新文件
+          const response = await fetch('./update-log.json?v=' + APP_VERSION + '&t=' + Date.now(), {
+            cache: 'no-store'
+          });
           if (response.ok) {
             const updateLog = await response.json();
             if (updateLog[APP_VERSION]) {

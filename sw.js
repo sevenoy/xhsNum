@@ -1,7 +1,7 @@
 // Service Worker - 自动更新缓存控制
 // 版本号：每次更新代码时，修改下面的 VERSION 值即可强制更新
 
-const VERSION = '20250115.4'; // ✅ 每次更新代码时，修改这个版本号
+const VERSION = '20250115.5'; // ✅ 每次更新代码时，修改这个版本号
 const CACHE_NAME = `xhsnum-cache-v${VERSION}`;
 
 // 需要缓存的资源列表（关键资源）
@@ -11,6 +11,7 @@ const CRITICAL_RESOURCES = [
   './css/style.css',
   './js/app.js',
   './site.webmanifest',
+  './update-log.json', // ✅ 添加更新日志文件到缓存列表
   './icon/icon-192.png',
   './icon/icon-512.png'
 ];
@@ -26,7 +27,8 @@ self.addEventListener('install', (event) => {
       });
     })
   );
-  // 立即激活新的 Service Worker
+  // ✅ 立即激活新的 Service Worker（但保留 installed 状态，让页面能检测到更新）
+  // 注意：skipWaiting 会导致立即激活，但会在 installed 状态停留一下
   self.skipWaiting();
 });
 

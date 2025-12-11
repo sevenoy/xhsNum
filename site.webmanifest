@@ -7,7 +7,7 @@
   "background_color": "#ffffff",
   "theme_color": "#1990FF",
   "orientation": "portrait",
-  "version": "20250115.4",
+  "version": "20250115.5",
   "icons": [
     {
       "src": "./icon/icon-192.png",

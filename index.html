@@ -253,116 +253,236 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20250115.4';
+    const APP_VERSION = '20250115.5';
 
     // ✅ Service Worker 注册
     if ('serviceWorker' in navigator) {
       let registration = null;
       let updateCheckInterval = null;
 
-      // 注册 Service Worker
-      navigator.serviceWorker.register('./sw.js', {
-        scope: './'
+      // 注册 Service Worker（添加版本号查询参数，确保浏览器能检测到文件变化）
+      navigator.serviceWorker.register('./sw.js?v=' + APP_VERSION, {
+        scope: './',
+        updateViaCache: 'none' // ✅ 禁用 Service Worker 脚本的 HTTP 缓存
       }).then((reg) => {
         registration = reg;
         console.log('✅ Service Worker 注册成功，版本:', APP_VERSION);
 
-        // 检查更新
+        // ✅ 立即检查更新
         checkForUpdate(reg);
 
-        // 监听 Service Worker 更新
+        // ✅ 监听 Service Worker 更新（改进检测逻辑）
         reg.addEventListener('updatefound', () => {
           console.log('🔄 发现新的 Service Worker 版本');
           const newWorker = reg.installing;
           
+          if (!newWorker) {
+            console.warn('⚠️ 未找到 installing 的 Service Worker');
+            return;
+          }
+          
+          // ✅ 监听多个状态，确保能捕获到更新
           newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // 新版本已安装，提示用户更新
-              showUpdateNotification();
+            console.log('🔄 Service Worker 状态变化:', newWorker.state);
+            
+            // ✅ 改进：检查多个状态，包括 installed 和 activating
+            if (newWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // 有旧版本在运行，新版本已安装，提示更新
+                console.log('✅ 新版本已安装，等待激活');
+                showUpdateNotification();
+              } else {
+                // 首次安装，直接激活
+                console.log('✅ 首次安装 Service Worker');
+              }
+            } else if (newWorker.state === 'activating') {
+              // ✅ 如果直接进入 activating 状态（由于 skipWaiting），也触发更新
+              if (navigator.serviceWorker.controller) {
+                console.log('✅ 新版本正在激活');
+                // 延迟一下，确保状态稳定
+                setTimeout(() => {
+                  if (reg.waiting || reg.installing) {
+                    showUpdateNotification();
+                  }
+                }, 100);
+              }
+            } else if (newWorker.state === 'activated') {
+              // ✅ 如果新版本已激活，也显示更新提示
+              if (navigator.serviceWorker.controller) {
+                console.log('✅ 新版本已激活');
+                showUpdateNotification();
+              }
+            }
+          });
+          
+          // ✅ 额外监听：如果新 Worker 直接激活了（skipWaiting 导致）
+          newWorker.addEventListener('controllerchange', () => {
+            console.log('🔄 Service Worker 控制权已变更');
+            if (!refreshing) {
+              refreshing = true;
+              window.location.reload();
             }
           });
         });
 
-        // 定期检查更新（每5分钟）
+        // ✅ 定期检查更新（每5分钟）
         updateCheckInterval = setInterval(() => {
+          console.log('⏰ 定时检查更新（每5分钟）');
           checkForUpdate(reg);
         }, 5 * 60 * 1000);
 
-        // 页面可见时检查更新
+        // ✅ 页面可见时检查更新
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden && reg) {
+            console.log('👁️ 页面可见，检查更新');
             checkForUpdate(reg);
           }
+        });
+        
+        // ✅ 页面加载完成后立即检查更新
+        window.addEventListener('load', () => {
+          console.log('📄 页面加载完成，立即检查更新');
+          checkForUpdate(reg);
         });
       }).catch((err) => {
         console.error('❌ Service Worker 注册失败:', err);
       });
 
-      // 检查更新函数
+      // ✅ 检查更新函数（增强版）
       function checkForUpdate(reg) {
+        if (!reg) {
+          console.warn('⚠️ Service Worker 注册对象不存在');
+          return;
+        }
+        
         reg.update().then(() => {
           console.log('✅ 更新检查完成');
+          
+          // ✅ 检查是否有等待中的新版本
+          if (reg.waiting) {
+            console.log('🔄 发现等待中的新版本');
+            showUpdateNotification();
+            return;
+          }
+          
+          // ✅ 检查是否有正在安装的新版本
+          if (reg.installing) {
+            console.log('🔄 发现正在安装的新版本');
+            // 等待安装完成后再显示通知
+            reg.installing.addEventListener('statechange', () => {
+              if (reg.installing && reg.installing.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateNotification();
+              }
+            });
+          }
         }).catch((err) => {
           console.warn('⚠️ 更新检查失败:', err);
         });
       }
 
-      // 显示更新通知
-      function showUpdateNotification() {
+      // ✅ 显示更新通知（改进版：显示更新内容）
+      async function showUpdateNotification() {
         // 检查是否已经显示过通知
         if (localStorage.getItem('update_notification_shown') === APP_VERSION) {
           return;
         }
 
+        // ✅ 从更新日志文件读取更新内容
+        let updateInfo = {
+          title: '发现新版本',
+          content: ['本次更新包含了一些改进和修复']
+        };
+
+        try {
+          const response = await fetch('./update-log.json?v=' + APP_VERSION);
+          if (response.ok) {
+            const updateLog = await response.json();
+            if (updateLog[APP_VERSION]) {
+              updateInfo = updateLog[APP_VERSION];
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ 无法加载更新日志:', err);
+        }
+
+        // ✅ 创建遮罩层
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        `;
+
+        // ✅ 创建更新提示框（居中显示）
         const notification = document.createElement('div');
         notification.style.cssText = `
-          position: fixed;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: #1990FF;
-          color: white;
-          padding: 16px 24px;
-          border-radius: 12px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-          z-index: 10000;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
           max-width: 90%;
-          text-align: center;
-          font-size: 14px;
-          line-height: 1.5;
+          max-height: 80vh;
+          overflow-y: auto;
+          z-index: 10000;
+          animation: slideIn 0.3s ease;
         `;
+        
         notification.innerHTML = `
-          <div style="margin-bottom: 12px; font-weight: 600;">🔄 发现新版本</div>
-          <div style="margin-bottom: 16px; opacity: 0.9;">点击下方按钮更新到最新版本</div>
-          <button id="btnUpdateNow" style="
-            background: white;
-            color: #1990FF;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 8px;
-          ">立即更新</button>
-          <button id="btnUpdateLater" style="
-            background: transparent;
-            color: white;
-            border: 1px solid white;
-            padding: 8px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            cursor: pointer;
-            font-size: 14px;
-          ">稍后</button>
+          <div style="padding: 24px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 16px;">🔄</div>
+            <div style="font-size: 20px; font-weight: 600; color: #333; margin-bottom: 8px;">
+              ${updateInfo.title || '发现新版本'}
+            </div>
+            <div style="font-size: 14px; color: #666; margin-bottom: 20px;">
+              版本 ${APP_VERSION} • ${updateInfo.date || '2025-01-15'}
+            </div>
+            <div style="
+              background: #f5f5f5;
+              border-radius: 12px;
+              padding: 16px;
+              margin-bottom: 24px;
+              text-align: left;
+              max-height: 300px;
+              overflow-y: auto;
+            ">
+              <div style="font-size: 14px; color: #333; line-height: 1.8;">
+                ${updateInfo.content ? updateInfo.content.map(item => `<div style="margin-bottom: 8px;">${item}</div>`).join('') : '本次更新包含了一些改进和修复'}
+              </div>
+            </div>
+            <button id="btnUpdateConfirm" style="
+              background: #1990FF;
+              color: white;
+              border: none;
+              padding: 12px 32px;
+              border-radius: 8px;
+              font-weight: 600;
+              cursor: pointer;
+              font-size: 16px;
+              width: 100%;
+              max-width: 200px;
+              transition: background 0.2s;
+            " onmouseover="this.style.background='#1580E0'" onmouseout="this.style.background='#1990FF'">
+              确定
+            </button>
+          </div>
         `;
-        document.body.appendChild(notification);
 
-        // 立即更新按钮
-        document.getElementById('btnUpdateNow').addEventListener('click', async () => {
-          notification.style.opacity = '0.7';
-          notification.querySelector('#btnUpdateNow').textContent = '更新中...';
-          notification.querySelector('#btnUpdateNow').disabled = true;
+        overlay.appendChild(notification);
+        document.body.appendChild(overlay);
+
+        // ✅ 确定按钮点击事件
+        document.getElementById('btnUpdateConfirm').addEventListener('click', async () => {
+          const btn = document.getElementById('btnUpdateConfirm');
+          btn.textContent = '更新中...';
+          btn.disabled = true;
+          btn.style.opacity = '0.7';
 
           try {
             // 通知 Service Worker 跳过等待
@@ -376,6 +496,9 @@
               await Promise.all(cacheNames.map(name => caches.delete(name)));
             }
 
+            // 记录已显示通知
+            localStorage.setItem('update_notification_shown', APP_VERSION);
+
             // 重新加载页面
             setTimeout(() => {
               window.location.reload();
@@ -383,23 +506,20 @@
           } catch (err) {
             console.error('更新失败:', err);
             alert('更新失败，请手动刷新页面');
-            notification.remove();
+            overlay.remove();
           }
         });
 
-        // 稍后按钮
-        document.getElementById('btnUpdateLater').addEventListener('click', () => {
-          notification.style.animation = 'fadeOut 0.3s ease';
-          setTimeout(() => {
-            notification.remove();
-          }, 300);
+        // ✅ 点击遮罩层也可以关闭（可选）
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) {
+            // 点击遮罩层不关闭，必须点击确定按钮
+            // overlay.remove();
+          }
         });
-
-        // 记录已显示通知
-        localStorage.setItem('update_notification_shown', APP_VERSION);
       }
 
-      // 监听 Service Worker 控制权变化
+      // ✅ 监听 Service Worker 控制权变化（全局变量，在 updatefound 中也会用到）
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
@@ -408,15 +528,28 @@
           window.location.reload();
         }
       });
+      
+      // ✅ 页面加载时立即检查是否有等待中的更新（已在上面处理，这里保留作为备用）
+      // 注意：这个监听器在 Service Worker 注册成功后也会执行
     } else {
       console.warn('⚠️ 浏览器不支持 Service Worker');
     }
 
-    // ✅ 添加淡出动画
+    // ✅ 添加动画样式
     if (!document.querySelector('style[data-update-animation]')) {
       const style = document.createElement('style');
       style.setAttribute('data-update-animation', 'true');
       style.textContent = `
+        @keyframes slideIn {
+          from { 
+            opacity: 0; 
+            transform: scale(0.9) translateY(-20px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: scale(1) translateY(0); 
+          }
+        }
         @keyframes fadeOut {
           from { opacity: 1; transform: translateX(-50%) translateY(0); }
           to { opacity: 0; transform: translateX(-50%) translateY(-20px); }

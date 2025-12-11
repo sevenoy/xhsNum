@@ -613,36 +613,277 @@ button.primary:active {
 
 #catList {
   margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
+/* 确保分类设置面板样式与其他面板一致 */
+#panelCategories {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+#panelCategories .toolbar {
+  margin-bottom: 12px;
+}
+
+/* 分类行：强制垂直排列（所有屏幕尺寸） */
 .cat-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
-  border-radius: 10px;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  border: 1px solid #e5e5ea;
+  background: white;
   transition: background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  align-items: stretch !important;
 }
 
 .cat-row:hover {
   background: #f5f5f7;
 }
 
-.cat-name {
-  flex: 1 1 auto;
+/* 第一排：序号、分类名称、颜色（强制水平排列） */
+.cat-row-main {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  flex-wrap: nowrap !important;
+  box-sizing: border-box !important;
+  order: 1 !important;
+}
+
+/* 序号：固定宽度，不收缩 */
+.cat-index {
   font-size: 14px;
+  color: #666;
+  font-weight: 600;
+  min-width: 35px;
+  width: 35px;
+  flex: 0 0 35px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/* 分类名称：占据剩余空间 */
+.cat-name {
+  flex: 1 1 auto !important;
+  min-width: 0;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+  border: 1px solid #e5e5ea;
+  background: #f9f9fb;
+  transition: all 0.2s ease;
+}
+
+.cat-name:focus {
+  background: white;
+  border-color: #1990FF;
+  box-shadow: 0 0 0 2px rgba(25, 144, 255, 0.1);
+}
+
+/* 颜色选择器：固定在右侧 */
+.cat-color-input {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  flex-shrink: 0;
 }
 
 .cat-color-preview {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 2px solid #e5e5ea;
+  display: block;
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
+.cat-color-picker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  border: none;
+  z-index: 1;
+}
+
+/* 第二排：上移、下移、删除按钮（强制水平排列） */
 .cat-actions {
-  display: inline-flex;
-  gap: 4px;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin-top: 0 !important;
+  order: 2 !important;
+}
+
+.cat-actions button {
+  flex: 1 1 0% !important;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: center;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .cat-row {
+    padding: 10px;
+    gap: 8px;
+    flex-direction: column !important; /* 确保垂直排列 */
+  }
+  
+  /* 第一排：序号、分类名称、颜色（水平排列） */
+  .cat-row-main {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  
+  /* 序号：固定宽度，不收缩 */
+  .cat-index {
+    font-size: 13px;
+    min-width: 30px;
+    width: 30px;
+    flex: 0 0 30px !important;
+    flex-shrink: 0 !important;
+    text-align: center;
+  }
+  
+  /* 分类名称：占据剩余空间 */
+  .cat-name {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  
+  /* 颜色选择器：固定在右侧 */
+  .cat-color-input {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* 第二排：上移、下移、删除按钮（水平排列） */
+  .cat-actions {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* 按钮：平均分配宽度 */
+  .cat-actions button {
+    flex: 1 1 0% !important;
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .cat-row {
+    padding: 8px;
+    gap: 6px;
+    flex-direction: column !important; /* 确保垂直排列 */
+  }
+  
+  /* 第一排：序号、分类名称、颜色（水平排列） */
+  .cat-row-main {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  
+  /* 序号：小屏幕优化 */
+  .cat-index {
+    font-size: 12px;
+    min-width: 28px;
+    width: 28px;
+    flex: 0 0 28px !important;
+    flex-shrink: 0 !important;
+    text-align: center;
+  }
+  
+  /* 分类名称：占据剩余空间 */
+  .cat-name {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+  
+  /* 颜色选择器：固定在右侧 */
+  .cat-color-input {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* 第二排：上移、下移、删除按钮（水平排列） */
+  .cat-actions {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    gap: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* 按钮：平均分配宽度 */
+  .cat-actions button {
+    flex: 1 1 0% !important;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    text-align: center;
+  }
+  
+  /* 确保所有元素在小屏幕上都能正常显示 */
+  .cat-row-main,
+  .cat-actions {
+    overflow: visible;
+  }
+  
+  .cat-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 /* 桌面表格 */

@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>分类设置 - XHSPHONE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="./icon/apple-touch-icon.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon/icon-192.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon/icon-512.png?v=20251107">
+  <link rel="icon" type="image/x-icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="shortcut icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="manifest" href="./site.webmanifest">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1990FF" />
+  <meta name="apple-mobile-web-app-title" content="分类设置" />
+  <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
+  <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
+  <link rel="stylesheet" href="./css/style.css">
+  <style>
+    /* ✅ 覆盖 style.css 中的背景设置 */
+    html, body {
+      margin: 0 !important;
+      padding: 20px !important;
+      background: #fff !important;
+      font-size: 14px;
+      box-sizing: border-box;
+      min-height: 100%;
+      overflow-y: auto;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    * {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+    }
+    button, a, input, select, textarea {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -moz-user-select: none !important;
+      cursor: pointer !important;
+    }
+    .category-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .category-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e5ea;
+    }
+    .category-header h1 {
+      font-size: 28px;
+      color: #1990FF;
+      margin: 0;
+    }
+    .add-category-form {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .form-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .form-group label {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .form-group input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .form-group input[type="color"] {
+      width: 50px;
+      height: 40px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .color-preview {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid #e5e5ea;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    .btn-add {
+      padding: 8px 20px;
+      background: #1990FF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .btn-add:hover {
+      background: #40a9ff;
+      transform: translateY(-1px);
+    }
+    .category-table {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow-x: auto;
+    }
+    .category-table table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .category-table th,
+    .category-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .category-table th {
+      font-weight: 600;
+      color: #333;
+      background: #f9f9fb;
+    }
+    .category-table tbody tr:hover {
+      background: #f5f7ff;
+    }
+    .category-table td input[type="text"] {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #e5e5ea;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .category-table td input[type="text"]:focus {
+      outline: none;
+      border-color: #1990FF;
+    }
+    .category-table td input[type="color"] {
+      width: 40px;
+      height: 32px;
+      border: 1px solid #e5e5ea;
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .btn-action {
+      padding: 4px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid #e5e5ea;
+      background: white;
+      color: #333;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin: 0 2px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .btn-action:hover {
+      background: #f5f5f7;
+      border-color: #1990FF;
+      color: #1990FF;
+    }
+    .btn-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-action:disabled:hover {
+      background: white;
+      border-color: #e5e5ea;
+      color: #333;
+    }
+    .btn-danger {
+      border-color: #ff4d4f;
+      color: #ff4d4f;
+    }
+    .btn-danger:hover {
+      background: #ff4d4f;
+      color: white;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+      font-size: 14px;
+    }
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 12px;
+    }
+    .pagination button {
+      padding: 6px 12px;
+      border: 1px solid #e5e5ea;
+      background: white;
+      color: #333;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.3s;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .pagination button:hover:not(:disabled) {
+      background: #f5f5f7;
+      border-color: #1990FF;
+      color: #1990FF;
+    }
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .pagination .page-info {
+      padding: 6px 12px;
+      font-size: 13px;
+      color: #666;
+    }
+    /* 移动端卡片式布局（强制使用卡片，隐藏表格） */
+    .category-table table {
+      display: none !important;
+    }
+    .category-list-mobile {
+      display: block !important;
+    }
+    .category-card {
+      background: white;
+      border: 1px solid #e5e5ea;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      align-items: stretch !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    /* 第一行：序号、分类名称、颜色（水平排列） */
+    .category-card-row-main {
+      width: 100%;
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      gap: 10px !important;
+      flex-wrap: nowrap;
+      box-sizing: border-box !important;
+      order: 1 !important;
+    }
+    /* 序号：固定宽度，不收缩 */
+    .category-card-index {
+      font-size: 14px;
+      color: #666;
+      font-weight: 600;
+      min-width: 35px;
+      width: 35px;
+      flex: 0 0 35px !important;
+      flex-shrink: 0 !important;
+      text-align: center;
+    }
+    /* 分类名称输入框：占据剩余空间 */
+    .category-card-name {
+      flex: 1 1 auto !important;
+      min-width: 0;
+      flex-shrink: 1;
+    }
+    .category-card-name input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      box-sizing: border-box;
+      background: #f9f9fb;
+      transition: all 0.2s ease;
+    }
+    .category-card-name input:focus {
+      outline: none;
+      border-color: #1990FF;
+      box-shadow: 0 0 0 2px rgba(25, 144, 255, 0.1);
+      background: white;
+    }
+    /* 颜色选择器：固定在右侧，不收缩 */
+    .category-card-color-input {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px !important;
+      flex-shrink: 0 !important;
+    }
+    .category-card-color {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      border: 2px solid #e5e5ea;
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+    .category-card-color-input input[type="color"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      z-index: 1;
+      margin: 0;
+      padding: 0;
+      border: none;
+    }
+    /* 第二行：上移、下移、删除按钮（水平排列） */
+    .category-card-actions {
+      display: flex !important;
+      flex-direction: row !important;
+      gap: 8px !important;
+      justify-content: flex-start;
+      width: 100%;
+      margin-top: 0 !important;
+      box-sizing: border-box !important;
+      order: 2 !important;
+    }
+    /* 按钮：使用 flex: 1 平均分配宽度 */
+    .category-card-actions .btn-action {
+      flex: 1 1 0% !important;
+      padding: 8px 12px;
+      font-size: 13px;
+      white-space: nowrap;
+      text-align: center;
+      min-width: 0;
+      box-sizing: border-box;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+    @media (max-width: 768px) {
+      html, body {
+        padding: 12px !important;
+      }
+      .category-container {
+        padding: 0;
+      }
+      .category-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+      }
+      .category-header h1 {
+        font-size: 22px;
+      }
+      .add-category-form {
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .form-group {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+      .form-group label {
+        font-size: 13px;
+      }
+      .form-group input[type="text"] {
+        min-width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+      .form-group input[type="color"] {
+        width: 100%;
+        height: 50px;
+      }
+      .btn-add {
+        width: 100%;
+        padding: 12px;
+        font-size: 15px;
+      }
+      /* 隐藏桌面表格，显示移动端卡片 */
+      .category-table table {
+        display: none !important;
+      }
+      .category-list-mobile {
+        display: block !important;
+      }
+      .category-card {
+        flex-direction: column !important;
+        display: flex !important;
+        gap: 10px;
+      }
+      /* 第一行：序号、分类名称、颜色（水平排列） */
+      .category-card-row-main {
+        display: flex !important;
+        flex-direction: row !important;
+        width: 100% !important;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: nowrap;
+      }
+      /* 第二行：上移、下移、删除按钮（水平排列） */
+      .category-card-actions {
+        display: flex !important;
+        flex-direction: row !important;
+        width: 100% !important;
+        margin-top: 0 !important;
+        gap: 8px;
+      }
+      .category-card-actions .btn-action {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+      }
+      .category-table {
+        padding: 0;
+        box-shadow: none;
+        background: transparent;
+      }
+      .pagination {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 12px 0;
+      }
+      .pagination button {
+        flex: 1;
+        min-width: 80px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+      .pagination .page-info {
+        width: 100%;
+        text-align: center;
+        padding: 8px 0;
+        font-size: 12px;
+      }
+    }
+    @media (max-width: 480px) {
+      html, body {
+        padding: 8px !important;
+        font-size: 13px;
+      }
+      .category-header h1 {
+        font-size: 20px;
+      }
+      .category-card {
+        padding: 10px;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      /* 第一行：序号、分类名称、颜色 */
+      .category-card-row-main {
+        display: flex !important;
+        flex-direction: row !important;
+        width: 100%;
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+      /* 序号：小屏幕优化 */
+      .category-card-index {
+        font-size: 13px;
+        min-width: 30px;
+        width: 30px;
+        flex: 0 0 30px !important;
+      }
+      /* 分类名称输入框：小屏幕优化 */
+      .category-card-name {
+        flex: 1 1 auto !important;
+        min-width: 0;
+      }
+      .category-card-name input {
+        font-size: 13px;
+        padding: 6px 8px;
+      }
+      /* 颜色选择器：小屏幕优化 */
+      .category-card-color-input {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px !important;
+      }
+      /* 第二行：按钮行 */
+      .category-card-actions {
+        gap: 6px;
+        width: 100%;
+        display: flex !important;
+        flex-direction: row !important;
+      }
+      /* 按钮：小屏幕优化 */
+      .category-card-actions .btn-action {
+        flex: 1 1 0% !important;
+        padding: 6px 8px;
+        font-size: 12px;
+        min-width: 0;
+      }
+      /* 确保所有元素在小屏幕上都能正常显示 */
+      .category-card-row-main,
+      .category-card-actions {
+        overflow: visible;
+      }
+      .category-card-name input {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="category-container">
+    <div class="category-header">
+      <h1>🏷️ 分类设置</h1>
+    </div>
+
+    <!-- 添加分类表单 -->
+    <div class="add-category-form">
+      <div class="form-group">
+        <label>
+          <span class="color-preview" id="newColorPreview" style="background: #007aff;"></span>
+          分类名称：
+        </label>
+        <input type="text" id="catNameInput" placeholder="例如：Olina用" />
+        <label>颜色：</label>
+        <input type="color" id="catColorInput" value="#007aff" />
+        <button class="btn-add" id="btnAddCategory">新增分类</button>
+      </div>
+    </div>
+
+    <!-- 分类列表表格 -->
+    <div class="category-table">
+      <div id="emptyState" class="empty-state" style="display:none;">
+        暂无分类数据
+      </div>
+      <!-- 桌面端表格 -->
+      <table id="categoryTable" style="display:none;">
+        <thead>
+          <tr>
+            <th style="width: 50px;">序号</th>
+            <th>分类名称</th>
+            <th style="width: 100px;">颜色</th>
+            <th style="width: 200px;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="categoryTableBody">
+        </tbody>
+      </table>
+      
+      <!-- 移动端卡片列表 -->
+      <div class="category-list-mobile" id="categoryListMobile">
+      </div>
+      
+      <!-- 分页 -->
+      <div class="pagination" id="pagination" style="display:none;">
+        <button id="btnPrevPage" disabled>上一页</button>
+        <span class="page-info" id="pageInfo">第 1 页，共 1 页</span>
+        <button id="btnNextPage" disabled>下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // 从 app.js 中提取必要的函数和常量
+    const CATS_KEY = "xhs_cats_v7";
+    const DEFAULT_CATS = [
+      { id: "enterprise", name: "企业号", color: "#007aff" },
+      { id: "olina", name: "Olina用", color: "#34c759" },
+      { id: "jasper", name: "嘉用", color: "#ff9f0a" },
+      { id: "usable", name: "可用", color: "#8e8e93" },
+    ];
+
+    function uid() {
+      return (
+        Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+      ).toUpperCase();
+    }
+
+    function readCats() {
+      try {
+        const raw = localStorage.getItem(CATS_KEY);
+        if (!raw) {
+          const defaultCats = DEFAULT_CATS.slice();
+          saveCats(defaultCats);
+          return defaultCats;
+        }
+        const obj = JSON.parse(raw);
+        if (Array.isArray(obj) && obj.length) {
+          const fixed = obj.map(cat => {
+            if (!cat.id) {
+              return { ...cat, id: uid() };
+            }
+            return cat;
+          });
+          if (fixed.some((cat, idx) => cat.id !== obj[idx]?.id)) {
+            saveCats(fixed);
+          }
+          return fixed;
+        }
+        const defaultCats = DEFAULT_CATS.slice();
+        saveCats(defaultCats);
+        return defaultCats;
+      } catch (err) {
+        console.error('读取分类数据失败:', err);
+        const defaultCats = DEFAULT_CATS.slice();
+        saveCats(defaultCats);
+        return defaultCats;
+      }
+    }
+
+    function saveCats(cats) {
+      localStorage.setItem(CATS_KEY, JSON.stringify(cats));
+      // 通知主页面更新（如果主页面打开）
+      if (window.parent && window.parent !== window) {
+        try {
+          window.parent.postMessage({ type: 'categoriesUpdated' }, '*');
+        } catch (e) {
+          console.log('无法通知父页面:', e);
+        }
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 分页配置
+    const ITEMS_PER_PAGE = 10;
+    let currentPage = 1;
+    let allCategories = [];
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      // 颜色预览更新
+      const colorInput = document.getElementById('catColorInput');
+      const colorPreview = document.getElementById('newColorPreview');
+      
+      colorInput.addEventListener('input', (e) => {
+        colorPreview.style.background = e.target.value;
+      });
+
+      // 添加分类
+      document.getElementById('btnAddCategory').addEventListener('click', () => {
+        const name = document.getElementById('catNameInput').value.trim();
+        const color = colorInput.value;
+        
+        if (!name) {
+          alert('请填写分类名称');
+          return;
+        }
+        
+        const cats = readCats();
+        cats.push({ id: uid(), name, color });
+        saveCats(cats);
+        
+        document.getElementById('catNameInput').value = '';
+        colorInput.value = '#007aff';
+        colorPreview.style.background = '#007aff';
+        
+        renderCategories();
+      });
+
+      // 监听父页面的更新消息
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'categoriesUpdated') {
+          renderCategories();
+        }
+      });
+
+      renderCategories();
+      
+      // 监听窗口大小变化，始终使用卡片视图
+      let resizeTimer;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          document.getElementById('categoryTable').style.display = 'none';
+          document.getElementById('categoryListMobile').style.display = 'block';
+        }, 100);
+      });
+    });
+
+    function renderCategories() {
+      allCategories = readCats();
+      const totalPages = Math.max(1, Math.ceil(allCategories.length / ITEMS_PER_PAGE));
+      
+      if (allCategories.length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('categoryTable').style.display = 'none';
+        document.getElementById('categoryListMobile').style.display = 'none';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('emptyState').style.display = 'none';
+      // 始终显示卡片视图，隐藏表格
+      document.getElementById('categoryTable').style.display = 'none';
+      document.getElementById('categoryListMobile').style.display = 'block';
+      
+      // 确保当前页有效
+      if (currentPage > totalPages) {
+        currentPage = totalPages;
+      }
+      if (currentPage < 1) {
+        currentPage = 1;
+      }
+      
+      // 计算当前页的数据
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const pageCategories = allCategories.slice(startIndex, endIndex);
+      
+      // 渲染桌面端表格
+      const tbody = document.getElementById('categoryTableBody');
+      tbody.innerHTML = pageCategories.map((cat, idx) => {
+        const globalIndex = startIndex + idx;
+        return `
+          <tr data-id="${cat.id}">
+            <td>${globalIndex + 1}</td>
+            <td>
+              <input type="text" value="${escapeHtml(cat.name)}" 
+                     class="cat-name-input" 
+                     data-id="${cat.id}" />
+            </td>
+            <td>
+              <input type="color" value="${escapeHtml(cat.color)}" 
+                     class="cat-color-input" 
+                     data-id="${cat.id}" />
+            </td>
+            <td>
+              <button class="btn-action" data-act="up" data-id="${cat.id}" 
+                      ${globalIndex === 0 ? 'disabled' : ''}>上移</button>
+              <button class="btn-action" data-act="down" data-id="${cat.id}" 
+                      ${globalIndex === allCategories.length - 1 ? 'disabled' : ''}>下移</button>
+              <button class="btn-action btn-danger" data-act="del" data-id="${cat.id}">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+      
+      // 渲染移动端卡片
+      const mobileList = document.getElementById('categoryListMobile');
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/adb5fb5c-8e9d-405d-acc7-4d2b6b22cea5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'category-settings.html:682',message:'Rendering mobile cards',data:{pageCategoriesCount:pageCategories.length,mobileListExists:!!mobileList},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      mobileList.innerHTML = pageCategories.map((cat, idx) => {
+        const globalIndex = startIndex + idx;
+        // 第一行：序号 | 分类名称输入框 | 颜色块
+        // 第二行：上移按钮 | 下移按钮 | 删除按钮
+        const cardHTML = `
+          <div class="category-card" data-id="${cat.id}">
+            <div class="category-card-row-main">
+              <div class="category-card-index">${globalIndex + 1}</div>
+              <div class="category-card-name">
+                <input type="text" value="${escapeHtml(cat.name)}" 
+                       class="cat-name-input" 
+                       data-id="${cat.id}" />
+              </div>
+              <div class="category-card-color-input">
+                <div class="category-card-color" style="background: ${escapeHtml(cat.color)};"></div>
+                <input type="color" value="${escapeHtml(cat.color)}" 
+                       class="cat-color-input" 
+                       data-id="${cat.id}" />
+              </div>
+            </div>
+            <div class="category-card-actions">
+              <button class="btn-action" data-act="up" data-id="${cat.id}" 
+                      ${globalIndex === 0 ? 'disabled' : ''}>上移</button>
+              <button class="btn-action" data-act="down" data-id="${cat.id}" 
+                      ${globalIndex === allCategories.length - 1 ? 'disabled' : ''}>下移</button>
+              <button class="btn-action btn-danger" data-act="del" data-id="${cat.id}">删除</button>
+            </div>
+          </div>
+        `;
+        return cardHTML;
+      }).join('');
+      
+      // 输出实际生成的HTML结构用于调试
+      console.log('🔍 移动端卡片HTML结构（前500字符）:', mobileList.innerHTML.substring(0, 500));
+      const testCard = mobileList.querySelector('.category-card');
+      if (testCard) {
+        console.log('🔍 卡片子元素数量:', testCard.children.length);
+        console.log('🔍 卡片第一个子元素:', testCard.children[0]?.className);
+        console.log('🔍 卡片第二个子元素:', testCard.children[1]?.className);
+        console.log('🔍 卡片flex-direction:', window.getComputedStyle(testCard).flexDirection);
+        console.log('🔍 卡片完整HTML:', testCard.outerHTML.substring(0, 800));
+      }
+      
+      // #region agent log
+      const firstCard = mobileList.querySelector('.category-card');
+      if (firstCard) {
+        const computedStyle = window.getComputedStyle(firstCard);
+        const rowMain = firstCard.querySelector('.category-card-row-main');
+        const actions = firstCard.querySelector('.category-card-actions');
+        const rowMainStyle = rowMain ? window.getComputedStyle(rowMain) : null;
+        const actionsStyle = actions ? window.getComputedStyle(actions) : null;
+        const children = Array.from(firstCard.children);
+        const childNodes = Array.from(firstCard.childNodes).filter(n => n.nodeType === 1);
+        fetch('http://127.0.0.1:7242/ingest/adb5fb5c-8e9d-405d-acc7-4d2b6b22cea5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'category-settings.html:760',message:'Card structure analysis',data:{cardFlexDirection:computedStyle.flexDirection,cardDisplay:computedStyle.display,childrenCount:children.length,childNodesCount:childNodes.length,rowMainExists:!!rowMain,actionsExists:!!actions,rowMainIsChild:rowMain?children.includes(rowMain):false,actionsIsChild:actions?children.includes(actions):false,rowMainDisplay:rowMainStyle?.display,rowMainFlexDirection:rowMainStyle?.flexDirection,actionsDisplay:actionsStyle?.display,actionsFlexDirection:actionsStyle?.flexDirection,actionsPosition:actionsStyle?.position,firstCardHTML:firstCard.innerHTML.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+      } else {
+        fetch('http://127.0.0.1:7242/ingest/adb5fb5c-8e9d-405d-acc7-4d2b6b22cea5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'category-settings.html:760',message:'No card found',data:{mobileListHTML:mobileList.innerHTML.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'})}).catch(()=>{});
+      }
+      // #endregion
+      
+      // 绑定事件
+      bindEvents();
+      
+      // 更新分页
+      updatePagination(totalPages);
+    }
+
+    function bindEvents() {
+      // 分类名称编辑
+      document.querySelectorAll('.cat-name-input').forEach(input => {
+        input.addEventListener('blur', () => {
+          const id = input.getAttribute('data-id');
+          const newName = input.value.trim();
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx >= 0 && newName) {
+            cats[idx].name = newName;
+            saveCats(cats);
+            renderCategories();
+          }
+        });
+        
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          }
+        });
+      });
+      
+      // 颜色编辑
+      document.querySelectorAll('.cat-color-input').forEach(input => {
+        input.addEventListener('change', () => {
+          const id = input.getAttribute('data-id');
+          const newColor = input.value;
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx >= 0) {
+            cats[idx].color = newColor;
+            saveCats(cats);
+            // 更新移动端颜色预览
+            const card = input.closest('.category-card');
+            if (card) {
+              const colorPreview = card.querySelector('.category-card-color');
+              if (colorPreview) {
+                colorPreview.style.background = newColor;
+              }
+            }
+            // 重新渲染以更新所有视图
+            renderCategories();
+          }
+        });
+      });
+      
+      // 操作按钮
+      document.querySelectorAll('[data-act]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const act = btn.getAttribute('data-act');
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx < 0) return;
+          
+          if (act === 'up' && idx > 0) {
+            [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
+            saveCats(cats);
+            renderCategories();
+          } else if (act === 'down' && idx < cats.length - 1) {
+            [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
+            saveCats(cats);
+            renderCategories();
+          } else if (act === 'del') {
+            if (!confirm('确定删除该分类？')) return;
+            cats.splice(idx, 1);
+            saveCats(cats);
+            renderCategories();
+          }
+        });
+      });
+    }
+
+    function updatePagination(totalPages) {
+      if (totalPages <= 1) {
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('pagination').style.display = 'flex';
+      document.getElementById('pageInfo').textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+      document.getElementById('btnPrevPage').disabled = currentPage === 1;
+      document.getElementById('btnNextPage').disabled = currentPage === totalPages;
+      
+      document.getElementById('btnPrevPage').onclick = () => {
+        if (currentPage > 1) {
+          currentPage--;
+          renderCategories();
+        }
+      };
+      
+      document.getElementById('btnNextPage').onclick = () => {
+        if (currentPage < totalPages) {
+          currentPage++;
+          renderCategories();
+        }
+      };
+    }
+  </script>
+</body>
+</html>

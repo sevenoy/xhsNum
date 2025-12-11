@@ -181,6 +181,7 @@
         'snapshot-browser.html': { requiresAdmin: false },
         'view-settings.html': { requiresAdmin: false },
         'recent-changes.html': { requiresAdmin: false },
+        'category-settings.html': { requiresAdmin: false },
       };
       // 控制导航可见性
       const btnApproval = document.getElementById('btnApproval');
@@ -189,6 +190,7 @@
       const btnSnap = document.getElementById('btnSnap');
       const btnView = document.getElementById('btnView');
       const btnRecent = document.getElementById('btnRecent');
+      const btnCategory = document.getElementById('btnCategory');
       if (!isAdmin) {
         if (btnApproval) btnApproval.style.display = 'none';
         if (btnUser) btnUser.style.display = 'none';
@@ -204,7 +206,8 @@
         'view-settings.html':'btnView',
         'approval-management.html':'btnApproval',
         'user-management.html':'btnUser',
-        'recent-changes.html':'btnRecent'
+        'recent-changes.html':'btnRecent',
+        'category-settings.html':'btnCategory'
       };
       if (moduleParam) {
         const btnId = map[moduleParam];
@@ -225,7 +228,7 @@
         switchModule('snapshot-browser.html', btnSnap);
       }
       // 导航点击拦截
-      [btnApproval, btnUser, btnPerm, btnSnap, btnView, btnRecent].forEach((btn) => {
+      [btnApproval, btnUser, btnPerm, btnSnap, btnView, btnRecent, btnCategory].forEach((btn) => {
         if (!btn) return;
         btn.addEventListener('click', (e) => {
           const url = btn.getAttribute('onclick') ? null : null;
@@ -268,6 +271,7 @@
       <button id="btnPerm" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
       <button id="btnSnap" onclick="switchModule('snapshot-browser.html', this)">📂 快照浏览器</button>
       <button id="btnView" onclick="switchModule('view-settings.html', this)">⚙️ 显示设置</button>
+      <button id="btnCategory" onclick="switchModule('category-settings.html', this)">🏷️ 分类设置</button>
       <button id="btnRecent" onclick="switchModule('recent-changes.html', this)">📝 最近修改</button>
     </div>
     <div class="panel">

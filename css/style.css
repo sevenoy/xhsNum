@@ -66,6 +66,29 @@ body {
   }
 }
 
+/* ✅ 修复：添加到主屏幕后（standalone 模式）调整间距，避免双重间距 */
+@media (max-width: 768px) and (display-mode: standalone) {
+  .wrap {
+    padding-top: 0 !important; /* standalone 模式下，topbar 已经有 padding-top，不需要 wrap 的 */
+  }
+  
+  /* standalone 模式下，确保 topbar 有足够的顶部间距 */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+  }
+}
+
+/* ✅ 修复：小屏幕 standalone 模式下的 topbar 间距 */
+@media (max-width: 480px) and (display-mode: standalone) {
+  .wrap {
+    padding-top: 0 !important;
+  }
+  
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+  }
+}
+
 /* 容器 */
 
 .wrap {

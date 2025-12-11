@@ -140,8 +140,24 @@ function applyView(v) {
 function readCats() {
   try {
     const raw = localStorage.getItem(CATS_KEY);
-    if (!raw) return DEFAULT_CATS.slice();
+    console.log('📦 读取分类数据:', { key: CATS_KEY, raw: raw ? '有数据' : '无数据' });
+    if (!raw) {
+      console.log('⚠️ 分类数据为空，返回默认分类');
+      // ✅ 首次使用时，保存默认分类到 localStorage
+      const defaultCats = DEFAULT_CATS.slice();
+      saveCats(defaultCats);
+      return defaultCats;
+    }
     const obj = JSON.parse(raw);
+    console.log('📦 解析后的分类数据:', obj);
+    // ✅ 详细显示每个分类的名称和颜色
+    if (Array.isArray(obj) && obj.length > 0) {
+      console.log('📋 分类详情:', obj.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        color: cat.color
+      })));
+    }
     if (Array.isArray(obj) && obj.length) {
       // ✅ 修复旧分类数据：确保所有分类都有id字段
       const fixed = obj.map(cat => {
@@ -155,16 +171,33 @@ function readCats() {
       if (fixed.some((cat, idx) => cat.id !== obj[idx]?.id)) {
         saveCats(fixed);
       }
+      console.log('✅ 返回分类数据:', fixed);
+      // ✅ 再次详细显示返回的分类数据
+      console.log('📋 返回的分类详情:', fixed.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        color: cat.color
+      })));
       return fixed;
     }
-    return DEFAULT_CATS.slice();
-  } catch {
-    return DEFAULT_CATS.slice();
+    console.log('⚠️ 分类数据格式不正确，返回默认分类');
+    // ✅ 如果数据格式不正确，也保存默认分类
+    const defaultCats = DEFAULT_CATS.slice();
+    saveCats(defaultCats);
+    return defaultCats;
+  } catch (err) {
+    console.error('❌ 读取分类数据失败:', err);
+    // ✅ 如果读取失败，也保存默认分类
+    const defaultCats = DEFAULT_CATS.slice();
+    saveCats(defaultCats);
+    return defaultCats;
   }
 }
 
 function saveCats(cats) {
+  console.log('💾 保存分类数据:', { key: CATS_KEY, cats: cats });
   localStorage.setItem(CATS_KEY, JSON.stringify(cats));
+  console.log('✅ 分类数据已保存');
 }
 
 function catNameOf(cats, id) {
@@ -1804,19 +1837,65 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   console.log('✅ 成功查询到云端数据:', data);
   const payload = data.payload || {};
   const rows = payload.rows || [];
-  const cats = payload.cats || DEFAULT_CATS;
+  
+  // ✅ 修复：分类设置跟随云端快照更新
+  // 如果云端有分类数据，使用云端的；否则保留本地的分类数据
+  const cloudCats = payload.cats;
+  const localCats = readCats();
+  const cats = (Array.isArray(cloudCats) && cloudCats.length > 0) ? cloudCats : localCats;
+  console.log('📦 分类数据处理:', { 
+    hasCloudCats: Array.isArray(cloudCats) && cloudCats.length > 0,
+    cloudCatsCount: cloudCats?.length || 0,
+    localCatsCount: localCats.length,
+    usingCats: cats.length,
+    source: (Array.isArray(cloudCats) && cloudCats.length > 0) ? '云端' : '本地保留'
+  });
+  // ✅ 详细显示云端分类数据
+  if (Array.isArray(cloudCats) && cloudCats.length > 0) {
+    console.log('☁️ 云端分类详情:', cloudCats.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      color: cat.color
+    })));
+  } else {
+    console.log('ℹ️ 云端没有分类数据，使用本地分类');
+  }
+  // ✅ 详细显示本地分类数据
+  if (localCats.length > 0) {
+    console.log('💾 本地分类详情:', localCats.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      color: cat.color
+    })));
+  }
+  // ✅ 详细显示最终使用的分类数据
+  console.log('✅ 最终使用的分类详情:', cats.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    color: cat.color
+  })));
+  
   const view = payload.view || DEFAULT_VIEW;
   const savedBy = payload.updated_by_name || '未知用户';
 
   await db.rows.clear();
   if (rows.length) await db.rows.bulkAdd(rows);
 
+  // ✅ 修复：保存分类数据（如果云端有分类数据，使用云端的；否则保留本地的）
   saveCats(cats);
+  console.log('💾 分类数据已保存:', cats);
   saveView({ ...DEFAULT_VIEW, ...view });
 
   await refreshFilters();
   applyView(readView());
   await renderTable();
+  
+  // ✅ 修复：加载云端数据后，如果分类设置面板是打开的，重新渲染分类列表
+  const panelCategories = $("#panelCategories");
+  if (panelCategories && panelCategories.style.display === 'block') {
+    console.log('🔄 分类设置面板已打开，重新渲染分类列表');
+    renderCatList();
+  }
   
   // ✅ 加载后刷新历史列表，显示最新的快照高亮
   await renderCloudHistory();
@@ -1962,8 +2041,26 @@ async function renderCloudHistory(maxCount = 3) {
 
 function renderCatList() {
   const list = $("#catList");
+  if (!list) {
+    console.error('❌ 找不到分类列表容器 #catList');
+    return;
+  }
   const cats = readCats();
-  list.innerHTML = cats
+  console.log('🎨 渲染分类列表，分类数量:', cats.length);
+  // ✅ 详细显示要渲染的分类数据
+  console.log('📋 要渲染的分类详情:', cats.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    color: cat.color
+  })));
+  if (cats.length === 0) {
+    console.warn('⚠️ 警告：分类列表为空，无法渲染');
+    list.innerHTML = '<div style="padding:8px 10px;color:#888;">暂无分类数据</div>';
+    return;
+  }
+  
+  // ✅ 生成 HTML 内容
+  const htmlContent = cats
     .map(
       (c, i) => `<div class="cat-row" data-id="${c.id}">
         <span class="cat-color-preview" style="background:${escapeHtml(
@@ -1983,6 +2080,29 @@ function renderCatList() {
       </div>`
     )
     .join("");
+  
+  // ✅ 调试：显示生成的 HTML 内容（前500个字符）
+  console.log('🔨 生成的 HTML 内容（前500字符）:', htmlContent.substring(0, 500));
+  console.log('🔨 生成的 HTML 内容长度:', htmlContent.length);
+  console.log('🔨 分类列表容器元素:', list);
+  console.log('🔨 分类列表容器 innerHTML 长度（渲染前）:', list.innerHTML.length);
+  
+  list.innerHTML = htmlContent;
+  
+  // ✅ 调试：检查渲染后的内容
+  console.log('🔨 分类列表容器 innerHTML 长度（渲染后）:', list.innerHTML.length);
+  console.log('🔨 渲染后的分类行数量:', list.querySelectorAll('.cat-row').length);
+  console.log('🔨 渲染后的分类名称元素数量:', list.querySelectorAll('.cat-name').length);
+  
+  // ✅ 调试：显示每个分类名称元素的内容
+  list.querySelectorAll('.cat-name').forEach((el, idx) => {
+    console.log(`🔨 分类 ${idx} 名称元素:`, {
+      element: el,
+      textContent: el.textContent,
+      innerHTML: el.innerHTML,
+      visible: el.offsetWidth > 0 && el.offsetHeight > 0
+    });
+  });
 
   list.querySelectorAll(".cat-name").forEach((el) => {
     el.addEventListener("blur", () => {
@@ -2494,7 +2614,7 @@ function bindEvents() {
     const wasActive = state.activeFunction === "categories";
     setActiveFunction("categories");
     const p = $("#panelCategories");
-    const pView = $("#panelView");
+    const pView = $("#panelView"); // 可能不存在（显示设置已移至独立页面）
     
     // ✅ 如果按钮被取消激活（再次点击），关闭面板
     if (wasActive) {
@@ -2502,9 +2622,20 @@ function bindEvents() {
       return;
     }
     
-    // ✅ 互斥展开：关闭显示设置面板
+    // ✅ 互斥展开：关闭显示设置面板（如果存在）
     p.style.display = "block";
-    pView.style.display = "none";
+    if (pView) {
+      pView.style.display = "none";
+    }
+    
+    // ✅ 调试：检查 localStorage 中的原始分类数据
+    const rawCats = localStorage.getItem(CATS_KEY);
+    console.log('🔍 分类设置面板打开，检查原始数据:', {
+      key: CATS_KEY,
+      rawData: rawCats,
+      parsedData: rawCats ? JSON.parse(rawCats) : null
+    });
+    
     renderCatList();
   });
 

@@ -47,6 +47,8 @@ body {
   font-family: var(--font-main);
   font-weight: var(--font-weight); /* ✅ 优化：应用字体粗细设置 */
   -webkit-font-smoothing: antialiased;
+  /* ✅ 移除移动端点击高亮 */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -56,13 +58,18 @@ body {
 /* iOS 安全区顶部背景，确保独立模式与Safari状态栏视觉融合 */
 @media (max-width: 768px) {
   .wrap {
-    padding-top: calc(env(safe-area-inset-top) + 12px);
+    padding-top: 0; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加 */
     padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
   }
 
   .panel {
     max-height: none !important;
     overflow: visible;
+  }
+  
+  /* ✅ 确保 topbar 在所有手机型号下都紧贴状态栏 */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
   }
 }
 
@@ -72,9 +79,9 @@ body {
     padding-top: 0 !important; /* standalone 模式下，topbar 已经有 padding-top，不需要 wrap 的 */
   }
   
-  /* standalone 模式下，确保 topbar 有足够的顶部间距 */
+  /* standalone 模式下，确保 topbar 紧贴状态栏下方（统一所有iPhone型号） */
   .topbar {
-    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
   }
 }
 
@@ -84,8 +91,9 @@ body {
     padding-top: 0 !important;
   }
   
+  /* standalone 模式下，确保 topbar 紧贴状态栏下方（统一所有iPhone型号） */
   .topbar {
-    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
   }
 }
 
@@ -1108,10 +1116,35 @@ td.col-cat select:focus {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: box-shadow 0.2s ease, transform 0.1s ease;
   color: #111;
+  /* ✅ 移除点击时的边框变化 */
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .m-row:hover {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* ✅ 移除所有焦点和激活状态下的边框变化和轮廓 */
+.m-row:focus,
+.m-row:focus-visible,
+.m-row:focus-within,
+.m-row:active {
+  outline: none !important;
+  border: 1px solid var(--line) !important; /* 保持原有边框，不改变颜色或宽度 */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important; /* 保持原有阴影 */
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.m-row:active {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important; /* 点击时使用hover的阴影 */
+  border: 1px solid var(--line) !important; /* 确保点击时边框不变 */
+}
+
+/* ✅ 确保内部按钮获得焦点时，父元素不显示额外边框 */
+.m-row:focus-within {
+  border: 1px solid var(--line) !important;
+  outline: none !important;
 }
 
 /* 卡片头 */
@@ -1132,6 +1165,12 @@ td.col-cat select:focus {
   color: inherit;
   height: auto;
   border-radius: 0;
+  /* ✅ 移除所有焦点样式，防止点击时出现焦点轮廓 */
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .m-row:hover .m-row-header {
@@ -1148,6 +1187,16 @@ td.col-cat select:focus {
 .m-row-header:active {
   background: transparent; /* ✅ 取消点击时的蓝色背景 */
   color: inherit; /* ✅ 保持原色 */
+  outline: none !important; /* ✅ 确保点击时没有焦点轮廓 */
+}
+
+/* ✅ 移除所有焦点状态下的样式 */
+.m-row-header:focus,
+.m-row-header:focus-visible,
+.m-row-header:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 /* 头部主行：手机号 + 小红书名称 */
@@ -1416,7 +1465,7 @@ td.col-cat select:focus {
   }
 
   .topbar {
-    padding-top: calc(env(safe-area-inset-top) + 2px);
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important; /* ✅ 统一所有手机型号，紧贴状态栏 */
     padding-bottom: 6px;
     padding-left: 10px;
     padding-right: 10px;
@@ -1496,14 +1545,14 @@ td.col-cat select:focus {
   }
 
   .wrap {
-    padding-top: calc(env(safe-area-inset-top) + 12px) !important;
+    padding-top: 0 !important; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加，统一所有手机型号 */
     padding-bottom: calc(env(safe-area-inset-bottom) + 24px) !important;
   }
 
-  /* 确保 topbar 不与状态栏重合 */
+  /* ✅ 确保 topbar 紧贴状态栏下方（统一所有iPhone型号，无空白间距） */
   .topbar {
     margin-top: 0;
-    padding-top: calc(env(safe-area-inset-top) + 2px);
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
   }
 
   #appTitle {
@@ -1650,15 +1699,15 @@ td.col-cat select:focus {
 
 @media (max-width: 480px) {
   .wrap {
-    padding-top: calc(env(safe-area-inset-top) + 8px) !important;
+    padding-top: 0 !important; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加，统一所有手机型号 */
     padding-left: 6px !important;
     padding-right: 6px !important;
     padding-bottom: calc(env(safe-area-inset-bottom) + 16px) !important;
   }
 
-  /* 确保 topbar 不与状态栏重合 */
+  /* ✅ 确保 topbar 紧贴状态栏下方（统一所有iPhone型号，无空白间距） */
   .topbar {
-    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
     padding-left: 8px;
     padding-right: 8px;
   }

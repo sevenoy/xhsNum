@@ -253,7 +253,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20251212.1';
+    const APP_VERSION = '20251212.2';
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {
@@ -593,9 +593,11 @@
             // 记录已显示通知（在刷新前记录，避免重复显示）
             localStorage.setItem('update_notification_shown', APP_VERSION);
             
-            // 标记正在刷新
+            // ✅ 标记正在刷新（使用 sessionStorage 持久化，防止刷新循环）
             refreshing = true;
             pendingUpdate = false;
+            sessionStorage.setItem('sw_refreshing', 'true');
+            sessionStorage.setItem('sw_refresh_time', Date.now().toString());
 
             // 通知 Service Worker 跳过等待
             if (registration && registration.waiting) {
@@ -608,10 +610,9 @@
               await Promise.all(cacheNames.map(name => caches.delete(name)));
             }
 
-            // 延迟一下，确保 Service Worker 更新完成
-            setTimeout(() => {
-              window.location.reload();
-            }, 300);
+            // ✅ 直接刷新，不延迟（延迟可能导致 controllerchange 事件先触发）
+            // 使用 sessionStorage 标志确保只刷新一次
+            window.location.reload();
           } catch (err) {
             console.error('更新失败:', err);
             alert('更新失败，请手动刷新页面');
@@ -679,11 +680,42 @@
       let refreshing = false;
       let pendingUpdate = false; // ✅ 标记是否有待处理的更新
       
+      // ✅ 页面加载时，检查是否有待处理的刷新（防止刷新循环）
+      const swRefreshing = sessionStorage.getItem('sw_refreshing');
+      const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
+      if (swRefreshing === 'true' && swRefreshTime) {
+        const refreshTime = parseInt(swRefreshTime, 10);
+        const now = Date.now();
+        // ✅ 如果刷新标志存在且是最近 5 秒内设置的，清除它（说明刷新已完成）
+        if (now - refreshTime < 5000) {
+          sessionStorage.removeItem('sw_refreshing');
+          sessionStorage.removeItem('sw_refresh_time');
+          console.log('✅ 检测到刷新标志，已清除（防止循环刷新）');
+        }
+      }
+      
+      // ✅ 使用防抖机制，确保 controllerchange 只触发一次刷新
+      let controllerChangeHandled = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // ✅ 如果已经处理过，或者有刷新标志，不重复刷新
+        if (controllerChangeHandled) {
+          console.log('⚠️ controllerchange 已处理，跳过重复刷新');
+          return;
+        }
+        
+        const isRefreshing = sessionStorage.getItem('sw_refreshing') === 'true';
+        if (isRefreshing) {
+          console.log('⚠️ 检测到刷新标志，跳过 controllerchange 刷新');
+          return;
+        }
+        
         if (!refreshing && !pendingUpdate) {
           // ✅ 只有在没有显示更新提示框的情况下才自动刷新（首次安装等情况）
           console.log('🔄 Service Worker 已更新，重新加载页面');
+          controllerChangeHandled = true;
           refreshing = true;
+          sessionStorage.setItem('sw_refreshing', 'true');
+          sessionStorage.setItem('sw_refresh_time', Date.now().toString());
           window.location.reload();
         } else if (pendingUpdate) {
           // ✅ 如果有待处理的更新，不自动刷新，等待用户点击确定按钮

@@ -953,14 +953,46 @@
     let autoRefreshInterval = null;
     const AUTO_REFRESH_INTERVAL = 100000; // 100秒
 
+    // ✅ 检查页面是否真正可见（包括iframe情况）
+    function isPageVisible() {
+      // 检查document.hidden
+      if (document.hidden) return false;
+      
+      // 检查window是否在焦点中（针对iframe情况）
+      if (window.top !== window.self) {
+        // 在iframe中，检查父窗口是否可见
+        try {
+          if (window.top.document.hidden) return false;
+        } catch (e) {
+          // 跨域情况下无法访问，保守处理：认为不可见
+          return false;
+        }
+      }
+      
+      // 检查窗口是否在焦点中
+      if (!document.hasFocus && window.top !== window.self) {
+        try {
+          if (!window.top.document.hasFocus()) return false;
+        } catch (e) {
+          return false;
+        }
+      }
+      
+      return true;
+    }
+
     function startAutoRefresh() {
       if (autoRefreshInterval) return;
       console.log('🔄 启动自动刷新');
       autoRefreshInterval = setInterval(() => {
-        // 只有当页面可见时才刷新
-        if (!document.hidden) {
+        // ✅ 多重检查：只有当页面真正可见时才刷新
+        if (isPageVisible()) {
           console.log('🔄 自动刷新快照列表');
           loadSnapshots();
+        } else {
+          // 如果页面不可见，停止自动刷新以节省资源
+          console.log('⏸️ 页面在后台，暂停自动刷新');
+          stopAutoRefresh();
         }
       }, AUTO_REFRESH_INTERVAL);
     }
@@ -976,17 +1008,50 @@
     // 默认启动自动刷新
     startAutoRefresh();
 
-    // 页面可见性变化处理（节省电量）
+    // ✅ 页面可见性变化处理（节省电量）- 多重监听
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         stopAutoRefresh();
-      } else {
+      } else if (isPageVisible()) {
         startAutoRefresh();
       }
     });
     
+    // ✅ 窗口焦点变化处理（针对iframe和标签页切换）
+    window.addEventListener('focus', () => {
+      if (isPageVisible()) {
+        startAutoRefresh();
+      }
+    });
+    
+    window.addEventListener('blur', () => {
+      stopAutoRefresh();
+    });
+    
+    // ✅ 父窗口焦点变化（针对iframe情况）
+    if (window.top !== window.self) {
+      try {
+        window.top.addEventListener('focus', () => {
+          if (isPageVisible()) {
+            startAutoRefresh();
+          }
+        });
+        window.top.addEventListener('blur', () => {
+          stopAutoRefresh();
+        });
+      } catch (e) {
+        // 跨域情况下无法监听父窗口事件
+        console.warn('无法监听父窗口焦点变化（可能跨域）');
+      }
+    }
+    
     // 页面离开时清理定时器
     window.addEventListener('beforeunload', () => {
+      stopAutoRefresh();
+    });
+    
+    // ✅ 页面隐藏时立即停止（Page Visibility API）
+    document.addEventListener('pagehide', () => {
       stopAutoRefresh();
     });
     

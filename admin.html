@@ -280,6 +280,22 @@
       window.__isAdmin = isAdmin;
       window.__ROUTES = ROUTES;
       window.__BUTTON_MAP = map;
+      
+      // 刷新按钮功能
+      const btnRefreshFrame = document.getElementById('btnRefreshFrame');
+      if (btnRefreshFrame) {
+        btnRefreshFrame.addEventListener('click', () => {
+          const frame = document.getElementById('adminFrame');
+          if (frame && frame.src) {
+            // 重新加载iframe内容
+            const currentSrc = frame.src;
+            frame.src = '';
+            setTimeout(() => {
+              frame.src = currentSrc;
+            }, 100);
+          }
+        });
+      }
     });
     function switchModule(url, el) {
       // 基于路由元数据做权限拦截
@@ -305,7 +321,10 @@
   <div class="admin-wrap">
     <div class="admin-header">
       <h1 style="margin:0; color:#1990FF;">⚙️ 管理中心</h1>
-      <button class="primary" onclick="location.href='index.html'">返回主页</button>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="btnRefreshFrame" class="ghost" style="padding: 6px 12px; font-size: 14px;" title="刷新当前页面">🔄 刷新</button>
+        <button class="primary" onclick="location.href='index.html'">返回主页</button>
+      </div>
     </div>
     <div class="nav">
       <!-- 管理员专用按钮（只有sevenoy管理员可见）- 默认隐藏，防止FOUC -->

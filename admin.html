@@ -89,6 +89,11 @@
       background:#1990FF; 
       color:#fff; 
     }
+    /* ✅ 默认隐藏管理员按钮，防止FOUC（Flash of Unstyled Content） */
+    .nav button.admin-only {
+      display: none !important;
+      visibility: hidden !important;
+    }
     .panel {
       background:#fff !important; /* ✅ 强制白色背景 */
       border-radius:12px; 
@@ -209,43 +214,28 @@
       const btnView = document.getElementById('btnView');
       const btnRecent = document.getElementById('btnRecent');
       const btnCategory = document.getElementById('btnCategory');
-      // ✅ 强制隐藏管理员按钮，除非明确是sevenoy管理员
-      // 使用多重保护：设置display、添加隐藏类、移除DOM元素
-      if (!isAdmin) {
+      // ✅ 管理员按钮默认已通过CSS隐藏（防止FOUC），这里只需要在确认是管理员后显示
+      if (isAdmin) {
+        // 如果是管理员，移除admin-only类，显示按钮
         if (btnApproval) {
-          btnApproval.style.display = 'none';
-          btnApproval.style.visibility = 'hidden';
-          btnApproval.setAttribute('hidden', 'true');
+          btnApproval.classList.remove('admin-only');
+        }
+        if (btnUser) {
+          btnUser.classList.remove('admin-only');
+        }
+        if (btnPerm) {
+          btnPerm.classList.remove('admin-only');
+        }
+      } else {
+        // 如果不是管理员，确保按钮被隐藏并移除DOM元素（双重保护）
+        if (btnApproval) {
           btnApproval.remove(); // 彻底移除DOM元素
         }
         if (btnUser) {
-          btnUser.style.display = 'none';
-          btnUser.style.visibility = 'hidden';
-          btnUser.setAttribute('hidden', 'true');
           btnUser.remove();
         }
         if (btnPerm) {
-          btnPerm.style.display = 'none';
-          btnPerm.style.visibility = 'hidden';
-          btnPerm.setAttribute('hidden', 'true');
           btnPerm.remove();
-        }
-      } else {
-        // 如果是管理员，确保按钮可见
-        if (btnApproval) {
-          btnApproval.style.display = '';
-          btnApproval.style.visibility = '';
-          btnApproval.removeAttribute('hidden');
-        }
-        if (btnUser) {
-          btnUser.style.display = '';
-          btnUser.style.visibility = '';
-          btnUser.removeAttribute('hidden');
-        }
-        if (btnPerm) {
-          btnPerm.style.display = '';
-          btnPerm.style.visibility = '';
-          btnPerm.removeAttribute('hidden');
         }
       }
       // 默认打开：管理员→权限管理；普通用户→快照浏览器
@@ -318,10 +308,10 @@
       <button class="primary" onclick="location.href='index.html'">返回主页</button>
     </div>
     <div class="nav">
-      <!-- 管理员专用按钮（只有sevenoy管理员可见） -->
-      <button id="btnApproval" onclick="switchModule('approval-management.html', this)">📋 审核管理</button>
-      <button id="btnUser" onclick="switchModule('user-management.html', this)">👥 用户管理</button>
-      <button id="btnPerm" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
+      <!-- 管理员专用按钮（只有sevenoy管理员可见）- 默认隐藏，防止FOUC -->
+      <button id="btnApproval" class="admin-only" onclick="switchModule('approval-management.html', this)">📋 审核管理</button>
+      <button id="btnUser" class="admin-only" onclick="switchModule('user-management.html', this)">👥 用户管理</button>
+      <button id="btnPerm" class="admin-only" onclick="switchModule('permission-management.html', this)">🔐 权限管理</button>
       <!-- 普通用户可见的按钮（按手机端布局顺序） -->
       <button id="btnSnap" onclick="switchModule('snapshot-browser.html', this)">📂 快照浏览器</button>
       <button id="btnView" onclick="switchModule('view-settings.html', this)">⚙️ 显示设置</button>

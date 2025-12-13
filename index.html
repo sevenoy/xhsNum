@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.25';
+    const APP_VERSION = 'V251213.26';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -985,14 +985,18 @@
               max-width: 200px;
               min-height: 48px;
               transition: background 0.2s;
-              -webkit-tap-highlight-color: transparent;
+              -webkit-tap-highlight-color: rgba(25, 144, 255, 0.3);
               touch-action: manipulation;
               user-select: none;
               -webkit-user-select: none;
-              pointer-events: auto;
-              z-index: 100001;
+              pointer-events: auto !important;
+              z-index: 100002 !important;
               position: relative;
-            " onmouseover="this.style.background='#1580E0'" onmouseout="this.style.background='#1990FF'">
+              display: block;
+              margin: 0 auto;
+              -webkit-touch-callout: none;
+              -webkit-user-drag: none;
+            " onmouseover="this.style.background='#1580E0'" onmouseout="this.style.background='#1990FF'" ontouchstart="this.style.background='#1580E0'" ontouchend="this.style.background='#1990FF'">
               确定
             </button>
           </div>
@@ -1012,8 +1016,12 @@
 
         // ✅ 确定按钮点击事件（支持移动端触摸）
         const handleConfirm = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+          // ✅ 关键修复：安卓设备需要立即阻止默认行为和事件传播
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+          }
           
           // ✅ 防止重复点击
           if (btnUpdateConfirm.disabled) {
@@ -1021,7 +1029,11 @@
             return;
           }
           
-          console.log('✅ 用户点击确定按钮，开始更新流程');
+          console.log('✅ 用户点击确定按钮，开始更新流程', {
+            eventType: e?.type,
+            target: e?.target?.id,
+            userAgent: navigator.userAgent
+          });
           
           btnUpdateConfirm.disabled = true;
           btnUpdateConfirm.textContent = '更新中...';
@@ -1125,33 +1137,86 @@
         };
         
         // ✅ 绑定多种事件，确保移动端和桌面端都能响应
-        btnUpdateConfirm.addEventListener('click', handleConfirm);
-        btnUpdateConfirm.addEventListener('touchend', (e) => {
+        // ✅ 关键修复：安卓设备需要同时绑定 touchstart 和 touchend
+        const handleButtonTouch = (e) => {
           e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
           handleConfirm(e);
-        });
+        };
+        
+        // ✅ 桌面端点击事件
+        btnUpdateConfirm.addEventListener('click', handleConfirm, { passive: false });
+        
+        // ✅ 移动端触摸事件（安卓需要 touchstart）
+        btnUpdateConfirm.addEventListener('touchstart', handleButtonTouch, { passive: false, capture: true });
+        btnUpdateConfirm.addEventListener('touchend', handleButtonTouch, { passive: false, capture: true });
+        
+        // ✅ 安卓特殊处理：确保按钮可以点击
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        if (isAndroid) {
+          console.log('🔧 检测到安卓设备，应用特殊处理');
+          // 强制设置按钮样式，确保可以点击
+          btnUpdateConfirm.style.touchAction = 'manipulation';
+          btnUpdateConfirm.style.webkitTouchCallout = 'none';
+          btnUpdateConfirm.style.webkitUserSelect = 'none';
+          btnUpdateConfirm.style.userSelect = 'none';
+          btnUpdateConfirm.style.cursor = 'pointer';
+          btnUpdateConfirm.style.pointerEvents = 'auto';
+          btnUpdateConfirm.style.zIndex = '100002';
+          
+          // ✅ 安卓设备：添加 mousedown 事件作为备用
+          btnUpdateConfirm.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleConfirm(e);
+          }, { passive: false });
+        }
 
         // ✅ 点击遮罩层不关闭，必须点击确定按钮才能更新
         overlay.addEventListener('click', (e) => {
+          // ✅ 关键修复：如果点击的是按钮或其子元素，不阻止
+          if (e.target === btnUpdateConfirm || btnUpdateConfirm.contains(e.target)) {
+            return; // 允许按钮点击事件传播
+          }
           if (e.target === overlay) {
             // 点击遮罩层不关闭，必须点击确定按钮
             e.stopPropagation();
             e.preventDefault();
           }
-        });
+        }, { passive: false });
         
-        // ✅ 防止触摸事件穿透
+        // ✅ 防止触摸事件穿透（但允许按钮的触摸事件）
         overlay.addEventListener('touchstart', (e) => {
+          // ✅ 关键修复：如果触摸的是按钮或其子元素，不阻止
+          if (e.target === btnUpdateConfirm || btnUpdateConfirm.contains(e.target)) {
+            return; // 允许按钮触摸事件传播
+          }
           if (e.target === overlay) {
             e.stopPropagation();
           }
-        });
+        }, { passive: false });
         
         overlay.addEventListener('touchmove', (e) => {
+          // ✅ 关键修复：如果触摸的是按钮或其子元素，不阻止
+          if (e.target === btnUpdateConfirm || btnUpdateConfirm.contains(e.target)) {
+            return; // 允许按钮触摸事件传播
+          }
           if (e.target === overlay) {
             e.stopPropagation();
           }
-        });
+        }, { passive: false });
+        
+        overlay.addEventListener('touchend', (e) => {
+          // ✅ 关键修复：如果触摸的是按钮或其子元素，不阻止
+          if (e.target === btnUpdateConfirm || btnUpdateConfirm.contains(e.target)) {
+            return; // 允许按钮触摸事件传播
+          }
+          if (e.target === overlay) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }, { passive: false });
         
         // ✅ 防止提示框被意外移除
         const observer = new MutationObserver((mutations) => {

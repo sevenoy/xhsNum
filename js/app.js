@@ -2154,11 +2154,13 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
     
     console.log('✅ 权限检查通过，继续加载数据');
     
-    // ✅ 关键修复：检查是否已经有确认对话框在显示
-    if (document.querySelector('.cloud-load-confirm-overlay')) {
-      console.log('⚠️ 云端加载确认对话框已显示，跳过重复显示');
-      return;
+    // ✅✅✅ [修复开始] 修复死锁问题：如果发现残留遮罩层，强制移除而不是退出
+    const existingOverlay = document.querySelector('.cloud-load-confirm-overlay');
+    if (existingOverlay) {
+      console.warn('⚠️ 检测到残留的云端加载确认对话框遮罩层，强制移除以恢复显示');
+      existingOverlay.remove();
     }
+    // ✅✅✅ [修复结束]
     
     // 检查本地是否有未保存的修改
     const localRows = await getAllRows();
@@ -2472,11 +2474,13 @@ async function renderCloudHistory(maxCount = 1) {
             return;
           }
           
-        // ✅ 关键修复：检查是否已经有确认对话框在显示
-        if (document.querySelector('.cloud-load-confirm-overlay')) {
-          console.log('⚠️ 云端加载确认对话框已显示，跳过重复显示');
-          return;
+        // ✅✅✅ [修复开始] 修复死锁问题：如果发现残留遮罩层，强制移除而不是退出
+        const existingOverlay = document.querySelector('.cloud-load-confirm-overlay');
+        if (existingOverlay) {
+          console.warn('⚠️ 检测到残留的云端加载确认对话框遮罩层，强制移除以恢复显示');
+          existingOverlay.remove();
         }
+        // ✅✅✅ [修复结束]
         
         // ✅ 创建确认对话框覆盖层（防止重复调用）
         const confirmOverlay = document.createElement('div');
@@ -3998,11 +4002,13 @@ async function checkAndUpdateSnapshot() {
         return (Date.now() - (row.updated_at || 0)) < 300000; // 5分钟内
       });
       
-      // ✅ 关键修复：检查是否已经有确认对话框在显示
-      if (document.querySelector('.snapshot-update-confirm-overlay')) {
-        console.log('⚠️ 快照更新确认对话框已显示，跳过重复显示');
-        return;
+      // ✅✅✅ [修复开始] 修复死锁问题：如果发现残留遮罩层，强制移除而不是退出
+      const existingOverlay = document.querySelector('.snapshot-update-confirm-overlay');
+      if (existingOverlay) {
+        console.warn('⚠️ 检测到残留的快照更新确认对话框遮罩层，强制移除以恢复显示');
+        existingOverlay.remove();
       }
+      // ✅✅✅ [修复结束]
       
       // ✅ 创建确认对话框覆盖层（防止重复调用）
       const confirmOverlay = document.createElement('div');

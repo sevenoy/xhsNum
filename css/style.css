@@ -2059,10 +2059,10 @@ td.col-cat select:focus {
   text-align: center;
   background: #ffffff;
   border-bottom: 1px solid #e5e5ea;
-  margin: 0;
+  margin: 0 -10px;
   font-weight: normal;
-  width: 100%;
-  max-width: 100%;
+  width: calc(100% + 20px);
+  max-width: calc(100% + 20px);
   box-sizing: border-box;
   -webkit-box-sizing: border-box;
   -moz-box-sizing: border-box;
@@ -2106,9 +2106,9 @@ td.col-cat select:focus {
     color: #007aff !important;
     background: #ffffff !important;
     border-bottom: 1px solid #e5e5ea !important;
-    margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    margin: 0 -8px !important;
+    width: calc(100% + 16px) !important;
+    max-width: calc(100% + 16px) !important;
     box-sizing: border-box !important;
     -webkit-box-sizing: border-box !important;
     -moz-box-sizing: border-box !important;
@@ -2125,5 +2125,20 @@ td.col-cat select:focus {
     -webkit-font-smoothing: antialiased !important;
     -moz-osx-font-smoothing: grayscale !important;
     font-weight: normal !important;
+    overflow: visible !important;
+    -webkit-transform: translateZ(0) !important;
+    transform: translateZ(0) !important;
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+  }
+  
+  /* ✅ 安卓设备特定修复 */
+  @supports (-webkit-appearance: none) {
+    .status-info-bar {
+      -webkit-font-feature-settings: normal !important;
+      font-feature-settings: normal !important;
+      -webkit-text-rendering: optimizeLegibility !important;
+      text-rendering: optimizeLegibility !important;
+    }
   }
 }

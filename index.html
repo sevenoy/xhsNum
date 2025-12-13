@@ -335,7 +335,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.16';
+    const APP_VERSION = 'V251213.17';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -345,8 +345,47 @@
         console.log('🔄 检测到旧版本号格式，清除旧记录:', lastShownVersion);
         localStorage.removeItem('update_notification_shown');
       }
+      
+      // ✅ 关键修复：如果已显示记录的版本号和当前版本相同，说明已经是最新版本
+      // 但为了安全，我们仍然允许显示提示（如果 Service Worker 检测到更新）
+      // 这里只是清除旧格式的记录
     } catch (e) {
       console.warn('清除旧版本号记录失败:', e);
+    }
+    
+    // ✅ 关键修复：页面加载时立即清除刷新标志，防止重复提示
+    // 这必须在 Service Worker 注册之前执行
+    try {
+      const swRefreshing = sessionStorage.getItem('sw_refreshing');
+      const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
+      const swManualRefresh = sessionStorage.getItem('sw_manual_refresh');
+      
+      if (swRefreshing === 'true' && swRefreshTime) {
+        const refreshTime = parseInt(swRefreshTime, 10);
+        const timeSinceRefresh = Date.now() - refreshTime;
+        
+        // 如果刷新标志存在且是最近60秒内设置的，清除它（说明刷新已完成）
+        if (timeSinceRefresh < 60000) {
+          console.log('✅ 页面加载时清除刷新标志（' + Math.floor(timeSinceRefresh / 1000) + '秒前刷新）');
+          sessionStorage.removeItem('sw_refreshing');
+          sessionStorage.removeItem('sw_refresh_time');
+          if (swManualRefresh === 'true') {
+            sessionStorage.removeItem('sw_manual_refresh');
+          }
+        } else {
+          // 超过60秒，也清除（可能是旧的标志）
+          console.log('✅ 清除过期的刷新标志');
+          sessionStorage.removeItem('sw_refreshing');
+          sessionStorage.removeItem('sw_refresh_time');
+          sessionStorage.removeItem('sw_manual_refresh');
+        }
+      } else if (swManualRefresh === 'true') {
+        // 如果只有手动刷新标志，也清除（可能是旧的标志）
+        console.log('✅ 清除旧的刷新标志');
+        sessionStorage.removeItem('sw_manual_refresh');
+      }
+    } catch (e) {
+      console.warn('清除刷新标志失败:', e);
     }
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
@@ -713,15 +752,16 @@
         const isManualRefresh = sessionStorage.getItem('sw_manual_refresh') === 'true';
         const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
         
-        // ✅ 关键修复：如果刷新标志存在且是最近30秒内设置的，说明刚刷新过，不显示提示
+        // ✅ 关键修复：如果刷新标志存在且是最近60秒内设置的，说明刚刷新过，不显示提示
+        // 增加时间窗口，确保刷新后不会立即显示提示
         if (isManualRefresh && swRefreshTime) {
           const refreshTime = parseInt(swRefreshTime, 10);
           const timeSinceRefresh = Date.now() - refreshTime;
-          if (timeSinceRefresh < 30000) { // 30秒内
+          if (timeSinceRefresh < 60000) { // 60秒内
             console.log('⚠️ 检测到最近刷新过（' + Math.floor(timeSinceRefresh / 1000) + '秒前），跳过显示更新提示');
             return;
           } else {
-            // 超过30秒，清除标志（说明刷新已完成）
+            // 超过60秒，清除标志（说明刷新已完成）
             console.log('✅ 刷新标志已过期，清除标志');
             sessionStorage.removeItem('sw_manual_refresh');
             sessionStorage.removeItem('sw_refreshing');
@@ -770,13 +810,51 @@
         }
         
         // ✅ 关键修复：如果版本号不同，说明有新版本，清除旧记录并显示
+        // 但要注意：如果刷新后版本已经更新，localStorage 中存储的是旧版本，这是正常的
+        // 我们需要检查服务器版本，而不是仅仅比较 localStorage 和 APP_VERSION
         if (currentLastShown && currentLastShown !== APP_VERSION) {
           console.log('🔄 检测到版本号变化，清除旧记录:', {
             oldVersion: currentLastShown,
-            newVersion: APP_VERSION
+            newVersion: APP_VERSION,
+            note: '可能是刷新后版本已更新，这是正常的'
           });
           // 清除旧版本记录，确保显示新版本提示
           localStorage.removeItem('update_notification_shown');
+        }
+        
+        // ✅ 关键修复：检查服务器版本，确保真的需要更新
+        // 如果服务器版本和当前版本相同，说明已经是最新版本，不应该显示提示
+        try {
+          const swResponse = await fetch('./sw.js?v=' + APP_VERSION + '&t=' + Date.now(), {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          });
+          if (swResponse.ok) {
+            const swText = await swResponse.text();
+            const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/) || 
+                                 swText.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+            if (versionMatch) {
+              const serverVersion = versionMatch[1];
+              console.log('🔍 服务器版本检查:', {
+                serverVersion: serverVersion,
+                currentVersion: APP_VERSION,
+                match: serverVersion === APP_VERSION
+              });
+              
+              // ✅ 如果服务器版本和当前版本相同，说明已经是最新版本，不应该显示提示
+              if (serverVersion === APP_VERSION) {
+                console.log('✅ 服务器版本和当前版本相同，已是最新版本，不显示提示');
+                // 更新已显示记录，防止下次检查时再次显示
+                localStorage.setItem('update_notification_shown', APP_VERSION);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ 检查服务器版本失败，继续显示提示:', err);
         }
         
         // ✅ 标记有待处理的更新（在检查之后设置，防止重复）
@@ -1001,11 +1079,24 @@
             // ✅ 延迟一小段时间，确保标志已设置，然后刷新
             // 使用 setTimeout 确保 sessionStorage 已写入
             // ✅ 关键修复：增加延迟时间，确保所有标志都已正确设置
-            console.log('⏳ 准备刷新页面，延迟100ms确保标志已设置');
+            console.log('⏳ 准备刷新页面，延迟200ms确保标志已设置');
+            
+            // ✅ 关键修复：在刷新前，再次确认已保存状态
+            try {
+              const finalCheck = localStorage.getItem('update_notification_shown');
+              if (finalCheck !== APP_VERSION) {
+                console.warn('⚠️ 刷新前检查：已显示状态未正确保存，重新保存');
+                localStorage.setItem('update_notification_shown', APP_VERSION);
+              }
+            } catch (e) {
+              console.error('❌ 刷新前检查失败:', e);
+            }
+            
             setTimeout(() => {
               console.log('🔄 开始刷新页面');
-              window.location.reload();
-            }, 100);
+              // ✅ 强制刷新，不使用缓存
+              window.location.reload(true);
+            }, 200);
           } catch (err) {
             console.error('更新失败:', err);
             alert('更新失败，请手动刷新页面');
@@ -1075,11 +1166,13 @@
       
       // ✅ 页面加载时，检查是否有待处理的刷新（防止刷新循环）
       // ✅ 关键修复：页面加载时立即清除刷新标志，防止重复显示提示
+      // 注意：这个检查已经在上面（Service Worker 注册之前）执行过了
+      // 这里保留作为备用检查
       const swRefreshing = sessionStorage.getItem('sw_refreshing');
       const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
       const swManualRefresh = sessionStorage.getItem('sw_manual_refresh');
       
-      console.log('🔍 页面加载时检查刷新标志:', {
+      console.log('🔍 Service Worker 注册后检查刷新标志:', {
         swRefreshing: swRefreshing,
         swRefreshTime: swRefreshTime,
         swManualRefresh: swManualRefresh

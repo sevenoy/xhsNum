@@ -1075,6 +1075,9 @@ async function renderTable() {
   // ✅ 注意：所有事件都通过 bindEvents() 中的事件委托处理，这里不需要绑定任何事件
   
   renderMobileList(rows);
+  
+  // ✅ 更新状态信息栏
+  updateStatusInfoBar();
 }
 
 function renderMobileList(rows) {
@@ -3481,4 +3484,69 @@ document.addEventListener("DOMContentLoaded", async () => {
       console.log('✅ 延迟检查：显示权限管理按钮');
     }
   }, 500);
+  
+  // ✅ 初始化状态信息栏
+  updateStatusInfoBar();
 });
+
+/* =========================
+ * 12. 状态信息栏更新
+ * ========================= */
+
+// ✅ 更新状态信息栏：显示数据数量、当前版本号、云端版本检查
+async function updateStatusInfoBar() {
+  const statusBar = document.getElementById('statusInfoBar');
+  if (!statusBar) {
+    return;
+  }
+  
+  try {
+    // 1. 获取数据总数
+    const rows = await getAllRows();
+    const dataCount = rows.length;
+    
+    // 2. 获取当前版本号
+    const currentVersion = window.APP_VERSION || '未知';
+    
+    // 3. 检查云端版本
+    let cloudVersionStatus = '检查中...';
+    try {
+      const cacheBuster = Date.now() + '_' + Math.random() + '_' + Math.random();
+      const swResponse = await fetch('./sw.js?v=' + currentVersion + '&t=' + cacheBuster + '&nocache=' + Math.random() + '&force=' + Math.random(), {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (swResponse.ok) {
+        const swText = await swResponse.text();
+        const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/) || 
+                             swText.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+        if (versionMatch) {
+          const serverVersion = versionMatch[1];
+          if (serverVersion === currentVersion) {
+            cloudVersionStatus = '已是最新版本';
+          } else {
+            cloudVersionStatus = `云端有更新版本：${serverVersion}`;
+          }
+        } else {
+          cloudVersionStatus = '无法获取云端版本';
+        }
+      } else {
+        cloudVersionStatus = '无法连接云端';
+      }
+    } catch (err) {
+      console.warn('⚠️ 检查云端版本失败:', err);
+      cloudVersionStatus = '检查失败';
+    }
+    
+    // 更新状态栏内容
+    statusBar.textContent = `数据总数：${dataCount} 条 | 当前版本：${currentVersion} | ${cloudVersionStatus}`;
+  } catch (err) {
+    console.error('❌ 更新状态信息栏失败:', err);
+    statusBar.textContent = '状态信息加载失败';
+  }
+}

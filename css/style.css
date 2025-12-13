@@ -2050,3 +2050,22 @@ td.col-cat select:focus {
     font-size: 18px;
   }
 }
+
+/* ✅ 状态信息栏样式 */
+.status-info-bar {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #007aff;
+  text-align: center;
+  border-top: 1px solid #e5e5ea;
+  margin-top: 8px;
+  font-weight: normal;
+}
+
+/* ✅ 移动端状态信息栏样式 */
+@media (max-width: 768px) {
+  .status-info-bar {
+    font-size: 11px !important;
+    padding: 6px 10px;
+  }
+}

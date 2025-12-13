@@ -3630,6 +3630,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ✅ 启动快照版本检查定时器
   startSnapshotVersionCheck();
   
+  // ✅ [新增] 启动实时软件版本监听
+  initRealtimeVersionCheck();
+  
   // ✅ 延迟检查本地快照是否是最新的（等待页面完全加载）
   setTimeout(() => {
     checkAndUpdateSnapshot();
@@ -4137,6 +4140,118 @@ window.addEventListener('beforeunload', () => {
 // ✅ 页面隐藏时清理定时器（移动端）
 document.addEventListener('pagehide', () => {
   stopSnapshotVersionCheck();
+});
+
+/* =========================
+ * 15. 实时软件版本监听 (Realtime Version Check)
+ * ========================= */
+
+// ✅ 实时版本监听频道（用于清理）
+let realtimeVersionChannel = null;
+
+async function initRealtimeVersionCheck() {
+  if (!supabase) {
+    console.log('⚠️ Supabase 未配置，跳过实时版本监听');
+    return;
+  }
+
+  console.log('📡 启动实时版本监听 (Realtime)...');
+
+  try {
+    // 监听 app_settings 表的 UPDATE 事件
+    realtimeVersionChannel = supabase
+      .channel('app_version_check')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'app_settings',
+          filter: 'key=eq.min_version' // 只监听 key 为 min_version 的行
+        },
+        async (payload) => {
+          const newVersion = payload.new.value;
+          const currentVersion = window.APP_VERSION; // 来自 index.html
+
+          console.log(`📡 [Realtime] 收到版本更新信号: ${newVersion}, 当前: ${currentVersion}`);
+
+          if (newVersion && newVersion !== currentVersion) {
+            console.log('🚀 [Realtime] 版本不一致，立即触发全网自动更新！', {
+              newVersion: newVersion,
+              currentVersion: currentVersion
+            });
+            
+            // 1. 强制清除已显示记录，确保提示框能弹出来
+            localStorage.removeItem('update_notification_shown');
+            localStorage.removeItem('update_notification_time');
+            
+            // 2. 显示 Toast 提示，告知用户正在更新
+            if (typeof window.showUpdateToast === 'function') {
+              window.showUpdateToast(`发现新版本 ${newVersion}，正在同步...`);
+            } else {
+              console.log('⚠️ showUpdateToast 函数未定义，跳过Toast提示');
+            }
+
+            // 3. 延迟一下，确保Toast显示出来，然后触发更新
+            setTimeout(async () => {
+              // 调用全局更新检查 (index.html 中定义的逻辑)
+              if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
+                // 强制 Service Worker 检查更新 (这会下载新的 sw.js 并触发 updatefound)
+                try {
+                  console.log('🔄 [Realtime] 调用 checkForUpdate 触发更新');
+                  await window.checkForUpdate(window.serviceWorkerRegistration);
+                } catch (updateErr) {
+                  console.error('❌ [Realtime] 更新检查失败:', updateErr);
+                  // 备用方案：如果 SW 更新失败，直接刷新页面
+                  console.warn('⚠️ [Realtime] Service Worker 更新失败，执行强制刷新');
+                  const currentUrl = window.location.href.split('?')[0];
+                  window.location.href = currentUrl + '?t=' + Date.now();
+                }
+              } else {
+                // 备用方案：如果 SW 未就绪，直接刷新页面
+                console.warn('⚠️ [Realtime] Service Worker 未就绪，执行强制刷新');
+                const currentUrl = window.location.href.split('?')[0];
+                window.location.href = currentUrl + '?t=' + Date.now();
+              }
+            }, 500); // 延迟500ms，确保Toast显示
+          } else {
+            console.log('✅ [Realtime] 版本一致，无需更新', {
+              newVersion: newVersion,
+              currentVersion: currentVersion
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime 版本监听订阅状态:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ 实时版本监听已成功订阅');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ 实时版本监听订阅失败');
+        }
+      });
+  } catch (err) {
+    console.error('❌ 启动实时版本监听失败:', err);
+  }
+}
+
+// ✅ 停止实时版本监听
+function stopRealtimeVersionCheck() {
+  if (realtimeVersionChannel && supabase) {
+    try {
+      supabase.removeChannel(realtimeVersionChannel);
+      realtimeVersionChannel = null;
+      console.log('⏸️ 已停止实时版本监听');
+    } catch (err) {
+      console.error('❌ 停止实时版本监听失败:', err);
+    }
+  }
+}
+
+// ✅ 页面卸载时清理实时监听
+window.addEventListener('beforeunload', () => {
+  stopRealtimeVersionCheck();
+});
 });
 
 /* =========================

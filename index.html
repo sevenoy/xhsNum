@@ -335,7 +335,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.17';
+    const APP_VERSION = 'V251213.18';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -364,8 +364,9 @@
         const refreshTime = parseInt(swRefreshTime, 10);
         const timeSinceRefresh = Date.now() - refreshTime;
         
-        // 如果刷新标志存在且是最近60秒内设置的，清除它（说明刷新已完成）
-        if (timeSinceRefresh < 60000) {
+        // 如果刷新标志存在且是最近30秒内设置的，清除它（说明刷新已完成）
+        // 缩短时间窗口，确保不会阻止正常的新版本检测
+        if (timeSinceRefresh < 30000) {
           console.log('✅ 页面加载时清除刷新标志（' + Math.floor(timeSinceRefresh / 1000) + '秒前刷新）');
           sessionStorage.removeItem('sw_refreshing');
           sessionStorage.removeItem('sw_refresh_time');
@@ -373,7 +374,7 @@
             sessionStorage.removeItem('sw_manual_refresh');
           }
         } else {
-          // 超过60秒，也清除（可能是旧的标志）
+          // 超过30秒，也清除（可能是旧的标志）
           console.log('✅ 清除过期的刷新标志');
           sessionStorage.removeItem('sw_refreshing');
           sessionStorage.removeItem('sw_refresh_time');
@@ -749,19 +750,20 @@
         console.log('🔔 showUpdateNotification 被调用，当前版本:', APP_VERSION);
         
         // ✅ 检查是否是手动刷新（用户点击确定按钮），如果是则不显示提示
+        // 注意：这个检查只在刷新后的短时间内有效，不应该阻止正常的新版本提示
         const isManualRefresh = sessionStorage.getItem('sw_manual_refresh') === 'true';
         const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
         
-        // ✅ 关键修复：如果刷新标志存在且是最近60秒内设置的，说明刚刷新过，不显示提示
-        // 增加时间窗口，确保刷新后不会立即显示提示
+        // ✅ 关键修复：如果刷新标志存在且是最近10秒内设置的，说明刚刷新过，不显示提示
+        // 缩短时间窗口，只阻止刷新后立即弹出的提示，不影响正常的新版本检测
         if (isManualRefresh && swRefreshTime) {
           const refreshTime = parseInt(swRefreshTime, 10);
           const timeSinceRefresh = Date.now() - refreshTime;
-          if (timeSinceRefresh < 60000) { // 60秒内
+          if (timeSinceRefresh < 10000) { // 10秒内
             console.log('⚠️ 检测到最近刷新过（' + Math.floor(timeSinceRefresh / 1000) + '秒前），跳过显示更新提示');
             return;
           } else {
-            // 超过60秒，清除标志（说明刷新已完成）
+            // 超过10秒，清除标志（说明刷新已完成，可以正常检测新版本了）
             console.log('✅ 刷新标志已过期，清除标志');
             sessionStorage.removeItem('sw_manual_refresh');
             sessionStorage.removeItem('sw_refreshing');
@@ -810,51 +812,16 @@
         }
         
         // ✅ 关键修复：如果版本号不同，说明有新版本，清除旧记录并显示
-        // 但要注意：如果刷新后版本已经更新，localStorage 中存储的是旧版本，这是正常的
-        // 我们需要检查服务器版本，而不是仅仅比较 localStorage 和 APP_VERSION
+        // 注意：showUpdateNotification 被调用时，已经确认有新版本了（在 checkForUpdate 中已检查）
+        // 所以这里不需要再次检查服务器版本，直接显示即可
         if (currentLastShown && currentLastShown !== APP_VERSION) {
           console.log('🔄 检测到版本号变化，清除旧记录:', {
             oldVersion: currentLastShown,
             newVersion: APP_VERSION,
-            note: '可能是刷新后版本已更新，这是正常的'
+            note: '检测到新版本，清除旧记录并显示提示'
           });
           // 清除旧版本记录，确保显示新版本提示
           localStorage.removeItem('update_notification_shown');
-        }
-        
-        // ✅ 关键修复：检查服务器版本，确保真的需要更新
-        // 如果服务器版本和当前版本相同，说明已经是最新版本，不应该显示提示
-        try {
-          const swResponse = await fetch('./sw.js?v=' + APP_VERSION + '&t=' + Date.now(), {
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache'
-            }
-          });
-          if (swResponse.ok) {
-            const swText = await swResponse.text();
-            const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/) || 
-                                 swText.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
-            if (versionMatch) {
-              const serverVersion = versionMatch[1];
-              console.log('🔍 服务器版本检查:', {
-                serverVersion: serverVersion,
-                currentVersion: APP_VERSION,
-                match: serverVersion === APP_VERSION
-              });
-              
-              // ✅ 如果服务器版本和当前版本相同，说明已经是最新版本，不应该显示提示
-              if (serverVersion === APP_VERSION) {
-                console.log('✅ 服务器版本和当前版本相同，已是最新版本，不显示提示');
-                // 更新已显示记录，防止下次检查时再次显示
-                localStorage.setItem('update_notification_shown', APP_VERSION);
-                return;
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('⚠️ 检查服务器版本失败，继续显示提示:', err);
         }
         
         // ✅ 标记有待处理的更新（在检查之后设置，防止重复）
@@ -1183,9 +1150,9 @@
         const now = Date.now();
         const timeSinceRefresh = now - refreshTime;
         
-        // ✅ 关键修复：如果刷新标志存在且是最近 60 秒内设置的，清除它（说明刷新已完成）
-        // 增加时间窗口，确保刷新后能正确清除标志
-        if (timeSinceRefresh < 60000) { // 60秒内
+        // ✅ 关键修复：如果刷新标志存在且是最近 30 秒内设置的，清除它（说明刷新已完成）
+        // 缩短时间窗口，确保不会阻止正常的新版本检测
+        if (timeSinceRefresh < 30000) { // 30秒内
           console.log('✅ 检测到刷新标志（' + Math.floor(timeSinceRefresh / 1000) + '秒前），清除标志');
           sessionStorage.removeItem('sw_refreshing');
           sessionStorage.removeItem('sw_refresh_time');
@@ -1194,7 +1161,7 @@
           }
           console.log('✅ 刷新标志已清除（防止循环刷新和重复提示）');
         } else {
-          // 超过60秒，也清除（可能是旧的标志）
+          // 超过30秒，也清除（可能是旧的标志）
           console.log('✅ 刷新标志已过期，清除标志');
           sessionStorage.removeItem('sw_refreshing');
           sessionStorage.removeItem('sw_refresh_time');

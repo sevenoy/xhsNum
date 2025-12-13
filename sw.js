@@ -3,7 +3,7 @@
 
 // ✅ 版本号格式：V + 年月日（6位） + . + 版本更改号
 // 例如：V251213.8 表示 2025年12月13日第8次更新
-const VERSION = 'V251213.43'; // ✅ 每次更新代码时，修改这个版本号
+const VERSION = 'V251213.44'; // ✅ 每次更新代码时，修改这个版本号
 const CACHE_NAME = `xhsnum-cache-v${VERSION}`;
 
 // 需要缓存的资源列表（关键资源）
@@ -15,7 +15,8 @@ const CRITICAL_RESOURCES = [
   './site.webmanifest',
   './update-log.json', // ✅ 添加更新日志文件到缓存列表
   './icon/icon-192.png',
-  './icon/icon-512.png'
+  './icon/icon-512.png',
+  'https://esm.sh/@supabase/supabase-js@2'
   // 注意：Supabase CDN 库不在 install 时缓存，而是在 fetch 时动态缓存
 ];
 

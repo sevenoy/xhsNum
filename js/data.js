@@ -83,9 +83,8 @@ export function applyView(v) {
 
   const h1 = document.getElementById("appTitle");
   if (h1) {
-    const versionEl = h1.querySelector("#appVersion");
-    const versionText = versionEl ? versionEl.textContent : (window.APP_VERSION ? `v${window.APP_VERSION}` : "");
-    h1.innerHTML = `${v.titleText}${versionText ? `<span id="appVersion">${versionText}</span>` : ""}`;
+    // ✅ 版本号已在状态栏显示，不再在标题中显示
+    h1.textContent = v.titleText;
     h1.style.color = v.titleColor || "#208BEE";
   }
 }

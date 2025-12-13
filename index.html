@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.35';
+    const APP_VERSION = 'V251213.36';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -754,18 +754,13 @@
                   });
                   
                   // ✅ 关键修复：先显示更新对话框，然后自动执行更新流程
-                  // 清除已显示记录，确保能显示新版本提示
-                  const lastShown = localStorage.getItem('update_notification_shown');
-                  if (lastShown && !lastShown.startsWith('V')) {
-                    console.log('🔄 清除旧格式版本号记录:', lastShown);
-                    localStorage.removeItem('update_notification_shown');
-                    localStorage.removeItem('update_notification_time');
-                  }
-                  if (lastShown === APP_VERSION) {
-                    console.log('🔄 服务器版本已更新，清除已显示记录');
-                    localStorage.removeItem('update_notification_shown');
-                    localStorage.removeItem('update_notification_time');
-                  }
+                  // ✅ 强制清除已显示记录，确保能显示新版本提示（无论什么情况都清除）
+                  console.log('🔄 检测到新版本，强制清除已显示记录，确保能显示更新提示');
+                  localStorage.removeItem('update_notification_shown');
+                  localStorage.removeItem('update_notification_time');
+                  
+                  // ✅ 延迟一下，确保清除操作完成
+                  await new Promise(resolve => setTimeout(resolve, 100));
                   
                   // ✅ 显示更新对话框
                   console.log('🔔 显示更新对话框');
@@ -1032,6 +1027,8 @@
         const currentLastShown = localStorage.getItem('update_notification_shown');
         const lastShownTime = localStorage.getItem('update_notification_time');
         
+        // ✅ 关键修复：如果检测到新版本（通过 checkForUpdate 调用），应该总是显示
+        // 这里只检查是否是重复显示（10分钟内显示过相同版本）
         if (currentLastShown === APP_VERSION && lastShownTime) {
           const timeSinceShown = Date.now() - parseInt(lastShownTime, 10);
           // ✅ 如果10分钟内显示过，跳过（避免重复提示）
@@ -1050,6 +1047,9 @@
           localStorage.removeItem('update_notification_shown');
           localStorage.removeItem('update_notification_time');
         }
+        
+        // ✅ 关键修复：如果记录为空或已清除，说明是新版本检测，应该显示
+        // 这个检查确保在检测到新版本时，即使之前显示过，也能再次显示
         
         // ✅ 标记有待处理的更新
         pendingUpdate = true;
@@ -1073,12 +1073,22 @@
           });
           if (response.ok) {
             const updateLog = await response.json();
-            // ✅ 兼容新旧版本号格式
+            // ✅ 关键修复：尝试获取服务器版本（通过检查所有版本号，找到最新的）
+            // 首先尝试当前版本
             if (updateLog[APP_VERSION]) {
               updateInfo = updateLog[APP_VERSION];
             } else {
-              // 如果新格式找不到，尝试查找旧格式（兼容性处理）
-              console.warn('⚠️ 未找到新格式版本号，尝试查找旧格式');
+              // 如果当前版本找不到，尝试查找最新的版本（通常是服务器版本）
+              const versions = Object.keys(updateLog).sort().reverse();
+              if (versions.length > 0) {
+                const latestVersion = versions[0];
+                console.log('🔍 当前版本更新日志不存在，使用最新版本:', latestVersion);
+                if (updateLog[latestVersion]) {
+                  updateInfo = updateLog[latestVersion];
+                }
+              } else {
+                console.warn('⚠️ 未找到任何版本号');
+              }
             }
           }
         } catch (err) {

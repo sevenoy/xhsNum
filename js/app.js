@@ -3548,12 +3548,24 @@ async function updateStatusInfoBar() {
     statusBar.style.color = '#007aff';
     statusBar.style.fontSize = '12px';
     statusBar.style.fontWeight = 'normal';
+    statusBar.style.background = '#ffffff';
+    statusBar.style.borderBottom = 'none';
+    statusBar.style.margin = '0';
+    statusBar.style.width = '100%';
+    statusBar.style.maxWidth = '100%';
+    statusBar.style.textAlign = 'center';
     
     // ✅ 移动端特定样式
     if (window.innerWidth <= 768) {
       statusBar.style.fontSize = '12px';
       statusBar.style.color = '#007aff';
       statusBar.style.fontWeight = 'normal';
+      statusBar.style.background = '#ffffff';
+      statusBar.style.borderBottom = 'none';
+      statusBar.style.margin = '0';
+      statusBar.style.width = '100%';
+      statusBar.style.maxWidth = '100%';
+      statusBar.style.textAlign = 'center';
     }
   } catch (err) {
     console.error('❌ 更新状态信息栏失败:', err);
@@ -3562,5 +3574,11 @@ async function updateStatusInfoBar() {
     statusBar.style.color = '#007aff';
     statusBar.style.fontSize = '12px';
     statusBar.style.fontWeight = 'normal';
+    statusBar.style.background = '#ffffff';
+    statusBar.style.borderBottom = 'none';
+    statusBar.style.margin = '0';
+    statusBar.style.width = '100%';
+    statusBar.style.maxWidth = '100%';
+    statusBar.style.textAlign = 'center';
   }
 }

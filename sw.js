@@ -3,7 +3,7 @@
 
 // ✅ 版本号格式：V + 年月日（6位） + . + 版本更改号
 // 例如：V251213.8 表示 2025年12月13日第8次更新
-const VERSION = 'V251213.8'; // ✅ 每次更新代码时，修改这个版本号
+const VERSION = 'V251213.9'; // ✅ 每次更新代码时，修改这个版本号
 const CACHE_NAME = `xhsnum-cache-v${VERSION}`;
 
 // 需要缓存的资源列表（关键资源）
@@ -65,12 +65,41 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 对于 HTML 和关键资源，使用网络优先策略（确保获取最新版本）
+  // ✅ 针对 js/app.js：强制从网络获取，不使用缓存（确保安卓设备获取最新代码）
   if (request.method === 'GET' && (
     request.destination === 'document' ||
     request.url.includes('.css') ||
     request.url.includes('.js') ||
     request.url.includes('manifest')
   )) {
+    // ✅ 特殊处理：app.js 强制从网络获取，不使用缓存
+    if (request.url.includes('app.js')) {
+      event.respondWith(
+        fetch(request, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        }).then((response) => {
+          // 如果网络请求成功，更新缓存
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
+          return response;
+        }).catch(() => {
+          // 网络失败时，尝试从缓存获取
+          return caches.match(request).then((cachedResponse) => {
+            return cachedResponse || new Response('离线状态', { status: 503 });
+          });
+        })
+      );
+      return;
+    }
+    
     event.respondWith(
       fetch(request)
         .then((response) => {

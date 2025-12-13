@@ -1416,6 +1416,7 @@ async function cloudHealthCheck() {
 async function cloudSave() {
   try {
     console.log('🔄 开始保存云端... [RLS Deep Dive 方案]');
+    console.log('✅ 确认：已移除 prompt() 弹窗，直接使用自动生成的快照名称');
 
     if (!supabase) {
       alert("未配置 Supabase，无法保存云端；本地仍可正常使用。");
@@ -2492,10 +2493,16 @@ function bindEvents() {
   $("#btnSaveCloud").addEventListener("click", async () => {
     try {
       console.log('🖱️ 点击了"保存云端"按钮');
+      console.log('✅ 确认：已移除 prompt() 弹窗，将直接使用自动生成的快照名称');
       setActiveFunction("saveCloud");
       const btn = $("#btnSaveCloud");
       const original = btn.textContent;
       btn.disabled = true; btn.textContent = '⏳ 保存中...';
+      
+      // ✅ 针对安卓设备：确保获取最新代码（强制清除可能的缓存）
+      // 注意：这里只是日志，实际代码中已经没有 prompt() 了
+      console.log('🔍 检查代码版本：当前 app.js 应该不包含 prompt() 调用');
+      
       await cloudSave();
       // 操作日志（忽略失败）
       try {

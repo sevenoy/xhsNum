@@ -335,7 +335,19 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.8';
+    const APP_VERSION = 'V251213.9';
+    
+    // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
+    // 确保更新提示能正常显示（针对 iPhone X 等设备）
+    try {
+      const lastShownVersion = localStorage.getItem('update_notification_shown');
+      if (lastShownVersion && !lastShownVersion.startsWith('V')) {
+        console.log('🔄 检测到旧版本号格式，清除旧记录:', lastShownVersion);
+        localStorage.removeItem('update_notification_shown');
+      }
+    } catch (e) {
+      console.warn('清除旧版本号记录失败:', e);
+    }
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {
@@ -355,13 +367,16 @@
 
       // 注册 Service Worker（添加版本号和时间戳查询参数，确保浏览器能检测到文件变化）
       // ✅ 使用时间戳确保每次都能获取最新版本
-      const swUrl = './sw.js?v=' + APP_VERSION + '&t=' + Date.now();
+      // ✅ 强制清除旧版本缓存（针对版本号格式变化的情况）
+      // ✅ 针对安卓设备：添加随机参数强制刷新
+      const swUrl = './sw.js?v=' + APP_VERSION + '&t=' + Date.now() + '&nocache=' + Math.random() + '&force=' + Math.random();
       navigator.serviceWorker.register(swUrl, {
         scope: './',
         updateViaCache: 'none' // ✅ 禁用 Service Worker 脚本的 HTTP 缓存
       }).then((reg) => {
         registration = reg;
         console.log('✅ Service Worker 注册成功，版本:', APP_VERSION);
+        console.log('✅ Service Worker URL:', swUrl);
 
         // ✅ 立即检查更新
         checkForUpdate(reg);
@@ -385,6 +400,12 @@
               if (navigator.serviceWorker.controller) {
                 // 有旧版本在运行，新版本已安装，提示更新
                 console.log('✅ 新版本已安装，等待激活');
+                // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                const lastShown = localStorage.getItem('update_notification_shown');
+                if (lastShown && !lastShown.startsWith('V')) {
+                  console.log('🔄 清除旧格式版本号记录:', lastShown);
+                  localStorage.removeItem('update_notification_shown');
+                }
                 showUpdateNotification();
               } else {
                 // 首次安装，直接激活
@@ -397,6 +418,12 @@
                 // 延迟一下，确保状态稳定
                 setTimeout(() => {
                   if (reg.waiting || reg.installing) {
+                    // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                    const lastShown = localStorage.getItem('update_notification_shown');
+                    if (lastShown && !lastShown.startsWith('V')) {
+                      console.log('🔄 清除旧格式版本号记录:', lastShown);
+                      localStorage.removeItem('update_notification_shown');
+                    }
                     showUpdateNotification();
                   }
                 }, 100);
@@ -462,6 +489,12 @@
           console.log('⏰ 延迟强制检查更新（5秒后）');
           checkForUpdate(reg);
         }, 5000);
+        
+        // ✅ 额外检查：10秒后再次检查（针对 iPhone X 等设备可能延迟检测的情况）
+        setTimeout(() => {
+          console.log('⏰ 延迟强制检查更新（10秒后）');
+          checkForUpdate(reg);
+        }, 10000);
       }).catch((err) => {
         console.error('❌ Service Worker 注册失败:', err);
       });
@@ -484,6 +517,12 @@
           // ✅ 检查是否有等待中的新版本
           if (reg.waiting) {
             console.log('🔄 发现等待中的新版本');
+            // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+            const lastShown = localStorage.getItem('update_notification_shown');
+            if (lastShown && !lastShown.startsWith('V')) {
+              console.log('🔄 清除旧格式版本号记录:', lastShown);
+              localStorage.removeItem('update_notification_shown');
+            }
             showUpdateNotification();
             return;
           }
@@ -494,6 +533,12 @@
             // 等待安装完成后再显示通知
             reg.installing.addEventListener('statechange', () => {
               if (reg.installing && reg.installing.state === 'installed' && navigator.serviceWorker.controller) {
+                // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                const lastShown = localStorage.getItem('update_notification_shown');
+                if (lastShown && !lastShown.startsWith('V')) {
+                  console.log('🔄 清除旧格式版本号记录:', lastShown);
+                  localStorage.removeItem('update_notification_shown');
+                }
                 showUpdateNotification();
               }
             });
@@ -502,16 +547,22 @@
           // ✅ 检查当前 Service Worker 的版本（通过 fetch 获取 sw.js 内容）
           // 这是最重要的检测方式，确保所有设备都能检测到版本变化
           try {
-            const swResponse = await fetch('./sw.js?v=' + Date.now(), { 
+            // ✅ 强制清除缓存，确保获取最新版本（针对安卓和某些设备）
+            // ✅ 添加多个随机参数，强制绕过所有可能的缓存
+            const cacheBuster = Date.now() + '_' + Math.random() + '_' + Math.random();
+            const swResponse = await fetch('./sw.js?v=' + APP_VERSION + '&t=' + cacheBuster + '&nocache=' + Math.random() + '&force=' + Math.random(), {
               cache: 'no-store',
               headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
+                'Pragma': 'no-cache',
+                'Expires': '0'
               }
             });
             if (swResponse.ok) {
               const swText = await swResponse.text();
-              const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/);
+              // ✅ 兼容新旧版本号格式（支持 V251213.8 和 20251212.8）
+              const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/) || 
+                                   swText.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
               if (versionMatch) {
                 const serverVersion = versionMatch[1];
                 console.log('🔍 版本检查:', { 
@@ -520,15 +571,26 @@
                   match: serverVersion === APP_VERSION
                 });
                 
+                // ✅ 如果版本不匹配，显示更新提示
                 if (serverVersion !== APP_VERSION) {
                   console.log('🔄 检测到版本不匹配，显示更新提示');
-                  // ✅ 如果版本不匹配，显示更新提示（而不是直接刷新）
-                  // 这样可以确保用户能看到更新内容并确认
+                  // ✅ 清除旧格式的版本号记录（兼容性处理）
+                  const lastShown = localStorage.getItem('update_notification_shown');
+                  if (lastShown && !lastShown.startsWith('V')) {
+                    console.log('🔄 清除旧格式版本号记录:', lastShown);
+                    localStorage.removeItem('update_notification_shown');
+                  }
                   showUpdateNotification();
                 } else {
                   // ✅ 版本匹配，但也要检查是否有等待中的更新（针对某些设备）
                   if (reg.waiting) {
                     console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
+                    // ✅ 清除旧格式版本号记录（兼容性处理）
+                    const lastShown = localStorage.getItem('update_notification_shown');
+                    if (lastShown && !lastShown.startsWith('V')) {
+                      console.log('🔄 清除旧格式版本号记录:', lastShown);
+                      localStorage.removeItem('update_notification_shown');
+                    }
                     showUpdateNotification();
                   } else {
                     // ✅ 即使版本匹配，也检查当前 Service Worker 的版本
@@ -538,7 +600,17 @@
                         // 尝试从当前 Service Worker 获取版本信息
                         const controllerVersion = await navigator.serviceWorker.controller.scriptURL;
                         console.log('🔍 当前 Service Worker URL:', controllerVersion);
-                        // 如果 URL 中包含不同的版本号，也可能需要更新
+                        // ✅ 如果 URL 中包含不同的版本号，也可能需要更新
+                        // 检查 URL 中是否包含旧格式的版本号
+                        if (controllerVersion && !controllerVersion.includes(APP_VERSION)) {
+                          console.log('🔄 Service Worker URL 中版本号不匹配，可能需要更新');
+                          // ✅ 清除旧格式版本号记录
+                          const lastShown = localStorage.getItem('update_notification_shown');
+                          if (lastShown && !lastShown.startsWith('V')) {
+                            console.log('🔄 清除旧格式版本号记录:', lastShown);
+                            localStorage.removeItem('update_notification_shown');
+                          }
+                        }
                       } catch (err) {
                         console.warn('⚠️ 无法获取当前 Service Worker 信息:', err);
                       }
@@ -582,9 +654,15 @@
         
         // ✅ 检查是否已经显示过通知（但允许同一版本多次显示，如果用户刷新了页面）
         const lastShownVersion = localStorage.getItem('update_notification_shown');
+        // ✅ 兼容旧版本号格式：如果 localStorage 中是旧格式（如 20251212.8），清除它
+        if (lastShownVersion && !lastShownVersion.startsWith('V')) {
+          console.log('🔄 检测到旧版本号格式，清除旧记录:', lastShownVersion);
+          localStorage.removeItem('update_notification_shown');
+        }
         // 如果已经显示过当前版本，且用户已经点击了确定，则不重复显示
         // 但如果版本号变化了，一定会显示
-        if (lastShownVersion === APP_VERSION && pendingUpdate === false) {
+        const currentLastShown = localStorage.getItem('update_notification_shown');
+        if (currentLastShown === APP_VERSION && pendingUpdate === false) {
           console.log('✅ 当前版本已显示过更新提示，跳过');
           return;
         }
@@ -599,14 +677,22 @@
         };
 
         try {
-          // ✅ 添加时间戳，确保获取最新文件
-          const response = await fetch('./update-log.json?v=' + APP_VERSION + '&t=' + Date.now(), {
-            cache: 'no-store'
+          // ✅ 添加时间戳，确保获取最新文件（强制清除缓存）
+          const response = await fetch('./update-log.json?v=' + APP_VERSION + '&t=' + Date.now() + '&nocache=' + Math.random(), {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
           });
           if (response.ok) {
             const updateLog = await response.json();
+            // ✅ 兼容新旧版本号格式
             if (updateLog[APP_VERSION]) {
               updateInfo = updateLog[APP_VERSION];
+            } else {
+              // 如果新格式找不到，尝试查找旧格式（兼容性处理）
+              console.warn('⚠️ 未找到新格式版本号，尝试查找旧格式');
             }
           }
         } catch (err) {
@@ -746,10 +832,28 @@
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             }
 
-            // 清除所有缓存
+            // ✅ 清除所有缓存（强制清除，确保获取最新代码）
             if (registration) {
-              const cacheNames = await caches.keys();
-              await Promise.all(cacheNames.map(name => caches.delete(name)));
+              try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log('✅ 所有缓存已清除');
+              } catch (err) {
+                console.warn('⚠️ 清除缓存失败:', err);
+              }
+            }
+            
+            // ✅ 额外清除：强制清除所有可能的缓存（针对安卓设备）
+            try {
+              if ('caches' in window) {
+                const allCacheNames = await caches.keys();
+                for (const cacheName of allCacheNames) {
+                  await caches.delete(cacheName);
+                }
+                console.log('✅ 额外缓存清除完成');
+              }
+            } catch (err) {
+              console.warn('⚠️ 额外缓存清除失败:', err);
             }
 
             // ✅ 延迟一小段时间，确保标志已设置，然后刷新

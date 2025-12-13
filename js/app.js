@@ -2696,42 +2696,64 @@ function bindEvents() {
       return;
     }
     
-    const userName = getCurrentUserName();
+    // ✅ 优先使用 window.currentUser（最新）
+    let userName = null;
+    if (window.currentUser && window.currentUser.name) {
+      userName = window.currentUser.name;
+    } else {
+      // 降级：使用 getCurrentUserName() 函数
+      userName = getCurrentUserName();
+    }
+    
+    // ✅ 如果还是没有，直接从 localStorage 获取
+    if (!userName || userName === '匿名用户') {
+      userName = localStorage.getItem('xhs_user_name');
+    }
+    
     if (userName && userName !== '匿名用户') {
       currentUserNameEl.textContent = `👤 ${userName}`;
       currentUserNameEl.style.display = 'inline-block';
       currentUserNameEl.style.visibility = 'visible';
       currentUserNameEl.style.opacity = '1';
+      console.log('✅ 用户名显示已更新:', userName);
     } else {
-      // 如果还没有用户名，尝试从 localStorage 获取
-      const storedName = localStorage.getItem('xhs_user_name');
-      if (storedName) {
-        currentUserNameEl.textContent = `👤 ${storedName}`;
-        currentUserNameEl.style.display = 'inline-block';
-        currentUserNameEl.style.visibility = 'visible';
-        currentUserNameEl.style.opacity = '1';
-      } else {
-        // 如果还是没有，隐藏元素
-        currentUserNameEl.style.display = 'none';
-      }
+      // 如果还是没有，隐藏元素
+      currentUserNameEl.style.display = 'none';
     }
   };
   
-  // 立即尝试更新一次
+  // ✅ 立即尝试更新一次
   updateUserNameDisplay();
   
-  // ✅ 延迟更新（等待 window.currentUser 设置）
+  // ✅ 延迟更新（等待 window.currentUser 设置）- 增加延迟时间
   setTimeout(() => {
     updateUserNameDisplay();
-  }, 300);
+  }, 500);
   
-  // ✅ 定期检查并更新（每500ms检查一次，最多检查10次）
+  // ✅ 再次延迟更新（针对桌面书签打开的情况）
+  setTimeout(() => {
+    updateUserNameDisplay();
+  }, 1000);
+  
+  // ✅ 定期检查并更新（每500ms检查一次，最多检查15次，增加检查次数）
   let checkCount = 0;
   const checkInterval = setInterval(() => {
     checkCount++;
     updateUserNameDisplay();
-    if (checkCount >= 10 || getCurrentUserName() !== '匿名用户') {
+    // ✅ 增加检查次数到15次，并检查是否已经有用户名显示
+    const currentUserNameEl = $("#currentUserName");
+    const hasUserName = currentUserNameEl && 
+                       currentUserNameEl.textContent && 
+                       currentUserNameEl.textContent.trim() !== '' &&
+                       currentUserNameEl.style.display !== 'none';
+    
+    if (checkCount >= 15 || hasUserName) {
       clearInterval(checkInterval);
+      if (hasUserName) {
+        console.log('✅ 用户名显示检查完成，已显示用户名');
+      } else {
+        console.warn('⚠️ 用户名显示检查完成，但未找到用户名');
+      }
     }
   }, 500);
   
@@ -2987,8 +3009,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 继续执行，避免阻塞应用
   }
   
-  // ✅ 等待一下，确保 window.isAdmin 已经设置（增加等待时间）
-  await new Promise(resolve => setTimeout(resolve, 200));
+  // ✅ 等待一下，确保 window.isAdmin 和 window.currentUser 已经设置（增加等待时间）
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  // ✅ 恢复用户信息（针对桌面书签打开的情况）
+  if (!window.currentUser) {
+    const storedName = localStorage.getItem('xhs_user_name');
+    const storedId = localStorage.getItem('xhs_user_id');
+    const storedEmail = localStorage.getItem('xhs_user_email');
+    
+    if (storedName && storedId) {
+      window.currentUser = {
+        id: storedId,
+        email: storedEmail || '',
+        name: storedName
+      };
+      console.log('✅ DOMContentLoaded: 从 localStorage 恢复用户信息', window.currentUser);
+    }
+  }
   
   // ✅ 再次检查管理员权限（如果还没有设置）
   if (!window.isAdmin && localStorage.getItem('xhs_is_admin') === 'true') {
@@ -3001,6 +3039,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (finalIsAdmin && !window.isAdmin) {
     window.isAdmin = true;
     console.log('✅ 最终确认：设置管理员权限');
+  }
+  
+  // ✅ 立即更新用户名显示（针对桌面书签打开的情况）
+  const currentUserNameEl = $("#currentUserName");
+  if (currentUserNameEl) {
+    const userName = window.currentUser?.name || localStorage.getItem('xhs_user_name');
+    if (userName && userName !== '匿名用户') {
+      currentUserNameEl.textContent = `👤 ${userName}`;
+      currentUserNameEl.style.display = 'inline-block';
+      currentUserNameEl.style.visibility = 'visible';
+      currentUserNameEl.style.opacity = '1';
+      console.log('✅ DOMContentLoaded: 立即更新用户名显示', userName);
+    }
   }
   
   // 初始化在线状态管理

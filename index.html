@@ -144,6 +144,22 @@
           window.isAdmin = localStorage.getItem('xhs_is_admin') === 'true';
           console.log('⚠️ 使用降级方案，从 localStorage 恢复管理员权限:', window.isAdmin);
         }
+        
+        // ✅ 用户信息加载完成后，立即更新用户名显示（针对桌面书签打开的情况）
+        // 使用 requestAnimationFrame 确保 DOM 已准备好
+        requestAnimationFrame(() => {
+          const currentUserNameEl = document.getElementById('currentUserName');
+          if (currentUserNameEl && window.currentUser) {
+            const userName = window.currentUser.name || localStorage.getItem('xhs_user_name');
+            if (userName && userName !== '匿名用户') {
+              currentUserNameEl.textContent = `👤 ${userName}`;
+              currentUserNameEl.style.display = 'inline-block';
+              currentUserNameEl.style.visibility = 'visible';
+              currentUserNameEl.style.opacity = '1';
+              console.log('✅ 立即更新用户名显示:', userName);
+            }
+          }
+        });
       }
     } else {
       // 如果没有 Supabase 配置，从 localStorage 恢复
@@ -158,11 +174,41 @@
       }
     }
     
-    // ✅ 确保在页面加载完成后，管理员权限已经设置
+    // ✅ 确保在页面加载完成后，管理员权限和用户名显示已经设置
     window.addEventListener('DOMContentLoaded', () => {
+      // 恢复管理员权限
       if (!window.isAdmin && localStorage.getItem('xhs_is_admin') === 'true') {
         window.isAdmin = true;
         console.log('✅ DOMContentLoaded: 从 localStorage 恢复管理员权限');
+      }
+      
+      // ✅ 恢复用户信息（针对桌面书签打开的情况）
+      if (!window.currentUser) {
+        const storedName = localStorage.getItem('xhs_user_name');
+        const storedId = localStorage.getItem('xhs_user_id');
+        const storedEmail = localStorage.getItem('xhs_user_email');
+        
+        if (storedName && storedId) {
+          window.currentUser = {
+            id: storedId,
+            email: storedEmail || '',
+            name: storedName
+          };
+          console.log('✅ DOMContentLoaded: 从 localStorage 恢复用户信息', window.currentUser);
+        }
+      }
+      
+      // ✅ 立即更新用户名显示
+      const currentUserNameEl = document.getElementById('currentUserName');
+      if (currentUserNameEl) {
+        const userName = window.currentUser?.name || localStorage.getItem('xhs_user_name');
+        if (userName && userName !== '匿名用户') {
+          currentUserNameEl.textContent = `👤 ${userName}`;
+          currentUserNameEl.style.display = 'inline-block';
+          currentUserNameEl.style.visibility = 'visible';
+          currentUserNameEl.style.opacity = '1';
+          console.log('✅ DOMContentLoaded: 更新用户名显示', userName);
+        }
       }
     });
   </script>
@@ -287,7 +333,7 @@
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
-    const APP_VERSION = '20251212.7';
+    const APP_VERSION = '20251212.8';
     
     // ✅ 在标题后显示版本号（立即执行，不等待DOMContentLoaded）
     (function() {
@@ -397,10 +443,23 @@
         });
         
         // ✅ 页面首次加载时强制检查（针对不同设备的缓存问题）
+        // 增加多个检查时机，确保所有设备都能检测到更新
         setTimeout(() => {
           console.log('⏰ 延迟强制检查更新（1秒后）');
           checkForUpdate(reg);
         }, 1000);
+        
+        // ✅ 额外检查：2秒后再次检查（针对某些设备可能延迟检测的情况）
+        setTimeout(() => {
+          console.log('⏰ 延迟强制检查更新（2秒后）');
+          checkForUpdate(reg);
+        }, 2000);
+        
+        // ✅ 额外检查：5秒后再次检查（针对某些设备可能延迟检测的情况）
+        setTimeout(() => {
+          console.log('⏰ 延迟强制检查更新（5秒后）');
+          checkForUpdate(reg);
+        }, 5000);
       }).catch((err) => {
         console.error('❌ Service Worker 注册失败:', err);
       });
@@ -417,8 +476,8 @@
           await reg.update();
           console.log('✅ 更新检查完成');
           
-          // ✅ 延迟检查，确保状态已更新
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // ✅ 延迟检查，确保状态已更新（增加延迟时间，确保不同设备都能检测到）
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // ✅ 检查是否有等待中的新版本
           if (reg.waiting) {
@@ -439,26 +498,56 @@
           }
           
           // ✅ 检查当前 Service Worker 的版本（通过 fetch 获取 sw.js 内容）
+          // 这是最重要的检测方式，确保所有设备都能检测到版本变化
           try {
-            const swResponse = await fetch('./sw.js?v=' + Date.now(), { cache: 'no-store' });
+            const swResponse = await fetch('./sw.js?v=' + Date.now(), { 
+              cache: 'no-store',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              }
+            });
             if (swResponse.ok) {
               const swText = await swResponse.text();
               const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/);
-              if (versionMatch && versionMatch[1] !== APP_VERSION) {
-                console.log('🔄 检测到版本不匹配:', { 
+              if (versionMatch) {
+                const serverVersion = versionMatch[1];
+                console.log('🔍 版本检查:', { 
                   current: APP_VERSION, 
-                  server: versionMatch[1] 
+                  server: serverVersion,
+                  match: serverVersion === APP_VERSION
                 });
-                // ✅ 如果版本不匹配，显示更新提示（而不是直接刷新）
-                // 这样可以确保用户能看到更新内容并确认
-                showUpdateNotification();
-              } else if (versionMatch && versionMatch[1] === APP_VERSION) {
-                // ✅ 版本匹配，检查是否有等待中的更新
-                if (reg.waiting) {
-                  console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
+                
+                if (serverVersion !== APP_VERSION) {
+                  console.log('🔄 检测到版本不匹配，显示更新提示');
+                  // ✅ 如果版本不匹配，显示更新提示（而不是直接刷新）
+                  // 这样可以确保用户能看到更新内容并确认
                   showUpdateNotification();
+                } else {
+                  // ✅ 版本匹配，但也要检查是否有等待中的更新（针对某些设备）
+                  if (reg.waiting) {
+                    console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
+                    showUpdateNotification();
+                  } else {
+                    // ✅ 即使版本匹配，也检查当前 Service Worker 的版本
+                    // 某些设备可能 Service Worker 已经更新但页面版本号还没更新
+                    if (navigator.serviceWorker.controller) {
+                      try {
+                        // 尝试从当前 Service Worker 获取版本信息
+                        const controllerVersion = await navigator.serviceWorker.controller.scriptURL;
+                        console.log('🔍 当前 Service Worker URL:', controllerVersion);
+                        // 如果 URL 中包含不同的版本号，也可能需要更新
+                      } catch (err) {
+                        console.warn('⚠️ 无法获取当前 Service Worker 信息:', err);
+                      }
+                    }
+                  }
                 }
+              } else {
+                console.warn('⚠️ 无法从 sw.js 中解析版本号');
               }
+            } else {
+              console.warn('⚠️ 无法获取 sw.js 文件:', swResponse.status);
             }
           } catch (err) {
             console.warn('⚠️ 检查 Service Worker 版本失败:', err);

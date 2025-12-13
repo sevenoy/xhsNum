@@ -1006,6 +1006,10 @@
           return;
         }
         
+        // ✅ 关键修复：在检查已显示记录之前，先检查是否是从 checkForUpdate 调用的
+        // 如果是检测到新版本后调用的，应该强制显示，不受已显示记录影响
+        // 这个检查通过检查记录是否为空来判断（因为检测到新版本时会清除记录）
+        
         // ✅ 关键修复：检查是否已经显示过当前版本的提示
         const lastShownVersion = localStorage.getItem('update_notification_shown');
         console.log('🔍 检查是否已显示过:', {
@@ -1027,9 +1031,11 @@
         const currentLastShown = localStorage.getItem('update_notification_shown');
         const lastShownTime = localStorage.getItem('update_notification_time');
         
-        // ✅ 关键修复：如果检测到新版本（通过 checkForUpdate 调用），应该总是显示
-        // 这里只检查是否是重复显示（10分钟内显示过相同版本）
-        if (currentLastShown === APP_VERSION && lastShownTime) {
+        // ✅ 关键修复：如果记录为空，说明是新版本检测或记录已清除，应该显示
+        if (!currentLastShown) {
+          console.log('✅ 没有已显示记录，这是新版本检测，应该显示更新提示');
+        } else if (currentLastShown === APP_VERSION && lastShownTime) {
+          // ✅ 如果已显示的是当前版本，检查时间
           const timeSinceShown = Date.now() - parseInt(lastShownTime, 10);
           // ✅ 如果10分钟内显示过，跳过（避免重复提示）
           if (timeSinceShown < 10 * 60 * 1000) {
@@ -1047,9 +1053,6 @@
           localStorage.removeItem('update_notification_shown');
           localStorage.removeItem('update_notification_time');
         }
-        
-        // ✅ 关键修复：如果记录为空或已清除，说明是新版本检测，应该显示
-        // 这个检查确保在检测到新版本时，即使之前显示过，也能再次显示
         
         // ✅ 标记有待处理的更新
         pendingUpdate = true;

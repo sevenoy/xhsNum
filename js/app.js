@@ -1443,6 +1443,17 @@ async function cloudSave() {
     const rows = await getAllRows();
     const cats = readCats();
     const view = readView();
+    
+    // ✅ 调试：输出本地 view 数据，检查是否包含元数据字段
+    const viewKeys = Object.keys(view || {});
+    const metadataKeys = viewKeys.filter(key => 
+      !['pad', 'colScale', 'zebraOn', 'zebraColor', 'fontFamily', 
+        'fontWeight', 'titleText', 'titleColor', 'btnColor', 'viewVersion'].includes(key)
+    );
+    if (metadataKeys.length > 0) {
+      console.warn('⚠️ 检测到 view 数据中包含可能的元数据字段:', metadataKeys);
+      console.warn('⚠️ 这些字段将在数据比较时被排除:', metadataKeys);
+    }
 
     // ✅ 获取最新的快照（用于数据比较）- 查询所有快照，按时间排序
     console.log('🔍 开始检查数据改动...', { 
@@ -1512,16 +1523,24 @@ async function cloudSave() {
         snapshotOwnerId: latestSnapshot.owner_id,
         currentUserId: authUid
       });
+      // ✅ 关键修复：只提取需要比较的数据字段，排除所有元数据字段
+      // 确保快照名称（snapshot_label）等元数据不会影响数据比较
       const latestRows = latestSnapshot.payload.rows || [];
       const latestCats = latestSnapshot.payload.cats || [];
       const latestView = latestSnapshot.payload.view || {};
       
-      // ✅ 调试：输出原始数据信息
+      // ✅ 调试：输出原始数据信息和元数据信息（用于对比）
       console.log('🔍 原始数据对比:', {
         localRowsCount: rows.length,
         latestRowsCount: latestRows.length,
         localCatsCount: cats.length,
-        latestCatsCount: latestCats.length
+        latestCatsCount: latestCats.length,
+        // ✅ 显示快照元数据（这些字段不应该影响数据比较）
+        latestSnapshotLabel: latestSnapshot.payload.snapshot_label,
+        latestUpdatedBy: latestSnapshot.payload.updated_by_name,
+        latestUpdatedAt: latestSnapshot.payload.updated_at,
+        // ✅ 确认：这些元数据字段不会参与数据比较
+        note: '数据比较只比较 rows、cats、view，不包括 snapshot_label、updated_at、updated_by 等元数据'
       });
       
       // 比较 rows：只比较数据字段，忽略元数据（id, created_at, updated_at 等）
@@ -1638,23 +1657,35 @@ async function cloudSave() {
       }
       
       // 比较 view（排除时间戳和版本号等字段）
+      // ✅ 关键修复：确保排除所有元数据字段，只比较真正的视图配置
+      // ✅ 只保留已知的视图配置字段，排除所有其他字段（包括可能的元数据字段）
+      const KNOWN_VIEW_FIELDS = [
+        'pad', 'colScale', 'zebraOn', 'zebraColor', 'fontFamily', 
+        'fontWeight', 'titleText', 'titleColor', 'btnColor'
+      ];
+      
       const normalizeViewData = (v) => {
         if (!v) return {};
-        const normalized = { ...v };
-        // 移除不影响数据的字段
-        delete normalized.updated_at;
-        delete normalized.viewVersion;
+        const normalized = {};
         
-        // 确保所有值都是字符串或数字，并按键排序
-        return Object.keys(normalized).sort().reduce((acc, key) => {
-          const val = normalized[key];
-          if (val === null || val === undefined) {
-            acc[key] = '';
-          } else if (typeof val === 'number') {
-            acc[key] = val;
-          } else {
-            acc[key] = String(val);
+        // ✅ 只保留已知的视图配置字段，排除所有其他字段
+        // 这样可以确保元数据字段（如 snapshot_label、updated_at 等）不会影响比较
+        KNOWN_VIEW_FIELDS.forEach(key => {
+          if (key in v) {
+            const val = v[key];
+            if (val === null || val === undefined) {
+              normalized[key] = '';
+            } else if (typeof val === 'number') {
+              normalized[key] = val;
+            } else {
+              normalized[key] = String(val);
+            }
           }
+        });
+        
+        // 按键排序，确保比较的一致性
+        return Object.keys(normalized).sort().reduce((acc, key) => {
+          acc[key] = normalized[key];
           return acc;
         }, {});
       };
@@ -1670,7 +1701,11 @@ async function cloudSave() {
           current: currentViewData,
           latest: latestViewData,
           currentStr: currentViewStr.substring(0, 100),
-          latestStr: latestViewStr.substring(0, 100)
+          latestStr: latestViewStr.substring(0, 100),
+          // ✅ 显示原始 view 数据，帮助调试
+          currentViewOriginal: view,
+          latestViewOriginal: latestView,
+          note: 'View 比较只比较已知的视图配置字段，排除所有元数据字段'
         });
       } else {
         console.log('✅ View 数据完全相同');
@@ -1712,9 +1747,13 @@ async function cloudSave() {
           latestRowsSample: JSON.stringify(latestRowsData.slice(0, 1)),
           // ✅ 添加快照信息，帮助调试多设备问题
           latestSnapshotKey: latestSnapshot?.key,
-          latestSnapshotUpdatedAt: latestSnapshot?.updated_at
+          latestSnapshotUpdatedAt: latestSnapshot?.updated_at,
+          latestSnapshotLabel: latestSnapshot?.payload?.snapshot_label,
+          latestUpdatedBy: latestSnapshot?.payload?.updated_by_name,
+          // ✅ 明确说明：快照名称不同不影响数据比较
+          note: '数据比较只比较 rows、cats、view 的实际内容，不包括快照名称（snapshot_label）等元数据'
         });
-        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n请修改数据后再保存到云端。\n\n如果确实有修改，请检查控制台日志查看详细比较信息。');
+        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n即使快照名称不同，只要数据内容相同，就不会保存。\n\n请修改数据后再保存到云端。\n\n如果确实有修改，请检查控制台日志查看详细比较信息。');
         return; // ✅ 关键：直接返回，不继续执行后续代码
       }
       
@@ -1722,7 +1761,11 @@ async function cloudSave() {
       console.log('✅ 数据有改动，继续保存流程：', {
         rowsChanged: !rowsEqual,
         catsChanged: !catsEqual,
-        viewChanged: !viewEqual
+        viewChanged: !viewEqual,
+        // ✅ 明确说明：快照名称不同不影响数据比较
+        note: '数据比较只比较 rows、cats、view 的实际内容，不包括快照名称（snapshot_label）等元数据',
+        latestSnapshotLabel: latestSnapshot?.payload?.snapshot_label,
+        currentWillGenerateLabel: `${getCurrentUserName()} ${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12)}`
       });
     } else {
       // 没有找到最新快照或快照没有 payload

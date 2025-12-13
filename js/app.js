@@ -4151,35 +4151,6 @@ async function initRealtimeVersionCheck() {
 
   console.log('📡 [App] 启动实时版本监听 (Realtime)...');
 
-  // 👉 启动时先检查一次当前云端版本，避免只依赖实时推送
-  try {
-    const { data, error } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'min_version')
-      .single();
-
-    if (error) {
-      console.warn('⚠️ [Realtime] 首次获取云端版本失败:', error);
-    } else if (data?.value && data.value !== window.APP_VERSION) {
-      console.log('🚀 [Realtime] 首次检测到云端存在更新版本，触发更新流程', {
-        serverVersion: data.value,
-        currentVersion: window.APP_VERSION
-      });
-
-      localStorage.removeItem('update_notification_shown');
-      localStorage.removeItem('update_notification_time');
-
-      if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
-        window.checkForUpdate(window.serviceWorkerRegistration);
-      } else {
-        window.location.reload(true);
-      }
-    }
-  } catch (err) {
-    console.warn('⚠️ [Realtime] 初始化云端版本检查异常:', err);
-  }
-
   const channel = supabase
     .channel('app_version_check')
     .on(

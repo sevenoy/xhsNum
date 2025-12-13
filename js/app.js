@@ -2152,7 +2152,7 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   console.log('🔍 开始查询云端数据，key:', key);
   const { data, error } = await supabase
     .from(SUPABASE_TABLE)
-    .select("payload, owner_id")
+    .select("payload, owner_id, updated_at")
     .eq("key", key)
     .maybeSingle();
   
@@ -3488,6 +3488,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // ✅ 启动定期版本检查定时器
   startStatusBarVersionCheck();
+  
+  // ✅ 启动快照版本检查定时器
+  startSnapshotVersionCheck();
+  
+  // ✅ 延迟检查本地快照是否是最新的（等待页面完全加载）
+  setTimeout(() => {
+    checkAndUpdateSnapshot();
+  }, 2000); // 延迟2秒，确保页面完全加载
 });
 
 /* =========================
@@ -3682,4 +3690,205 @@ window.addEventListener('beforeunload', () => {
 // ✅ 页面隐藏时清理定时器（移动端）
 document.addEventListener('pagehide', () => {
   stopStatusBarVersionCheck();
+});
+
+/* =========================
+ * 13. 快照版本检查和自动更新
+ * ========================= */
+
+// ✅ 检查本地快照是否是最新的，如果不是则提示并自动更新
+async function checkAndUpdateSnapshot() {
+  if (!supabase) {
+    console.log('⚠️ Supabase 未配置，跳过快照版本检查');
+    return;
+  }
+  
+  try {
+    // 获取本地快照版本信息
+    const localSnapshotTime = localStorage.getItem('local_snapshot_updated_at');
+    const localSnapshotKey = localStorage.getItem('local_snapshot_key') || SUPABASE_DEFAULT_KEY;
+    
+    // 如果没有本地快照记录，检查是否需要从云端加载
+    if (!localSnapshotTime) {
+      console.log('ℹ️ 没有本地快照记录，检查是否需要从云端加载');
+      
+      // 查询云端是否有快照
+      const { data: cloudSnapshot, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('updated_at, payload, owner_id')
+        .eq('key', SUPABASE_DEFAULT_KEY)
+        .maybeSingle();
+      
+      if (error) {
+        console.warn('⚠️ 查询云端快照失败:', error);
+        return;
+      }
+      
+      // 如果云端有快照，提示用户是否加载
+      if (cloudSnapshot) {
+        const cloudTimeStr = new Date(cloudSnapshot.updated_at).toLocaleString();
+        const savedBy = cloudSnapshot.payload?.updated_by_name || '未知用户';
+        
+        const shouldLoad = confirm(
+          `📦 检测到云端有快照数据\n\n` +
+          `更新时间：${cloudTimeStr}\n` +
+          `保存人：${savedBy}\n\n` +
+          `是否加载云端快照？`
+        );
+        
+        if (shouldLoad) {
+          console.log('✅ 用户选择加载云端快照');
+          await cloudLoad(SUPABASE_DEFAULT_KEY);
+        }
+      } else {
+        console.log('ℹ️ 云端也没有快照，跳过加载');
+      }
+      
+      return;
+    }
+    
+    console.log('🔍 检查快照版本...', {
+      localKey: localSnapshotKey,
+      localTime: localSnapshotTime ? new Date(parseInt(localSnapshotTime)).toLocaleString() : '无'
+    });
+    
+    // 查询云端最新快照
+    const { data: cloudSnapshot, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select('updated_at, payload, owner_id')
+      .eq('key', localSnapshotKey)
+      .maybeSingle();
+    
+    if (error) {
+      console.warn('⚠️ 查询云端快照失败:', error);
+      return;
+    }
+    
+    if (!cloudSnapshot) {
+      console.warn('⚠️ 云端快照不存在，跳过版本检查');
+      return;
+    }
+    
+    const cloudSnapshotTime = new Date(cloudSnapshot.updated_at).getTime();
+    const localSnapshotTimeNum = parseInt(localSnapshotTime, 10);
+    
+    console.log('🔍 版本对比:', {
+      localTime: new Date(localSnapshotTimeNum).toLocaleString(),
+      cloudTime: new Date(cloudSnapshotTime).toLocaleString(),
+      isLatest: cloudSnapshotTime <= localSnapshotTimeNum
+    });
+    
+    // ✅ 如果云端快照更新，提示并自动更新
+    if (cloudSnapshotTime > localSnapshotTimeNum) {
+      const cloudTimeStr = new Date(cloudSnapshotTime).toLocaleString();
+      const localTimeStr = new Date(localSnapshotTimeNum).toLocaleString();
+      const savedBy = cloudSnapshot.payload?.updated_by_name || '未知用户';
+      
+      console.log('🔄 检测到云端有更新快照，准备自动更新', {
+        cloudTime: cloudTimeStr,
+        localTime: localTimeStr,
+        savedBy: savedBy
+      });
+      
+      // ✅ 检查是否有未保存的本地修改
+      const localRows = await getAllRows();
+      const hasRecentChanges = localRows.some(row => {
+        return (Date.now() - (row.updated_at || 0)) < 300000; // 5分钟内
+      });
+      
+      if (hasRecentChanges) {
+        // 有未保存的修改，询问用户
+        const shouldUpdate = confirm(
+          `🔄 检测到云端有更新快照\n\n` +
+          `本地快照时间：${localTimeStr}\n` +
+          `云端快照时间：${cloudTimeStr}\n` +
+          `保存人：${savedBy}\n\n` +
+          `⚠️ 警告：您有未保存的本地修改\n\n` +
+          `是否自动加载最新快照？\n` +
+          `（本地修改将被覆盖）`
+        );
+        
+        if (!shouldUpdate) {
+          console.log('⚠️ 用户取消自动更新');
+          return;
+        }
+      } else {
+        // 没有未保存的修改，直接提示并自动更新
+        const shouldUpdate = confirm(
+          `🔄 检测到云端有更新快照\n\n` +
+          `本地快照时间：${localTimeStr}\n` +
+          `云端快照时间：${cloudTimeStr}\n` +
+          `保存人：${savedBy}\n\n` +
+          `是否自动加载最新快照？`
+        );
+        
+        if (!shouldUpdate) {
+          console.log('⚠️ 用户取消自动更新');
+          return;
+        }
+      }
+      
+      // ✅ 自动加载最新快照
+      console.log('✅ 开始自动加载最新快照...');
+      await cloudLoad(localSnapshotKey);
+      
+      // ✅ 显示提示
+      alert(`✅ 已自动加载最新快照\n\n保存人：${savedBy}\n更新时间：${cloudTimeStr}`);
+    } else {
+      console.log('✅ 本地快照已是最新版本');
+    }
+  } catch (err) {
+    console.error('❌ 检查快照版本失败:', err);
+  }
+}
+
+// ✅ 定期检查快照版本（每5分钟检查一次）
+let snapshotCheckInterval = null;
+
+function startSnapshotVersionCheck() {
+  // 如果已经有定时器在运行，先清除
+  if (snapshotCheckInterval) {
+    clearInterval(snapshotCheckInterval);
+  }
+  
+  // 每5分钟检查一次快照版本
+  snapshotCheckInterval = setInterval(() => {
+    console.log('⏰ 定期检查快照版本（每5分钟）');
+    checkAndUpdateSnapshot();
+  }, 5 * 60 * 1000); // 5分钟 = 300000毫秒
+  
+  console.log('✅ 已启动快照版本检查定时器（每5分钟）');
+}
+
+function stopSnapshotVersionCheck() {
+  if (snapshotCheckInterval) {
+    clearInterval(snapshotCheckInterval);
+    snapshotCheckInterval = null;
+    console.log('⏸️ 已停止快照版本检查定时器');
+  }
+}
+
+// ✅ 页面可见性变化时检查快照版本
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    // 页面变为可见时，立即检查快照版本
+    console.log('👁️ 页面可见，检查快照版本');
+    checkAndUpdateSnapshot();
+  }
+});
+
+// ✅ 窗口获得焦点时检查快照版本
+window.addEventListener('focus', () => {
+  console.log('🔍 窗口获得焦点，检查快照版本');
+  checkAndUpdateSnapshot();
+});
+
+// ✅ 页面卸载时清理定时器
+window.addEventListener('beforeunload', () => {
+  stopSnapshotVersionCheck();
+});
+
+// ✅ 页面隐藏时清理定时器（移动端）
+document.addEventListener('pagehide', () => {
+  stopSnapshotVersionCheck();
 });

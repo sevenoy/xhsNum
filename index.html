@@ -71,30 +71,72 @@
         return;
       }
       
-      const { data: { session } } = await supabase.auth.getSession();
+      // ✅ 检测是否是从主屏幕启动（PWA standalone 模式）
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          window.navigator.standalone || 
+                          document.referrer.includes('android-app://');
+      
+      console.log('🔍 登录检查:', { 
+        isStandalone, 
+        referrer: document.referrer,
+        userAgent: navigator.userAgent 
+      });
+      
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (!session) {
         // 未登录，跳转到登录页
+        console.log('❌ 未找到 session，跳转到登录页');
         window.location.href = 'login.html';
-      } else {
-        // 已登录，从 user_profiles 查询用户信息
+        return;
+      }
+      
+      // ✅ 关键修复：验证 session 是否真的有效（通过尝试获取用户信息）
+      // 在 standalone 模式下，可能 session token 已过期但本地还有缓存
+      try {
+        // 先尝试刷新 session（如果过期会自动刷新）
+        // 注意：refreshSession 可能失败但不一定是认证问题，所以不立即跳转
+        let validSession = session;
         try {
-          const { data: profile, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-          
-          if (profile) {
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          if (!refreshError && refreshedSession) {
+            validSession = refreshedSession;
+            console.log('✅ Session 刷新成功');
+          } else if (refreshError) {
+            console.log('⚠️ Session 刷新失败（可能没有 refresh token）:', refreshError);
+            // 继续使用原始 session，稍后通过查询验证
+          }
+        } catch (refreshErr) {
+          console.log('⚠️ Session 刷新异常（继续使用原始 session）:', refreshErr);
+          // 继续使用原始 session
+        }
+        
+        // ✅ 验证 session：尝试获取用户信息（如果 session 无效，这里会失败）
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', validSession.user.id)
+          .single();
+        
+        // ✅ 如果查询失败且是认证错误，说明 session 无效
+        if (profileError && (profileError.code === 'PGRST116' || profileError.message?.includes('JWT'))) {
+          console.log('❌ Session 无效（认证失败），清除并跳转到登录页:', profileError);
+          await supabase.auth.signOut();
+          window.location.href = 'login.html';
+          return;
+        }
+        
+        // ✅ 已登录且 session 有效，从 user_profiles 查询用户信息
+        if (profile) {
             // 从数据库获取用户信息
             window.currentUser = {
-              id: session.user.id,
+              id: validSession.user.id,
               email: profile.email,
               name: profile.username
             };
             
             localStorage.setItem('xhs_user_name', profile.username);
-            localStorage.setItem('xhs_user_id', session.user.id);
+            localStorage.setItem('xhs_user_id', validSession.user.id);
             localStorage.setItem('xhs_user_email', profile.email);
             localStorage.setItem('xhs_user_role', profile.role || 'basic');
             
@@ -106,37 +148,54 @@
             console.log('✅ 用户信息已加载:', { 
               username: profile.username, 
               role: profile.role, 
-              isAdmin: isAdmin 
+              isAdmin: isAdmin,
+              isStandalone 
             });
           } else {
             // 如果查询失败，使用 session 中的信息
-            const username = session.user.user_metadata?.username || 
+            const username = validSession.user.user_metadata?.username || 
                             localStorage.getItem('xhs_user_name') || 
-                            session.user.email.split('@')[0];
+                            validSession.user.email.split('@')[0];
             
             window.currentUser = {
-              id: session.user.id,
-              email: session.user.email,
+              id: validSession.user.id,
+              email: validSession.user.email,
               name: username
             };
             
             localStorage.setItem('xhs_user_name', username);
-            localStorage.setItem('xhs_user_id', session.user.id);
+            localStorage.setItem('xhs_user_id', validSession.user.id);
             
             // 默认不是管理员
             window.isAdmin = false;
             localStorage.setItem('xhs_is_admin', 'false');
           }
         } catch (err) {
-          console.error('查询用户信息失败:', err);
-          // 降级处理：使用 session 信息或 localStorage
-          const username = session.user.user_metadata?.username || 
+          console.error('❌ 查询用户信息失败:', err);
+          
+          // ✅ 关键修复：如果是认证错误，清除 session 并跳转到登录页
+          if (err.message?.includes('JWT') || err.code === 'PGRST116' || err.message?.includes('expired') || 
+              err.message?.includes('Invalid') || err.message?.includes('Unauthorized')) {
+            console.log('❌ Session 已过期或无效，清除并跳转到登录页');
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutErr) {
+              console.error('清除 session 失败:', signOutErr);
+            }
+            window.location.href = 'login.html';
+            return;
+          }
+          
+          // 其他错误：降级处理，使用 session 信息或 localStorage
+          // 注意：如果 refreshSession 失败，validSession 可能不存在，使用原始 session
+          const currentSession = session;
+          const username = currentSession?.user?.user_metadata?.username || 
                           localStorage.getItem('xhs_user_name') || 
-                          session.user.email.split('@')[0];
+                          currentSession?.user?.email?.split('@')[0] || '未知用户';
           
           window.currentUser = {
-            id: session.user.id,
-            email: session.user.email,
+            id: currentSession?.user?.id || 'unknown',
+            email: currentSession?.user?.email || '',
             name: username
           };
           

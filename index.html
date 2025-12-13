@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.29';
+    const APP_VERSION = 'V251213.31';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -743,15 +743,59 @@
                   match: serverVersion === APP_VERSION
                 });
                 
-                // ✅ 如果版本不匹配，显示更新提示
+                // ✅ 如果版本不匹配，强制触发 Service Worker 更新并显示更新提示
                 if (serverVersion !== APP_VERSION) {
-                  console.log('🔄 检测到版本不匹配，显示更新提示', {
+                  console.log('🔄 检测到版本不匹配，强制触发更新', {
                     serverVersion: serverVersion,
                     currentVersion: APP_VERSION,
                     note: '服务器版本和当前页面版本不同，需要更新',
                     userAgent: navigator.userAgent,
                     isStandalone: window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
                   });
+                  
+                  // ✅ 关键修复：强制触发 Service Worker 更新
+                  try {
+                    // 再次强制更新检查
+                    await reg.update();
+                    console.log('✅ 强制更新检查完成');
+                    
+                    // 延迟检查，确保状态已更新
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // 如果仍然没有 waiting 或 installing，尝试强制重新注册
+                    if (!reg.waiting && !reg.installing) {
+                      console.log('⚠️ Service Worker 没有进入 waiting 或 installing 状态，尝试强制更新');
+                      
+                      // 尝试清除缓存并重新注册
+                      try {
+                        // 清除所有缓存
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        console.log('✅ 已清除所有缓存');
+                        
+                        // 强制重新注册 Service Worker
+                        const cacheBuster = Date.now();
+                        const newReg = await navigator.serviceWorker.register(`./sw.js?v=${serverVersion}&t=${cacheBuster}&force=${Math.random()}`, {
+                          updateViaCache: 'none'
+                        });
+                        console.log('✅ 强制重新注册 Service Worker');
+                        
+                        // 等待一下，检查新注册的 Service Worker
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        if (newReg.waiting || newReg.installing) {
+                          console.log('✅ 强制重新注册后，发现 waiting 或 installing 状态');
+                          // 更新全局注册对象
+                          window.serviceWorkerRegistration = newReg;
+                        }
+                      } catch (reRegisterErr) {
+                        console.warn('⚠️ 强制重新注册失败:', reRegisterErr);
+                      }
+                    }
+                  } catch (updateErr) {
+                    console.warn('⚠️ 强制更新检查失败:', updateErr);
+                  }
+                  
                   // ✅ 兼容旧版本号格式
                   const lastShown = localStorage.getItem('update_notification_shown');
                   if (lastShown && !lastShown.startsWith('V')) {
@@ -765,8 +809,10 @@
                     localStorage.removeItem('update_notification_shown');
                     localStorage.removeItem('update_notification_time');
                   }
-                  // ✅ 强制显示更新提示（不检查已显示记录，因为已经清除）
-                  console.log('🔔 强制调用 showUpdateNotification');
+                  
+                  // ✅ 关键修复：即使没有 waiting 的 Service Worker，也显示更新提示
+                  // 因为版本不匹配说明需要更新，用户可以通过刷新页面来更新
+                  console.log('🔔 强制调用 showUpdateNotification（版本不匹配）');
                   showUpdateNotification();
                 } else {
                   // ✅ 版本匹配，检查是否有等待中的更新
@@ -854,33 +900,28 @@
           localStorage.removeItem('update_notification_shown');
         }
         
-        // ✅ 关键修复：如果已显示过当前版本，直接跳过（不再检查 pendingUpdate）
-        // ✅ 但如果是 iPhone X 等设备，可能需要强制显示（调试用）
+        // ✅ 关键修复：检查是否已经显示过当前版本的提示
+        // ✅ 简化逻辑：如果已显示过当前版本，且时间在10分钟内，跳过（避免重复提示）
         const currentLastShown = localStorage.getItem('update_notification_shown');
-        const isIPhoneX = /iPhone/.test(navigator.userAgent) && !/iPhone OS 1[3-9]/.test(navigator.userAgent);
+        const lastShownTime = localStorage.getItem('update_notification_time');
         
-        if (currentLastShown === APP_VERSION) {
-          // ✅ 如果是 iPhone X 且超过 5 分钟，强制重新显示（可能是缓存问题）
-          if (isIPhoneX) {
-            const lastShownTime = localStorage.getItem('update_notification_time');
-            if (lastShownTime) {
-              const timeSinceShown = Date.now() - parseInt(lastShownTime, 10);
-              if (timeSinceShown > 5 * 60 * 1000) { // 5分钟
-                console.log('🔄 iPhone X：超过5分钟，强制重新显示更新提示');
-                localStorage.removeItem('update_notification_shown');
-                localStorage.removeItem('update_notification_time');
-              } else {
-                console.log('✅ 当前版本已显示过更新提示（' + Math.floor(timeSinceShown / 1000) + '秒前），跳过');
-                return;
-              }
-            } else {
-              console.log('✅ 当前版本已显示过更新提示，跳过');
-              return;
-            }
-          } else {
-            console.log('✅ 当前版本已显示过更新提示，跳过');
+        if (currentLastShown === APP_VERSION && lastShownTime) {
+          const timeSinceShown = Date.now() - parseInt(lastShownTime, 10);
+          // ✅ 如果10分钟内显示过，跳过（避免重复提示）
+          if (timeSinceShown < 10 * 60 * 1000) {
+            console.log('✅ 当前版本已显示过更新提示（' + Math.floor(timeSinceShown / 1000) + '秒前），跳过');
             return;
+          } else {
+            // ✅ 超过10分钟，清除记录，允许重新显示（可能是新版本）
+            console.log('🔄 超过10分钟，清除已显示记录，允许重新显示');
+            localStorage.removeItem('update_notification_shown');
+            localStorage.removeItem('update_notification_time');
           }
+        } else if (currentLastShown && currentLastShown !== APP_VERSION) {
+          // ✅ 如果已显示的是其他版本，清除记录（说明版本已更新）
+          console.log('🔄 已显示的版本（' + currentLastShown + '）与当前版本（' + APP_VERSION + '）不同，清除记录');
+          localStorage.removeItem('update_notification_shown');
+          localStorage.removeItem('update_notification_time');
         }
         
         // ✅ 标记有待处理的更新
@@ -1091,10 +1132,44 @@
               time: new Date(refreshTime).toLocaleString()
             });
 
-            // 通知 Service Worker 跳过等待
+            // ✅ 关键修复：检查是否有等待中的 Service Worker
+            let hasWaitingWorker = false;
             if (registration && registration.waiting) {
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
               console.log('✅ 已通知 Service Worker 跳过等待');
+              hasWaitingWorker = true;
+            } else {
+              // ✅ 如果没有 waiting 的 Service Worker，检查版本是否真的不匹配
+              // 如果版本不匹配，直接刷新页面（强制获取最新代码）
+              try {
+                const cacheBuster = Date.now() + '_' + Math.random();
+                const swResponse = await fetch('./sw.js?v=' + APP_VERSION + '&t=' + cacheBuster + '&force=' + Math.random(), {
+                  cache: 'no-store',
+                  headers: {
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                  }
+                });
+                if (swResponse.ok) {
+                  const swText = await swResponse.text();
+                  const versionMatch = swText.match(/const VERSION = ['"]([^'"]+)['"]/) || 
+                                       swText.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+                  if (versionMatch) {
+                    const serverVersion = versionMatch[1];
+                    if (serverVersion !== APP_VERSION) {
+                      console.log('🔄 检测到版本不匹配但没有 waiting Worker，直接刷新页面', {
+                        current: APP_VERSION,
+                        server: serverVersion
+                      });
+                      // 直接刷新，不使用缓存
+                      window.location.reload(true);
+                      return;
+                    }
+                  }
+                }
+              } catch (versionCheckErr) {
+                console.warn('⚠️ 检查版本失败，继续正常更新流程:', versionCheckErr);
+              }
             }
 
             // ✅ 清除所有缓存（强制清除，确保获取最新代码）

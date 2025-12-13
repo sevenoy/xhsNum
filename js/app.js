@@ -92,6 +92,9 @@ const state = {
   activeFunction: null,
 };
 
+// ✅ 云端加载自动关闭定时器
+let loadCloudAutoCloseTimer = null;
+
 /* =========================
  * 1. Dexie 初始化
  * ========================= */
@@ -456,6 +459,11 @@ function setActiveFunction(functionName) {
 }
 
 function clearActiveFunction() {
+  // ✅ 如果清除的是云端加载功能，同时清除自动关闭定时器
+  if (state.activeFunction === 'loadCloud') {
+    stopLoadCloudAutoClose();
+  }
+  
   state.activeFunction = null;
   document.querySelectorAll(".function-btn").forEach((btn) => {
     btn.classList.remove("active");
@@ -2112,6 +2120,9 @@ async function cloudSave() {
 }
 
 async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
+  // ✅ 清除云端加载自动关闭定时器（用户选择了快照）
+  stopLoadCloudAutoClose();
+  
   if (!supabase) {
     alert("未配置 Supabase，无法从云端加载。");
     return;
@@ -2146,7 +2157,11 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
       "是否继续加载云端数据？"
     );
     
-    if (!shouldContinue) return;
+    if (!shouldContinue) {
+      // ✅ 用户取消，清除自动关闭定时器（因为用户还在选择中）
+      // 注意：不在这里清除，让定时器继续运行，1分钟后自动关闭
+      return;
+    }
   }
   
   console.log('🔍 开始查询云端数据，key:', key);
@@ -2284,6 +2299,12 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
     panel.style.display = "none";
   }
   
+  // ✅ 清除激活状态
+  clearActiveFunction();
+  
+  // ✅ 清除自动关闭定时器
+  stopLoadCloudAutoClose();
+  
   alert(`✅ 云端数据已加载\n最后保存人：${savedBy}`);
 }
 
@@ -2389,6 +2410,9 @@ async function renderCloudHistory(maxCount = 1) {
         
       if (confirm("确定用该快照覆盖本地数据？")) {
         await cloudLoad(key);
+      } else {
+        // ✅ 用户取消，不清除定时器，让定时器继续运行，1分钟后自动关闭
+        console.log('⚠️ 用户取消选择快照，定时器继续运行');
       }
     });
   });
@@ -2892,6 +2916,10 @@ function bindEvents() {
       if (panel.style.display === "none") {
         panel.style.display = "block";
         await renderCloudHistory();
+        
+        // ✅ 启动1分钟自动关闭定时器
+        startLoadCloudAutoClose();
+        
         // 操作日志（忽略失败）
         try {
           if (window.supabase) {
@@ -2908,6 +2936,8 @@ function bindEvents() {
         } catch (_) {}
       } else {
         panel.style.display = "none";
+        // ✅ 关闭面板时清除定时器
+        stopLoadCloudAutoClose();
       }
     } finally {
       btn.disabled = false; btn.textContent = original;
@@ -3554,6 +3584,14 @@ async function updateStatusInfoBar() {
               serverVersion: serverVersion
             });
             
+            // ✅ 关键修复：立即清除已显示记录，确保新版本提示能显示
+            const lastShown = localStorage.getItem('update_notification_shown');
+            if (lastShown === currentVersion || lastShown === serverVersion) {
+              console.log('🔄 检测到新版本，清除已显示记录，确保新版本提示能显示');
+              localStorage.removeItem('update_notification_shown');
+              localStorage.removeItem('update_notification_time');
+            }
+            
             // ✅ 延迟一下，确保状态栏已更新显示
             setTimeout(async () => {
               try {
@@ -3565,16 +3603,16 @@ async function updateStatusInfoBar() {
                   // ✅ 如果没有全局函数，直接调用 showUpdateNotification
                   if (typeof window.showUpdateNotification === 'function') {
                     console.log('✅ 直接调用更新提示函数');
-                    // ✅ 清除旧的显示记录，确保能显示新版本提示
-                    const lastShown = localStorage.getItem('update_notification_shown');
-                    if (lastShown === currentVersion) {
-                      console.log('🔄 清除已显示记录，确保新版本提示能显示');
-                      localStorage.removeItem('update_notification_shown');
-                      localStorage.removeItem('update_notification_time');
-                    }
                     await window.showUpdateNotification();
                   } else {
                     console.warn('⚠️ 更新检查函数不可用，可能需要等待页面完全加载');
+                    // ✅ 如果函数不可用，延迟重试
+                    setTimeout(async () => {
+                      if (typeof window.showUpdateNotification === 'function') {
+                        console.log('✅ 延迟后调用更新提示函数');
+                        await window.showUpdateNotification();
+                      }
+                    }, 2000);
                   }
                 }
               } catch (err) {
@@ -3926,3 +3964,46 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('pagehide', () => {
   stopSnapshotVersionCheck();
 });
+
+/* =========================
+ * 14. 云端加载自动关闭功能
+ * ========================= */
+
+// ✅ 启动云端加载自动关闭定时器（1分钟后自动关闭）
+function startLoadCloudAutoClose() {
+  // 如果已经有定时器在运行，先清除
+  if (loadCloudAutoCloseTimer) {
+    clearInterval(loadCloudAutoCloseTimer);
+  }
+  
+  console.log('⏰ 启动云端加载自动关闭定时器（1分钟后自动关闭）');
+  
+  // 1分钟后自动关闭
+  loadCloudAutoCloseTimer = setTimeout(() => {
+    // 检查是否仍然处于激活状态
+    if (state.activeFunction === 'loadCloud') {
+      console.log('⏰ 1分钟超时，自动关闭云端加载激活状态');
+      
+      // 清除激活状态
+      clearActiveFunction();
+      
+      // 关闭面板
+      const panel = $("#cloudHistoryPanel");
+      if (panel) {
+        panel.style.display = "none";
+      }
+      
+      // 清除定时器
+      loadCloudAutoCloseTimer = null;
+    }
+  }, 60 * 1000); // 1分钟 = 60000毫秒
+}
+
+// ✅ 停止云端加载自动关闭定时器
+function stopLoadCloudAutoClose() {
+  if (loadCloudAutoCloseTimer) {
+    clearTimeout(loadCloudAutoCloseTimer);
+    loadCloudAutoCloseTimer = null;
+    console.log('⏸️ 已停止云端加载自动关闭定时器');
+  }
+}

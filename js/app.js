@@ -1456,39 +1456,126 @@ async function cloudSave() {
     }
 
     // ✅ 新增：保存前检查云端是否有更新（防止覆盖其他设备的更新）
+    // ✅ 关键修复：无论是否有本地版本记录，都要检查云端最新快照
     console.log('🔍 开始检查云端更新...');
     const localSnapshotTime = localStorage.getItem('local_snapshot_updated_at');
     const localSnapshotKey = localStorage.getItem('local_snapshot_key');
     
-    if (localSnapshotTime && localSnapshotKey === SUPABASE_DEFAULT_KEY) {
+    console.log('🔍 本地版本信息:', {
+      hasLocalTime: !!localSnapshotTime,
+      localTime: localSnapshotTime ? new Date(parseInt(localSnapshotTime)).toLocaleString() : '无',
+      localKey: localSnapshotKey || '无'
+    });
+    
+    // ✅ 关键修复：无论是否有本地版本记录，都要查询云端最新快照
+    // 这样可以检测到所有情况下的冲突
+    let hasConflict = false;
+    let conflictInfo = null;
+    
+    try {
       // 查询云端最新快照的更新时间
       const { data: latestCloudSnapshot, error: cloudCheckError } = await supabase
         .from(SUPABASE_TABLE)
-        .select('updated_at, payload')
+        .select('updated_at, payload, owner_id')
         .eq('key', SUPABASE_DEFAULT_KEY)
         .maybeSingle();
       
-      if (!cloudCheckError && latestCloudSnapshot && latestCloudSnapshot.updated_at) {
+      console.log('🔍 云端快照查询结果:', {
+        hasData: !!latestCloudSnapshot,
+        hasError: !!cloudCheckError,
+        error: cloudCheckError?.message,
+        updated_at: latestCloudSnapshot?.updated_at,
+        owner_id: latestCloudSnapshot?.owner_id
+      });
+      
+      if (cloudCheckError) {
+        console.error('❌ 查询云端快照失败:', cloudCheckError);
+        // 查询失败时，显示警告但允许继续（可能是网络问题）
+        const shouldContinue = confirm(
+          '⚠️ 无法检查云端更新状态\n\n' +
+          '错误：' + cloudCheckError.message + '\n\n' +
+          '可能原因：网络问题或权限问题\n\n' +
+          '如果继续保存，可能会覆盖云端数据。\n\n' +
+          '是否继续保存？'
+        );
+        if (!shouldContinue) {
+          console.log('✅ 用户取消保存（查询失败）');
+          return;
+        }
+      } else if (latestCloudSnapshot && latestCloudSnapshot.updated_at) {
         const cloudTime = new Date(latestCloudSnapshot.updated_at).getTime();
-        const localTime = parseInt(localSnapshotTime);
         
-        console.log('🔍 版本检查:', {
-          cloudTime: new Date(cloudTime).toLocaleString(),
-          localTime: new Date(localTime).toLocaleString(),
-          cloudNewer: cloudTime > localTime
-        });
+        // ✅ 关键修复：如果有本地版本记录，比较时间戳
+        // 如果没有本地版本记录，也检查云端快照是否存在（可能是首次保存）
+        if (localSnapshotTime && localSnapshotKey === SUPABASE_DEFAULT_KEY) {
+          const localTime = parseInt(localSnapshotTime);
+          
+          console.log('🔍 版本比较:', {
+            cloudTime: new Date(cloudTime).toLocaleString(),
+            localTime: new Date(localTime).toLocaleString(),
+            cloudNewer: cloudTime > localTime,
+            timeDiff: cloudTime - localTime
+          });
+          
+          // 如果云端快照比本地记录新，说明有其他设备更新了
+          if (cloudTime > localTime) {
+            hasConflict = true;
+            conflictInfo = {
+              cloudTime,
+              localTime,
+              snapshot: latestCloudSnapshot
+            };
+          }
+        } else {
+          // ✅ 关键修复：没有本地版本记录时，也要检查云端快照
+          // 如果云端快照存在且不是当前用户刚保存的，可能是冲突
+          // 检查云端快照的更新时间是否在最近（比如1分钟内），如果是，可能是刚保存的，不算冲突
+          const cloudSnapshotTime = cloudTime;
+          const now = Date.now();
+          const timeDiff = now - cloudSnapshotTime;
+          
+          console.log('🔍 无本地版本记录，检查云端快照:', {
+            cloudTime: new Date(cloudSnapshotTime).toLocaleString(),
+            now: new Date(now).toLocaleString(),
+            timeDiff: timeDiff,
+            timeDiffMinutes: Math.floor(timeDiff / 60000)
+          });
+          
+          // ✅ 如果云端快照存在且不是最近1分钟内保存的，可能是其他设备的更新
+          // 但为了安全，我们仍然提示用户（除非是当前用户自己刚保存的）
+          if (timeDiff > 60000) { // 超过1分钟
+            // 检查是否是当前用户保存的
+            const cloudOwnerId = latestCloudSnapshot.owner_id;
+            if (cloudOwnerId !== authUid) {
+              // 不是当前用户保存的，可能是冲突
+              hasConflict = true;
+              conflictInfo = {
+                cloudTime: cloudSnapshotTime,
+                localTime: null, // 没有本地记录
+                snapshot: latestCloudSnapshot
+              };
+              console.warn('⚠️ 检测到可能的冲突：云端快照不是当前用户保存的');
+            }
+          }
+        }
         
-        // 如果云端快照比本地记录新，说明有其他设备更新了
-        if (cloudTime > localTime) {
-          const cloudSnapshotLabel = latestCloudSnapshot.payload?.snapshot_label || '未知';
-          const cloudUpdatedBy = latestCloudSnapshot.payload?.updated_by_name || '未知用户';
+        // ✅ 处理冲突
+        if (hasConflict && conflictInfo) {
+          const cloudSnapshotLabel = conflictInfo.snapshot.payload?.snapshot_label || '未知';
+          const cloudUpdatedBy = conflictInfo.snapshot.payload?.updated_by_name || '未知用户';
+          const cloudRowsCount = conflictInfo.snapshot.payload?.rows?.length || 0;
+          const localRowsCount = rows.length;
           
           const shouldLoad = confirm(
             '⚠️ 检测到云端有更新\n\n' +
             '云端快照：' + cloudSnapshotLabel + '\n' +
             '更新人：' + cloudUpdatedBy + '\n' +
-            '更新时间：' + new Date(cloudTime).toLocaleString() + '\n' +
-            '本地快照时间：' + new Date(localTime).toLocaleString() + '\n\n' +
+            '更新时间：' + new Date(conflictInfo.cloudTime).toLocaleString() + '\n' +
+            '云端数据条数：' + cloudRowsCount + '\n' +
+            (conflictInfo.localTime ? 
+              '本地快照时间：' + new Date(conflictInfo.localTime).toLocaleString() + '\n' :
+              '本地快照：无记录\n') +
+            '本地数据条数：' + localRowsCount + '\n\n' +
             '⚠️ 如果现在保存，将覆盖云端的最新数据！\n\n' +
             '建议：\n' +
             '1. 点击【确定】先加载云端数据\n' +
@@ -1510,7 +1597,9 @@ async function cloudSave() {
               '云端数据包含：\n' +
               '- 快照：' + cloudSnapshotLabel + '\n' +
               '- 更新人：' + cloudUpdatedBy + '\n' +
-              '- 数据条数：' + (latestCloudSnapshot.payload?.rows?.length || 0) + '\n\n' +
+              '- 数据条数：' + cloudRowsCount + '\n' +
+              '- 更新时间：' + new Date(conflictInfo.cloudTime).toLocaleString() + '\n\n' +
+              '本地数据：' + localRowsCount + ' 条\n\n' +
               '⚠️ 此操作可能导致数据丢失！\n\n' +
               '您确定要继续吗？'
             );
@@ -1522,24 +1611,25 @@ async function cloudSave() {
             
             console.warn('⚠️ 用户选择强制保存，可能覆盖云端数据');
           }
+        } else {
+          console.log('✅ 未检测到冲突，可以继续保存');
         }
-      } else if (cloudCheckError) {
-        console.warn('⚠️ 检查云端更新失败:', cloudCheckError);
-        // 查询失败时，允许保存但显示警告
-        const shouldContinue = confirm(
-          '⚠️ 无法检查云端更新状态\n\n' +
-          '可能原因：网络问题或权限问题\n\n' +
-          '如果继续保存，可能会覆盖云端数据。\n\n' +
-          '是否继续保存？'
-        );
-        if (!shouldContinue) {
-          return;
-        }
+      } else {
+        // 云端没有快照（首次保存）
+        console.log('ℹ️ 云端没有快照，允许首次保存');
       }
-    } else {
-      // 没有本地版本记录（首次使用或清除过数据）
-      console.log('ℹ️ 没有本地快照版本记录，允许保存');
-      // 可以显示一个提示，但不阻止保存
+    } catch (error) {
+      console.error('❌ 检查云端更新时发生异常:', error);
+      // 发生异常时，显示警告但允许继续
+      const shouldContinue = confirm(
+        '⚠️ 检查云端更新时发生错误\n\n' +
+        '错误：' + (error.message || String(error)) + '\n\n' +
+        '如果继续保存，可能会覆盖云端数据。\n\n' +
+        '是否继续保存？'
+      );
+      if (!shouldContinue) {
+        return;
+      }
     }
 
     // ✅ 获取最新的快照（用于数据比较）- 查询所有快照，按时间排序
@@ -1944,14 +2034,39 @@ async function cloudSave() {
     console.log('✅ 默认快照保存成功');
     
     // ✅ 新增：保存后更新本地快照版本记录
-    const savedTime = new Date(now).getTime();
-    localStorage.setItem('local_snapshot_updated_at', savedTime.toString());
-    localStorage.setItem('local_snapshot_key', SUPABASE_DEFAULT_KEY);
-    console.log('✅ 已更新本地快照版本记录:', {
-      key: SUPABASE_DEFAULT_KEY,
-      timestamp: savedTime,
-      time: new Date(savedTime).toLocaleString()
-    });
+    // ✅ 关键修复：确保在所有情况下都能正确更新版本记录（包括 iPhone）
+    try {
+      const savedTime = new Date(now).getTime();
+      
+      localStorage.setItem('local_snapshot_updated_at', savedTime.toString());
+      localStorage.setItem('local_snapshot_key', SUPABASE_DEFAULT_KEY);
+      
+      // ✅ 验证是否成功写入
+      const savedTimeCheck = localStorage.getItem('local_snapshot_updated_at');
+      const savedKeyCheck = localStorage.getItem('local_snapshot_key');
+      
+      if (savedTimeCheck && savedKeyCheck === SUPABASE_DEFAULT_KEY) {
+        console.log('✅ 已更新本地快照版本记录:', {
+          key: SUPABASE_DEFAULT_KEY,
+          timestamp: savedTime,
+          time: new Date(savedTime).toLocaleString(),
+          savedTime: savedTimeCheck,
+          savedKey: savedKeyCheck
+        });
+      } else {
+        console.error('❌ 版本记录更新失败:', {
+          expectedTime: savedTime.toString(),
+          actualTime: savedTimeCheck,
+          expectedKey: SUPABASE_DEFAULT_KEY,
+          actualKey: savedKeyCheck
+        });
+        // 显示警告但不阻止保存流程
+        console.warn('⚠️ localStorage 更新失败，可能影响下次冲突检测');
+      }
+    } catch (e) {
+      console.error('❌ 更新版本记录时发生错误:', e);
+      // 即使更新失败，也不阻止保存流程
+    }
 
     const histKey = `snap_${now}`;
     const { error: historyInsertError } = await supabase.from(SUPABASE_TABLE).insert({
@@ -2105,15 +2220,43 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   saveView({ ...DEFAULT_VIEW, ...view });
 
   // ✅ 新增：记录加载的快照版本信息（用于冲突检测）
+  // ✅ 关键修复：确保在所有情况下都能正确记录版本信息（包括 iPhone）
   if (data && data.updated_at) {
-    const snapshotTime = new Date(data.updated_at).getTime();
-    localStorage.setItem('local_snapshot_updated_at', snapshotTime.toString());
-    localStorage.setItem('local_snapshot_key', key);
-    console.log('✅ 已记录本地快照版本:', {
-      key: key,
-      updated_at: data.updated_at,
-      timestamp: snapshotTime
-    });
+    try {
+      const snapshotTime = new Date(data.updated_at).getTime();
+      
+      // ✅ 使用 try-catch 确保 localStorage 操作成功
+      localStorage.setItem('local_snapshot_updated_at', snapshotTime.toString());
+      localStorage.setItem('local_snapshot_key', key);
+      
+      // ✅ 验证是否成功写入
+      const savedTime = localStorage.getItem('local_snapshot_updated_at');
+      const savedKey = localStorage.getItem('local_snapshot_key');
+      
+      if (savedTime && savedKey === key) {
+        console.log('✅ 已记录本地快照版本:', {
+          key: key,
+          updated_at: data.updated_at,
+          timestamp: snapshotTime,
+          savedTime: savedTime,
+          savedKey: savedKey
+        });
+      } else {
+        console.error('❌ 版本信息保存失败:', {
+          expectedTime: snapshotTime.toString(),
+          actualTime: savedTime,
+          expectedKey: key,
+          actualKey: savedKey
+        });
+        // 如果保存失败，显示警告但不阻止加载
+        console.warn('⚠️ localStorage 保存失败，可能影响冲突检测');
+      }
+    } catch (e) {
+      console.error('❌ 保存版本信息时发生错误:', e);
+      // 即使保存失败，也不阻止加载数据
+    }
+  } else {
+    console.warn('⚠️ 无法记录版本信息：数据中没有 updated_at 字段');
   }
 
   await refreshFilters();

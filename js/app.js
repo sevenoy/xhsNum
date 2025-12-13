@@ -2230,6 +2230,10 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
       localStorage.setItem('local_snapshot_updated_at', snapshotTime.toString());
       localStorage.setItem('local_snapshot_key', key);
       
+      // ✅ 清除拒绝加载标志（如果存在）
+      localStorage.removeItem('snapshot_load_refused');
+      localStorage.removeItem('snapshot_load_refused_time');
+      
       // ✅ 验证是否成功写入
       const savedTime = localStorage.getItem('local_snapshot_updated_at');
       const savedKey = localStorage.getItem('local_snapshot_key');
@@ -3712,6 +3716,27 @@ async function checkAndUpdateSnapshot() {
     if (!localSnapshotTime) {
       console.log('ℹ️ 没有本地快照记录，检查是否需要从云端加载');
       
+      // ✅ 关键修复：检查用户是否已经拒绝过加载云端快照
+      const hasRefusedLoad = localStorage.getItem('snapshot_load_refused') === 'true';
+      const refusedTime = localStorage.getItem('snapshot_load_refused_time');
+      
+      // 如果用户最近（24小时内）拒绝过，不再弹出提示
+      if (hasRefusedLoad && refusedTime) {
+        const refusedTimeNum = parseInt(refusedTime, 10);
+        const timeSinceRefused = Date.now() - refusedTimeNum;
+        const hoursSinceRefused = timeSinceRefused / (1000 * 60 * 60);
+        
+        if (hoursSinceRefused < 24) {
+          console.log(`ℹ️ 用户已在 ${Math.floor(hoursSinceRefused)} 小时前拒绝加载云端快照，跳过提示`);
+          return;
+        } else {
+          // 超过24小时，清除拒绝标志，允许再次提示
+          console.log('ℹ️ 拒绝标志已过期（超过24小时），清除标志');
+          localStorage.removeItem('snapshot_load_refused');
+          localStorage.removeItem('snapshot_load_refused_time');
+        }
+      }
+      
       // 查询云端是否有快照
       const { data: cloudSnapshot, error } = await supabase
         .from(SUPABASE_TABLE)
@@ -3733,12 +3758,21 @@ async function checkAndUpdateSnapshot() {
           `📦 检测到云端有快照数据\n\n` +
           `更新时间：${cloudTimeStr}\n` +
           `保存人：${savedBy}\n\n` +
-          `是否加载云端快照？`
+          `是否加载云端快照？\n\n` +
+          `（点击"取消"后，24小时内不再提示）`
         );
         
         if (shouldLoad) {
           console.log('✅ 用户选择加载云端快照');
+          // ✅ 清除拒绝标志（如果存在）
+          localStorage.removeItem('snapshot_load_refused');
+          localStorage.removeItem('snapshot_load_refused_time');
           await cloudLoad(SUPABASE_DEFAULT_KEY);
+        } else {
+          // ✅ 用户点击取消，记录拒绝标志
+          console.log('⚠️ 用户拒绝加载云端快照，记录拒绝标志');
+          localStorage.setItem('snapshot_load_refused', 'true');
+          localStorage.setItem('snapshot_load_refused_time', Date.now().toString());
         }
       } else {
         console.log('ℹ️ 云端也没有快照，跳过加载');

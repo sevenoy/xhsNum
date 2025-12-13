@@ -3535,6 +3535,40 @@ async function updateStatusInfoBar() {
             cloudVersionStatus = '已是最新版本';
           } else {
             cloudVersionStatus = `云端有更新版本：${serverVersion}`;
+            
+            // ✅ 检测到新版本，自动触发更新检查
+            console.log('🔄 状态栏检测到新版本，自动触发更新检查', {
+              currentVersion: currentVersion,
+              serverVersion: serverVersion
+            });
+            
+            // ✅ 延迟一下，确保状态栏已更新显示
+            setTimeout(async () => {
+              try {
+                // ✅ 如果有全局的更新检查函数，调用它
+                if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
+                  console.log('✅ 调用全局更新检查函数');
+                  await window.checkForUpdate(window.serviceWorkerRegistration);
+                } else {
+                  // ✅ 如果没有全局函数，直接调用 showUpdateNotification
+                  if (typeof window.showUpdateNotification === 'function') {
+                    console.log('✅ 直接调用更新提示函数');
+                    // ✅ 清除旧的显示记录，确保能显示新版本提示
+                    const lastShown = localStorage.getItem('update_notification_shown');
+                    if (lastShown === currentVersion) {
+                      console.log('🔄 清除已显示记录，确保新版本提示能显示');
+                      localStorage.removeItem('update_notification_shown');
+                      localStorage.removeItem('update_notification_time');
+                    }
+                    await window.showUpdateNotification();
+                  } else {
+                    console.warn('⚠️ 更新检查函数不可用，可能需要等待页面完全加载');
+                  }
+                }
+              } catch (err) {
+                console.error('❌ 自动触发更新检查失败:', err);
+              }
+            }, 500);
           }
         } else {
           cloudVersionStatus = '无法获取云端版本';

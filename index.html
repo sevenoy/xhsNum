@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.26';
+    const APP_VERSION = 'V251213.27';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -665,7 +665,8 @@
       });
 
       // ✅ 检查更新函数（增强版 - 强制检测版本变化）
-      async function checkForUpdate(reg) {
+      // ✅ 暴露为全局函数，供状态栏版本检查调用
+      window.checkForUpdate = async function(reg) {
         if (!reg) {
           console.warn('⚠️ Service Worker 注册对象不存在');
           return;
@@ -795,10 +796,14 @@
         } catch (err) {
           console.warn('⚠️ 更新检查失败:', err);
         }
-      }
+      };
+      
+      // ✅ 保存 Service Worker 注册对象到全局，供状态栏版本检查使用
+      window.serviceWorkerRegistration = reg;
 
       // ✅ 显示更新通知（改进版：显示更新内容）
-      async function showUpdateNotification() {
+      // ✅ 暴露为全局函数，供状态栏版本检查调用
+      window.showUpdateNotification = async function() {
         console.log('🔔 showUpdateNotification 被调用，当前版本:', APP_VERSION);
         
         // ✅ 优先检查：如果已经有提示框在显示，直接返回（防止重复创建）
@@ -1238,7 +1243,7 @@
           childList: true,
           subtree: true
         });
-      }
+      };
 
       // ✅ 监听 Service Worker 控制权变化
       // 注意：不自动刷新，等待用户点击更新提示框的"确定"按钮后再刷新

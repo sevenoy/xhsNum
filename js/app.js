@@ -1445,24 +1445,27 @@ async function cloudSave() {
     const view = readView();
 
     // ✅ 获取最新的快照（用于数据比较）- 查询所有快照，按时间排序
-    console.log('🔍 开始检查数据改动...', { authUid });
+    console.log('🔍 开始检查数据改动...', { 
+      authUid,
+      localRowsCount: rows.length,
+      localCatsCount: cats.length
+    });
     
+    // ✅ 查询所有可访问的快照（包括授权的快照），用于比较
     // 先查询默认快照（用于比较）
     const { data: defaultSnapshot, error: defaultError } = await supabase
       .from(SUPABASE_TABLE)
       .select('key, owner_id, payload, updated_at')
       .eq('key', SUPABASE_DEFAULT_KEY)
-      .eq('owner_id', authUid)
-      .maybeSingle();
+      .maybeSingle(); // ✅ 移除 owner_id 限制，因为可能有授权的快照
     
-    // 再查询最新的历史快照
+    // 再查询最新的历史快照（所有可访问的）
     const { data: historySnapshots, error: historyError } = await supabase
       .from(SUPABASE_TABLE)
       .select('key, owner_id, payload, updated_at')
       .like('key', 'snap_%')
-      .eq('owner_id', authUid)
       .order('updated_at', { ascending: false })
-      .limit(1);
+      .limit(1); // ✅ 移除 owner_id 限制，因为可能有授权的快照
     
     // 确定哪个是最新的快照（比较 updated_at）
     let latestSnapshot = null;
@@ -1486,7 +1489,12 @@ async function cloudSave() {
       hasHistory: !!(historySnapshots && historySnapshots.length > 0),
       latestKey: latestSnapshot?.key,
       latestUpdatedAt: latestSnapshot?.updated_at,
-      hasPayload: !!latestSnapshot?.payload
+      latestOwnerId: latestSnapshot?.owner_id,
+      currentUserId: authUid,
+      hasPayload: !!latestSnapshot?.payload,
+      // ✅ 添加调试信息：检查快照中的 rows 数量
+      latestRowsCount: latestSnapshot?.payload?.rows?.length || 0,
+      localRowsCount: rows.length
     });
 
     if (defaultError) {
@@ -1498,14 +1506,28 @@ async function cloudSave() {
     
     // ✅ 检查是否有数据改动：比较当前数据和最新快照（在 prompt 之前检查）
     if (latestSnapshot && latestSnapshot.payload) {
-      console.log('✅ 找到最新快照，开始比较数据...');
+      console.log('✅ 找到最新快照，开始比较数据...', {
+        snapshotKey: latestSnapshot.key,
+        snapshotUpdatedAt: latestSnapshot.updated_at,
+        snapshotOwnerId: latestSnapshot.owner_id,
+        currentUserId: authUid
+      });
       const latestRows = latestSnapshot.payload.rows || [];
       const latestCats = latestSnapshot.payload.cats || [];
       const latestView = latestSnapshot.payload.view || {};
       
-      // 比较 rows：只比较数据字段，忽略元数据
+      // ✅ 调试：输出原始数据信息
+      console.log('🔍 原始数据对比:', {
+        localRowsCount: rows.length,
+        latestRowsCount: latestRows.length,
+        localCatsCount: cats.length,
+        latestCatsCount: latestCats.length
+      });
+      
+      // 比较 rows：只比较数据字段，忽略元数据（id, created_at, updated_at 等）
       const normalizeRow = (r) => {
         if (!r) return null;
+        // ✅ 确保所有字段都标准化为字符串，并处理 undefined/null
         return {
           phone: String(r.phone || '').trim(),
           owner: String(r.owner || '').trim(),
@@ -1514,7 +1536,7 @@ async function cloudSave() {
           xhs_name: String(r.xhs_name || '').trim(),
           note1: String(r.note1 || '').trim(),
           row_color: String(r.row_color || '').trim(),
-          order: String(r.order || 0) // ✅ 添加 order 字段参与比较
+          order: String(r.order ?? 0).trim() // ✅ 使用 ?? 确保 null/undefined 都转为 "0"
         };
       };
       
@@ -1538,6 +1560,12 @@ async function cloudSave() {
       const currentRowsData = sortRows(rows);
       const latestRowsData = sortRows(latestRows);
       
+      // ✅ 调试：输出前几条数据用于对比
+      console.log('🔍 数据标准化后对比（前3条）:', {
+        current: currentRowsData.slice(0, 3),
+        latest: latestRowsData.slice(0, 3)
+      });
+      
       // 比较 rows（使用 JSON.stringify 比较，确保顺序一致）
       const currentRowsStr = JSON.stringify(currentRowsData);
       const latestRowsStr = JSON.stringify(latestRowsData);
@@ -1549,8 +1577,35 @@ async function cloudSave() {
           currentCount: currentRowsData.length,
           latestCount: latestRowsData.length,
           currentFirst: currentRowsData[0],
-          latestFirst: latestRowsData[0]
+          latestFirst: latestRowsData[0],
+          currentStrLength: currentRowsStr.length,
+          latestStrLength: latestRowsStr.length,
+          // ✅ 找出第一个不同的位置
+          firstDiffIndex: (() => {
+            const minLen = Math.min(currentRowsStr.length, latestRowsStr.length);
+            for (let i = 0; i < minLen; i++) {
+              if (currentRowsStr[i] !== latestRowsStr[i]) {
+                return i;
+              }
+            }
+            return minLen;
+          })()
         });
+        
+        // ✅ 详细对比：找出具体哪些行不同
+        const maxLen = Math.max(currentRowsData.length, latestRowsData.length);
+        for (let i = 0; i < Math.min(maxLen, 5); i++) {
+          const currentRow = currentRowsData[i];
+          const latestRow = latestRowsData[i];
+          if (JSON.stringify(currentRow) !== JSON.stringify(latestRow)) {
+            console.log(`📊 第 ${i + 1} 行不同:`, {
+              current: currentRow,
+              latest: latestRow
+            });
+          }
+        }
+      } else {
+        console.log('✅ Rows 数据完全相同');
       }
       
       // 比较 cats（标准化后比较）
@@ -1558,7 +1613,7 @@ async function cloudSave() {
         if (!Array.isArray(catsData)) return [];
         return catsData
           .map(c => ({
-            id: String(c.id || ''),
+            id: String(c.id || '').trim(),
             name: String(c.name || '').trim(),
             color: String(c.color || '').trim()
           }))
@@ -1574,8 +1629,12 @@ async function cloudSave() {
       if (!catsEqual) {
         console.log('📊 Cats 数据不同:', {
           current: currentCatsData,
-          latest: latestCatsData
+          latest: latestCatsData,
+          currentStr: currentCatsStr,
+          latestStr: latestCatsStr
         });
+      } else {
+        console.log('✅ Cats 数据完全相同');
       }
       
       // 比较 view（排除时间戳和版本号等字段）
@@ -1613,6 +1672,8 @@ async function cloudSave() {
           currentStr: currentViewStr.substring(0, 100),
           latestStr: latestViewStr.substring(0, 100)
         });
+      } else {
+        console.log('✅ View 数据完全相同');
       }
       
       // 如果所有数据都相同，提示用户并直接返回
@@ -1648,9 +1709,12 @@ async function cloudSave() {
           currentRowsCount: currentRowsData.length,
           latestRowsCount: latestRowsData.length,
           currentRowsSample: JSON.stringify(currentRowsData.slice(0, 1)),
-          latestRowsSample: JSON.stringify(latestRowsData.slice(0, 1))
+          latestRowsSample: JSON.stringify(latestRowsData.slice(0, 1)),
+          // ✅ 添加快照信息，帮助调试多设备问题
+          latestSnapshotKey: latestSnapshot?.key,
+          latestSnapshotUpdatedAt: latestSnapshot?.updated_at
         });
-        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n请修改数据后再保存到云端。');
+        alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n请修改数据后再保存到云端。\n\n如果确实有修改，请检查控制台日志查看详细比较信息。');
         return; // ✅ 关键：直接返回，不继续执行后续代码
       }
       
@@ -1675,6 +1739,7 @@ async function cloudSave() {
     }
 
     // ✅ 获取默认快照（用于权限检查和快照名称）
+    // ✅ 修复：查询所有可访问的默认快照（RLS 会自动过滤）
     const { data: existingSnapshot, error: existingError } = await supabase
       .from(SUPABASE_TABLE)
       .select('owner_id, payload')

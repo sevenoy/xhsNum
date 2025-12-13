@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.32';
+    const APP_VERSION = 'V251213.33';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -743,26 +743,87 @@
                   match: serverVersion === APP_VERSION
                 });
                 
-                // ✅ 如果版本不匹配，强制触发 Service Worker 更新并显示更新提示
+                // ✅ 如果版本不匹配，立即启动自动更新流程
                 if (serverVersion !== APP_VERSION) {
-                  console.log('🔄 检测到版本不匹配，强制触发更新', {
+                  console.log('🔄 检测到版本不匹配，立即启动自动更新', {
                     serverVersion: serverVersion,
                     currentVersion: APP_VERSION,
-                    note: '服务器版本和当前页面版本不同，需要更新',
+                    note: '服务器版本和当前页面版本不同，立即自动更新',
                     userAgent: navigator.userAgent,
                     isStandalone: window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
                   });
                   
-                  // ✅ 关键修复：强制触发 Service Worker 更新
+                  // ✅ 关键修复：立即启动自动更新流程
                   try {
-                    // 再次强制更新检查
+                    // 1. 强制更新检查
                     await reg.update();
                     console.log('✅ 强制更新检查完成');
                     
-                    // 延迟检查，确保状态已更新
+                    // 2. 延迟检查，确保状态已更新
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // 如果仍然没有 waiting 或 installing，尝试强制重新注册
+                    // 3. 检查是否有等待中的 Service Worker
+                    if (reg.waiting) {
+                      console.log('✅ 发现等待中的 Service Worker，立即激活');
+                      // ✅ 立即通知 Service Worker 跳过等待
+                      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                      console.log('✅ 已通知 Service Worker 跳过等待');
+                      
+                      // ✅ 延迟一下，等待 Service Worker 激活
+                      await new Promise(resolve => setTimeout(resolve, 300));
+                      
+                      // ✅ 清除所有缓存
+                      try {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        console.log('✅ 已清除所有缓存');
+                      } catch (err) {
+                        console.warn('⚠️ 清除缓存失败:', err);
+                      }
+                      
+                      // ✅ 立即刷新页面
+                      console.log('🔄 立即刷新页面以应用新版本');
+                      window.location.reload(true);
+                      return;
+                    }
+                    
+                    // 4. 检查是否有正在安装的 Service Worker
+                    if (reg.installing) {
+                      console.log('✅ 发现正在安装的 Service Worker，等待安装完成');
+                      // 等待安装完成
+                      await new Promise((resolve) => {
+                        reg.installing.addEventListener('statechange', () => {
+                          if (reg.installing && reg.installing.state === 'installed') {
+                            resolve();
+                          }
+                        });
+                        // 超时保护
+                        setTimeout(resolve, 3000);
+                      });
+                      
+                      // 如果安装完成，检查是否有 waiting 状态
+                      if (reg.waiting) {
+                        console.log('✅ 安装完成，立即激活');
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        
+                        // 清除缓存
+                        try {
+                          const cacheNames = await caches.keys();
+                          await Promise.all(cacheNames.map(name => caches.delete(name)));
+                          console.log('✅ 已清除所有缓存');
+                        } catch (err) {
+                          console.warn('⚠️ 清除缓存失败:', err);
+                        }
+                        
+                        // 立即刷新
+                        console.log('🔄 立即刷新页面以应用新版本');
+                        window.location.reload(true);
+                        return;
+                      }
+                    }
+                    
+                    // 5. 如果仍然没有 waiting 或 installing，尝试强制重新注册
                     if (!reg.waiting && !reg.installing) {
                       console.log('⚠️ Service Worker 没有进入 waiting 或 installing 状态，尝试强制更新');
                       
@@ -783,37 +844,84 @@
                         // 等待一下，检查新注册的 Service Worker
                         await new Promise(resolve => setTimeout(resolve, 500));
                         
-                        if (newReg.waiting || newReg.installing) {
-                          console.log('✅ 强制重新注册后，发现 waiting 或 installing 状态');
-                          // 更新全局注册对象
-                          window.serviceWorkerRegistration = newReg;
+                        if (newReg.waiting) {
+                          console.log('✅ 强制重新注册后，发现 waiting 状态，立即激活');
+                          newReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                          await new Promise(resolve => setTimeout(resolve, 300));
+                          
+                          // 清除缓存
+                          try {
+                            const cacheNames = await caches.keys();
+                            await Promise.all(cacheNames.map(name => caches.delete(name)));
+                            console.log('✅ 已清除所有缓存');
+                          } catch (err) {
+                            console.warn('⚠️ 清除缓存失败:', err);
+                          }
+                          
+                          // 立即刷新
+                          console.log('🔄 立即刷新页面以应用新版本');
+                          window.location.reload(true);
+                          return;
+                        } else if (newReg.installing) {
+                          console.log('✅ 强制重新注册后，发现 installing 状态，等待安装完成');
+                          // 等待安装完成
+                          await new Promise((resolve) => {
+                            newReg.installing.addEventListener('statechange', () => {
+                              if (newReg.installing && newReg.installing.state === 'installed') {
+                                resolve();
+                              }
+                            });
+                            setTimeout(resolve, 3000);
+                          });
+                          
+                          if (newReg.waiting) {
+                            console.log('✅ 安装完成，立即激活');
+                            newReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            
+                            // 清除缓存
+                            try {
+                              const cacheNames = await caches.keys();
+                              await Promise.all(cacheNames.map(name => caches.delete(name)));
+                              console.log('✅ 已清除所有缓存');
+                            } catch (err) {
+                              console.warn('⚠️ 清除缓存失败:', err);
+                            }
+                            
+                            // 立即刷新
+                            console.log('🔄 立即刷新页面以应用新版本');
+                            window.location.reload(true);
+                            return;
+                          }
                         }
+                        
+                        // 更新全局注册对象
+                        window.serviceWorkerRegistration = newReg;
                       } catch (reRegisterErr) {
                         console.warn('⚠️ 强制重新注册失败:', reRegisterErr);
                       }
                     }
+                    
+                    // 6. 如果以上方法都失败，直接刷新页面（强制获取最新代码）
+                    console.log('⚠️ 无法通过 Service Worker 更新，直接刷新页面');
+                    // 清除缓存
+                    try {
+                      const cacheNames = await caches.keys();
+                      await Promise.all(cacheNames.map(name => caches.delete(name)));
+                      console.log('✅ 已清除所有缓存');
+                    } catch (err) {
+                      console.warn('⚠️ 清除缓存失败:', err);
+                    }
+                    
+                    // 立即刷新
+                    console.log('🔄 立即刷新页面以应用新版本');
+                    window.location.reload(true);
+                    return;
                   } catch (updateErr) {
-                    console.warn('⚠️ 强制更新检查失败:', updateErr);
+                    console.warn('⚠️ 自动更新失败:', updateErr);
+                    // 如果自动更新失败，显示更新提示让用户手动更新
+                    showUpdateNotification();
                   }
-                  
-                  // ✅ 兼容旧版本号格式
-                  const lastShown = localStorage.getItem('update_notification_shown');
-                  if (lastShown && !lastShown.startsWith('V')) {
-                    console.log('🔄 清除旧格式版本号记录:', lastShown);
-                    localStorage.removeItem('update_notification_shown');
-                    localStorage.removeItem('update_notification_time');
-                  }
-                  // ✅ 如果服务器版本和当前版本不同，清除已显示记录（重要：确保能显示新版本提示）
-                  if (lastShown === APP_VERSION) {
-                    console.log('🔄 服务器版本已更新，清除已显示记录');
-                    localStorage.removeItem('update_notification_shown');
-                    localStorage.removeItem('update_notification_time');
-                  }
-                  
-                  // ✅ 关键修复：即使没有 waiting 的 Service Worker，也显示更新提示
-                  // 因为版本不匹配说明需要更新，用户可以通过刷新页面来更新
-                  console.log('🔔 强制调用 showUpdateNotification（版本不匹配）');
-                  showUpdateNotification();
                 } else {
                   // ✅ 版本匹配，检查是否有等待中的更新
                   if (reg.waiting) {

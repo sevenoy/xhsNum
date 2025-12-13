@@ -3692,31 +3692,31 @@ async function updateStatusInfoBar() {
               localStorage.removeItem('update_notification_time');
             }
             
-            // ✅ 延迟一下，确保状态栏已更新显示
+            // ✅ 关键修复：检测到新版本时，立即启动自动更新流程
+            console.log('🔄 状态栏检测到新版本，立即启动自动更新流程');
             setTimeout(async () => {
               try {
-                // ✅ 如果有全局的更新检查函数，调用它
+                // ✅ 如果有全局的更新检查函数，调用它（会自动触发更新）
                 if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
-                  console.log('✅ 调用全局更新检查函数');
+                  console.log('✅ 调用全局更新检查函数（自动更新）');
                   await window.checkForUpdate(window.serviceWorkerRegistration);
                 } else {
-                  // ✅ 如果没有全局函数，直接调用 showUpdateNotification
-                  if (typeof window.showUpdateNotification === 'function') {
-                    console.log('✅ 直接调用更新提示函数');
-                    await window.showUpdateNotification();
-                  } else {
-                    console.warn('⚠️ 更新检查函数不可用，可能需要等待页面完全加载');
-                    // ✅ 如果函数不可用，延迟重试
-                    setTimeout(async () => {
-                      if (typeof window.showUpdateNotification === 'function') {
-                        console.log('✅ 延迟后调用更新提示函数');
-                        await window.showUpdateNotification();
-                      }
-                    }, 2000);
-                  }
+                  console.warn('⚠️ 更新检查函数不可用，可能需要等待页面完全加载');
+                  // ✅ 如果函数不可用，延迟重试
+                  setTimeout(async () => {
+                    if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
+                      console.log('✅ 延迟后调用更新检查函数（自动更新）');
+                      await window.checkForUpdate(window.serviceWorkerRegistration);
+                    }
+                  }, 2000);
                 }
               } catch (err) {
                 console.error('❌ 自动触发更新检查失败:', err);
+                // 如果自动更新失败，显示更新提示让用户手动更新
+                if (typeof window.showUpdateNotification === 'function') {
+                  console.log('⚠️ 自动更新失败，显示更新提示');
+                  await window.showUpdateNotification();
+                }
               }
             }, 500);
           }

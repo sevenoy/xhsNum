@@ -2119,71 +2119,111 @@ async function cloudSave() {
   }
 }
 
+// ✅ 防止 cloudLoad 重复调用的标志
+let isCloudLoading = false;
+
 async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
-  // ✅ 清除云端加载自动关闭定时器（用户选择了快照）
-  stopLoadCloudAutoClose();
-  
-  if (!supabase) {
-    alert("未配置 Supabase，无法从云端加载。");
+  // ✅ 关键修复：防止重复调用（苹果手机可能快速连续触发）
+  if (isCloudLoading) {
+    console.log('⚠️ 云端加载正在进行中，跳过重复调用');
     return;
   }
   
-  // ✅ 权限检查：检查是否有权限访问此资源
-  console.log('🔍 开始权限检查，key:', key);
-  const hasPermission = await checkPermission(key, 'snapshot', 'view');
-  console.log('✅ 权限检查结果:', hasPermission, 'isAdmin:', isAdmin());
+  // ✅ 设置加载标志
+  isCloudLoading = true;
   
-  if (!hasPermission && !isAdmin()) {
-    console.error('❌ 权限检查失败，没有权限访问资源');
-    alert("❌ 您没有权限访问此资源\n\n请联系资源所有者授予权限\n\n如果已授权，请确保已执行 fix-snapshot-rls.sql 文件");
-    return;
-  }
-  
-  console.log('✅ 权限检查通过，继续加载数据');
-  
-  // 检查本地是否有未保存的修改
-  const localRows = await getAllRows();
-  const hasRecentChanges = localRows.some(row => {
-    return (Date.now() - (row.updated_at || 0)) < 300000; // 5分钟内
-  });
-  
-  if (hasRecentChanges) {
-    const shouldContinue = confirm(
-      "⚠️ 警告：您有最近的本地修改尚未保存到云端\n\n" +
-      "如果现在加载云端数据，本地修改将被覆盖！\n\n" +
-      "建议：\n" +
-      "1. 点击【取消】，先点击【保存云端】按钮\n" +
-      "2. 如果确定要放弃本地修改，点击【确定】\n\n" +
-      "是否继续加载云端数据？"
-    );
+  try {
+    // ✅ 清除云端加载自动关闭定时器（用户选择了快照）
+    stopLoadCloudAutoClose();
     
-    if (!shouldContinue) {
-      // ✅ 用户取消，清除自动关闭定时器（因为用户还在选择中）
-      // 注意：不在这里清除，让定时器继续运行，1分钟后自动关闭
+    if (!supabase) {
+      alert("未配置 Supabase，无法从云端加载。");
       return;
     }
-  }
-  
-  console.log('🔍 开始查询云端数据，key:', key);
-  const { data, error } = await supabase
-    .from(SUPABASE_TABLE)
-    .select("payload, owner_id, updated_at")
-    .eq("key", key)
-    .maybeSingle();
-  
-  if (error) {
-    console.error('❌ 云端读取失败:', error);
-    alert(`❌ 云端读取失败：${error.message}\n\n如果提示权限错误，请确保已执行 fix-snapshot-rls.sql 文件`);
-    return;
-  }
-  
-  if (!data) {
-    console.error('❌ 未找到云端数据，key:', key);
-    alert(`❌ 未找到云端数据（key: ${key}）\n\n可能原因：\n1. 数据不存在\n2. 没有访问权限（请检查 RLS 策略）`);
-    return;
-  }
-  
-  console.log('✅ 成功查询到云端数据:', data);
+    
+    // ✅ 权限检查：检查是否有权限访问此资源
+    console.log('🔍 开始权限检查，key:', key);
+    const hasPermission = await checkPermission(key, 'snapshot', 'view');
+    console.log('✅ 权限检查结果:', hasPermission, 'isAdmin:', isAdmin());
+    
+    if (!hasPermission && !isAdmin()) {
+      console.error('❌ 权限检查失败，没有权限访问资源');
+      alert("❌ 您没有权限访问此资源\n\n请联系资源所有者授予权限\n\n如果已授权，请确保已执行 fix-snapshot-rls.sql 文件");
+      return;
+    }
+    
+    console.log('✅ 权限检查通过，继续加载数据');
+    
+    // ✅ 关键修复：检查是否已经有确认对话框在显示
+    if (document.querySelector('.cloud-load-confirm-overlay')) {
+      console.log('⚠️ 云端加载确认对话框已显示，跳过重复显示');
+      return;
+    }
+    
+    // 检查本地是否有未保存的修改
+    const localRows = await getAllRows();
+    const hasRecentChanges = localRows.some(row => {
+      return (Date.now() - (row.updated_at || 0)) < 300000; // 5分钟内
+    });
+    
+    if (hasRecentChanges) {
+      // ✅ 创建确认对话框覆盖层（防止重复调用）
+      const confirmOverlay = document.createElement('div');
+      confirmOverlay.className = 'cloud-load-confirm-overlay';
+      confirmOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+      document.body.appendChild(confirmOverlay);
+      
+      const shouldContinue = confirm(
+        "⚠️ 警告：您有最近的本地修改尚未保存到云端\n\n" +
+        "如果现在加载云端数据，本地修改将被覆盖！\n\n" +
+        "建议：\n" +
+        "1. 点击【取消】，先点击【保存云端】按钮\n" +
+        "2. 如果确定要放弃本地修改，点击【确定】\n\n" +
+        "是否继续加载云端数据？"
+      );
+      
+      // ✅ 移除覆盖层
+      if (confirmOverlay && confirmOverlay.parentNode) {
+        confirmOverlay.remove();
+      }
+      
+      if (!shouldContinue) {
+        // ✅ 用户取消，不清除定时器，让定时器继续运行，1分钟后自动关闭
+        return;
+      }
+    }
+    
+    console.log('🔍 开始查询云端数据，key:', key);
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("payload, owner_id, updated_at")
+      .eq("key", key)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('❌ 云端读取失败:', error);
+      alert(`❌ 云端读取失败：${error.message}\n\n如果提示权限错误，请确保已执行 fix-snapshot-rls.sql 文件`);
+      return;
+    }
+    
+    if (!data) {
+      console.error('❌ 未找到云端数据，key:', key);
+      alert(`❌ 未找到云端数据（key: ${key}）\n\n可能原因：\n1. 数据不存在\n2. 没有访问权限（请检查 RLS 策略）`);
+      return;
+    }
+    
+    console.log('✅ 成功查询到云端数据:', data);
   const payload = data.payload || {};
   const rows = payload.rows || [];
   
@@ -2306,6 +2346,14 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   stopLoadCloudAutoClose();
   
   alert(`✅ 云端数据已加载\n最后保存人：${savedBy}`);
+  } finally {
+    // ✅ 关键修复：清除加载标志，允许下次加载
+    // ✅ 延迟清除，避免快速连续调用
+    setTimeout(() => {
+      isCloudLoading = false;
+      console.log('✅ 云端加载完成，清除标志');
+    }, 1000); // 延迟1秒，确保不会重复调用
+  }
 }
 
 async function renderCloudHistory(maxCount = 1) {
@@ -2397,24 +2445,76 @@ async function renderCloudHistory(maxCount = 1) {
     
     // 绑定点击事件
   panel.querySelectorAll(".cloud-item").forEach((el) => {
-    el.addEventListener("click", async () => {
-      const key = el.getAttribute("data-key");
-      if (!key) return;
-        
-        // 检查权限
-        const hasPermission = await checkPermission(key, 'snapshot', 'view');
-        if (!hasPermission && !isAdmin()) {
-          alert("❌ 您没有权限访问此快照");
+    // ✅ 关键修复：防止重复点击（苹果手机可能快速连续触发）
+    let isClicking = false;
+    
+    el.addEventListener("click", async (e) => {
+      // ✅ 防止事件冒泡和重复触发
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      
+      if (isClicking) {
+        console.log('⚠️ 快照选择正在进行中，跳过重复点击');
+        return;
+      }
+      
+      isClicking = true;
+      
+      try {
+        const key = el.getAttribute("data-key");
+        if (!key) return;
+          
+          // 检查权限
+          const hasPermission = await checkPermission(key, 'snapshot', 'view');
+          if (!hasPermission && !isAdmin()) {
+            alert("❌ 您没有权限访问此快照");
+            return;
+          }
+          
+        // ✅ 关键修复：检查是否已经有确认对话框在显示
+        if (document.querySelector('.cloud-load-confirm-overlay')) {
+          console.log('⚠️ 云端加载确认对话框已显示，跳过重复显示');
           return;
         }
         
-      if (confirm("确定用该快照覆盖本地数据？")) {
-        await cloudLoad(key);
-      } else {
-        // ✅ 用户取消，不清除定时器，让定时器继续运行，1分钟后自动关闭
-        console.log('⚠️ 用户取消选择快照，定时器继续运行');
+        // ✅ 创建确认对话框覆盖层（防止重复调用）
+        const confirmOverlay = document.createElement('div');
+        confirmOverlay.className = 'cloud-load-confirm-overlay';
+        confirmOverlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.3);
+          z-index: 99999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        `;
+        document.body.appendChild(confirmOverlay);
+        
+        const shouldLoad = confirm("确定用该快照覆盖本地数据？");
+        
+        // ✅ 移除覆盖层
+        if (confirmOverlay && confirmOverlay.parentNode) {
+          confirmOverlay.remove();
+        }
+        
+        if (shouldLoad) {
+          await cloudLoad(key);
+        } else {
+          // ✅ 用户取消，不清除定时器，让定时器继续运行，1分钟后自动关闭
+          console.log('⚠️ 用户取消选择快照，定时器继续运行');
+        }
+      } finally {
+        // ✅ 延迟清除标志，避免快速连续点击
+        setTimeout(() => {
+          isClicking = false;
+        }, 1000);
       }
-    });
+    }, { passive: false, capture: true });
   });
     
     console.log(`✅ 云端历史加载成功: 显示最新 1 条快照`);
@@ -3738,12 +3838,26 @@ document.addEventListener('pagehide', () => {
  * 13. 快照版本检查和自动更新
  * ========================= */
 
+// ✅ 防止重复检查的标志
+let isCheckingSnapshot = false;
+let snapshotCheckInProgress = false;
+
 // ✅ 检查本地快照是否是最新的，如果不是则提示并自动更新
 async function checkAndUpdateSnapshot() {
   if (!supabase) {
     console.log('⚠️ Supabase 未配置，跳过快照版本检查');
     return;
   }
+  
+  // ✅ 关键修复：防止重复调用（苹果手机可能快速连续触发）
+  if (isCheckingSnapshot || snapshotCheckInProgress) {
+    console.log('⚠️ 快照检查正在进行中，跳过重复调用');
+    return;
+  }
+  
+  // ✅ 设置检查标志
+  isCheckingSnapshot = true;
+  snapshotCheckInProgress = true;
   
   try {
     // 获取本地快照版本信息
@@ -3816,6 +3930,11 @@ async function checkAndUpdateSnapshot() {
         console.log('ℹ️ 云端也没有快照，跳过加载');
       }
       
+      // ✅ 清除标志，允许下次检查
+      setTimeout(() => {
+        isCheckingSnapshot = false;
+        snapshotCheckInProgress = false;
+      }, 1000);
       return;
     }
     
@@ -3833,11 +3952,21 @@ async function checkAndUpdateSnapshot() {
     
     if (error) {
       console.warn('⚠️ 查询云端快照失败:', error);
+      // ✅ 清除标志，允许下次检查
+      setTimeout(() => {
+        isCheckingSnapshot = false;
+        snapshotCheckInProgress = false;
+      }, 1000);
       return;
     }
     
     if (!cloudSnapshot) {
       console.warn('⚠️ 云端快照不存在，跳过版本检查');
+      // ✅ 清除标志，允许下次检查
+      setTimeout(() => {
+        isCheckingSnapshot = false;
+        snapshotCheckInProgress = false;
+      }, 1000);
       return;
     }
     
@@ -3868,9 +3997,34 @@ async function checkAndUpdateSnapshot() {
         return (Date.now() - (row.updated_at || 0)) < 300000; // 5分钟内
       });
       
+      // ✅ 关键修复：检查是否已经有确认对话框在显示
+      if (document.querySelector('.snapshot-update-confirm-overlay')) {
+        console.log('⚠️ 快照更新确认对话框已显示，跳过重复显示');
+        return;
+      }
+      
+      // ✅ 创建确认对话框覆盖层（防止重复调用）
+      const confirmOverlay = document.createElement('div');
+      confirmOverlay.className = 'snapshot-update-confirm-overlay';
+      confirmOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+      document.body.appendChild(confirmOverlay);
+      
+      let shouldUpdate = false;
+      
       if (hasRecentChanges) {
         // 有未保存的修改，询问用户
-        const shouldUpdate = confirm(
+        shouldUpdate = confirm(
           `🔄 检测到云端有更新快照\n\n` +
           `本地快照时间：${localTimeStr}\n` +
           `云端快照时间：${cloudTimeStr}\n` +
@@ -3879,25 +4033,30 @@ async function checkAndUpdateSnapshot() {
           `是否自动加载最新快照？\n` +
           `（本地修改将被覆盖）`
         );
-        
-        if (!shouldUpdate) {
-          console.log('⚠️ 用户取消自动更新');
-          return;
-        }
       } else {
         // 没有未保存的修改，直接提示并自动更新
-        const shouldUpdate = confirm(
+        shouldUpdate = confirm(
           `🔄 检测到云端有更新快照\n\n` +
           `本地快照时间：${localTimeStr}\n` +
           `云端快照时间：${cloudTimeStr}\n` +
           `保存人：${savedBy}\n\n` +
           `是否自动加载最新快照？`
         );
-        
-        if (!shouldUpdate) {
-          console.log('⚠️ 用户取消自动更新');
-          return;
-        }
+      }
+      
+      // ✅ 移除覆盖层
+      if (confirmOverlay && confirmOverlay.parentNode) {
+        confirmOverlay.remove();
+      }
+      
+      if (!shouldUpdate) {
+        console.log('⚠️ 用户取消自动更新');
+        // ✅ 清除标志，允许下次检查
+        setTimeout(() => {
+          isCheckingSnapshot = false;
+          snapshotCheckInProgress = false;
+        }, 1000);
+        return;
       }
       
       // ✅ 自动加载最新快照
@@ -3911,6 +4070,14 @@ async function checkAndUpdateSnapshot() {
     }
   } catch (err) {
     console.error('❌ 检查快照版本失败:', err);
+  } finally {
+    // ✅ 关键修复：清除检查标志，允许下次检查
+    // ✅ 延迟清除，避免快速连续调用
+    setTimeout(() => {
+      isCheckingSnapshot = false;
+      snapshotCheckInProgress = false;
+      console.log('✅ 快照检查完成，清除标志');
+    }, 2000); // 延迟2秒，确保不会重复调用
   }
 }
 

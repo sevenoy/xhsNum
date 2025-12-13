@@ -3684,13 +3684,14 @@ async function updateStatusInfoBar() {
               serverVersion: serverVersion
             });
             
-            // ✅ 关键修复：立即清除已显示记录，确保新版本提示能显示
-            const lastShown = localStorage.getItem('update_notification_shown');
-            if (lastShown === currentVersion || lastShown === serverVersion) {
-              console.log('🔄 检测到新版本，清除已显示记录，确保新版本提示能显示');
-              localStorage.removeItem('update_notification_shown');
-              localStorage.removeItem('update_notification_time');
-            }
+            // ✅ 关键修复：立即强制清除已显示记录，确保新版本提示能显示
+            console.log('🔄 检测到新版本，强制清除已显示记录，确保新版本提示能显示', {
+              currentVersion: currentVersion,
+              serverVersion: serverVersion,
+              lastShown: localStorage.getItem('update_notification_shown')
+            });
+            localStorage.removeItem('update_notification_shown');
+            localStorage.removeItem('update_notification_time');
             
             // ✅ 关键修复：检测到新版本时，立即启动自动更新流程
             console.log('🔄 状态栏检测到新版本，立即启动自动更新流程');

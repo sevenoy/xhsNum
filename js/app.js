@@ -4081,7 +4081,7 @@ async function checkAndUpdateSnapshot() {
   }
 }
 
-// ✅ 定期检查快照版本（每5分钟检查一次）
+// ✅ 定期检查快照版本（每2分钟检查一次）
 let snapshotCheckInterval = null;
 
 function startSnapshotVersionCheck() {
@@ -4090,13 +4090,13 @@ function startSnapshotVersionCheck() {
     clearInterval(snapshotCheckInterval);
   }
   
-  // 每5分钟检查一次快照版本
+  // 每2分钟检查一次快照版本
   snapshotCheckInterval = setInterval(() => {
-    console.log('⏰ 定期检查快照版本（每5分钟）');
+    console.log('⏰ 定期检查快照版本（每2分钟）');
     checkAndUpdateSnapshot();
-  }, 5 * 60 * 1000); // 5分钟 = 300000毫秒
+  }, 2 * 60 * 1000); // 2分钟 = 120000毫秒
   
-  console.log('✅ 已启动快照版本检查定时器（每5分钟）');
+  console.log('✅ 已启动快照版本检查定时器（每2分钟）');
 }
 
 function stopSnapshotVersionCheck() {

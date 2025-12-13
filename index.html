@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.40';
+    const APP_VERSION = 'V251213.41';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -601,9 +601,10 @@
                       sessionStorage.setItem('sw_auto_refresh', 'true');
                       sessionStorage.setItem('sw_refresh_time', Date.now().toString());
                       
-                      // 立即刷新页面
+                      // 立即刷新页面（使用location.href强制刷新）
                       console.log('🔄 立即刷新页面以应用新版本');
-                      window.location.reload(true);
+                      const currentUrl = window.location.href.split('?')[0];
+                      window.location.href = currentUrl + '?t=' + Date.now();
                     } catch (updateErr) {
                       console.error('❌ 自动更新失败:', updateErr);
                       showUpdateNotification();
@@ -654,9 +655,10 @@
                         sessionStorage.setItem('sw_auto_refresh', 'true');
                         sessionStorage.setItem('sw_refresh_time', Date.now().toString());
                         
-                        // 立即刷新
-                        console.log('🔄 立即刷新页面以应用新版本');
-                        window.location.reload(true);
+                      // 立即刷新页面（使用location.href强制刷新）
+                      console.log('🔄 立即刷新页面以应用新版本');
+                      const currentUrl = window.location.href.split('?')[0];
+                      window.location.href = currentUrl + '?t=' + Date.now();
                       } catch (updateErr) {
                         console.error('❌ 自动更新失败:', updateErr);
                         showUpdateNotification();
@@ -787,9 +789,10 @@
               sessionStorage.setItem('sw_auto_refresh', 'true');
               sessionStorage.setItem('sw_refresh_time', Date.now().toString());
               
-              // 立即刷新页面
+              // 立即刷新页面（使用location.href强制刷新）
               console.log('🔄 立即刷新页面以应用新版本');
-              window.location.reload(true);
+              const currentUrl = window.location.href.split('?')[0];
+              window.location.href = currentUrl + '?t=' + Date.now();
               return;
             } catch (updateErr) {
               console.error('❌ 自动更新失败:', updateErr);
@@ -847,9 +850,10 @@
                 sessionStorage.setItem('sw_auto_refresh', 'true');
                 sessionStorage.setItem('sw_refresh_time', Date.now().toString());
                 
-                // 立即刷新
+                // 立即刷新页面（使用location.href强制刷新）
                 console.log('🔄 立即刷新页面以应用新版本');
-                window.location.reload(true);
+                const currentUrl = window.location.href.split('?')[0];
+                window.location.href = currentUrl + '?t=' + Date.now();
                 return;
               } catch (updateErr) {
                 console.error('❌ 自动更新失败:', updateErr);
@@ -902,190 +906,52 @@
                   localStorage.removeItem('update_notification_time');
                   
                   // ✅ 显示更新提示（Toast形式，不阻塞用户）
-                  showUpdateToast(`发现新版本 ${serverVersion}，正在自动更新...`);
+                  if (typeof showUpdateToast === 'function') {
+                    showUpdateToast(`发现新版本 ${serverVersion}，正在自动更新...`);
+                  } else {
+                    console.log('⚠️ showUpdateToast 函数未定义，跳过Toast提示');
+                  }
                   
-                  // ✅ 立即执行自动更新流程（不延迟）
+                  // ✅ 简化自动更新流程：直接清除缓存并刷新页面（最可靠的方式）
                   try {
-                    // 1. 强制更新检查
-                    await reg.update();
-                    console.log('✅ 强制更新检查完成');
-                    
-                    // 2. 延迟检查，确保状态已更新
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    
-                    // 3. 检查是否有等待中的 Service Worker
+                    // 1. 先尝试激活等待中的 Service Worker（如果存在）
                     if (reg.waiting) {
                       console.log('✅ 发现等待中的 Service Worker，立即激活');
                       reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                      console.log('✅ 已通知 Service Worker 跳过等待');
-                      await new Promise(resolve => setTimeout(resolve, 200));
-                      
-                      // 清除所有缓存
-                      try {
-                        const cacheNames = await caches.keys();
-                        await Promise.all(cacheNames.map(name => caches.delete(name)));
-                        console.log('✅ 已清除所有缓存');
-                      } catch (err) {
-                        console.warn('⚠️ 清除缓存失败:', err);
-                      }
-                      
-                      // 设置刷新标志
-                      sessionStorage.setItem('sw_auto_refresh', 'true');
-                      sessionStorage.setItem('sw_refresh_time', Date.now().toString());
-                      
-                      // 立即刷新页面
-                      console.log('🔄 立即刷新页面以应用新版本');
-                      window.location.reload(true);
-                      return;
+                      await new Promise(resolve => setTimeout(resolve, 100));
                     }
                     
-                    // 4. 检查是否有正在安装的 Service Worker
-                    if (reg.installing) {
-                      console.log('✅ 发现正在安装的 Service Worker，等待安装完成');
-                      await new Promise((resolve) => {
-                        const timeout = setTimeout(resolve, 2000);
-                        reg.installing.addEventListener('statechange', () => {
-                          if (reg.installing && (reg.installing.state === 'installed' || reg.installing.state === 'activated')) {
-                            clearTimeout(timeout);
-                            resolve();
-                          }
-                        });
-                      });
-                      
-                      // 检查是否有 waiting 状态
-                      if (reg.waiting) {
-                        console.log('✅ 安装完成，立即激活');
-                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                        await new Promise(resolve => setTimeout(resolve, 200));
-                        
-                        // 清除缓存
-                        try {
-                          const cacheNames = await caches.keys();
-                          await Promise.all(cacheNames.map(name => caches.delete(name)));
-                          console.log('✅ 已清除所有缓存');
-                        } catch (err) {
-                          console.warn('⚠️ 清除缓存失败:', err);
-                        }
-                        
-                        // 设置刷新标志
-                        sessionStorage.setItem('sw_auto_refresh', 'true');
-                        sessionStorage.setItem('sw_refresh_time', Date.now().toString());
-                        
-                        // 立即刷新
-                        console.log('🔄 立即刷新页面以应用新版本');
-                        window.location.reload(true);
-                        return;
-                      }
-                    }
-                    
-                    // 5. 如果仍然没有 waiting 或 installing，尝试强制重新注册
-                    if (!reg.waiting && !reg.installing) {
-                      console.log('⚠️ Service Worker 没有进入 waiting 或 installing 状态，尝试强制重新注册');
-                      
-                      try {
-                        // 清除所有缓存
-                        const cacheNames = await caches.keys();
-                        await Promise.all(cacheNames.map(name => caches.delete(name)));
-                        console.log('✅ 已清除所有缓存');
-                        
-                        // 强制重新注册 Service Worker
-                        const cacheBuster = Date.now();
-                        const newReg = await navigator.serviceWorker.register(`./sw.js?v=${serverVersion}&t=${cacheBuster}&force=${Math.random()}`, {
-                          updateViaCache: 'none'
-                        });
-                        console.log('✅ 强制重新注册 Service Worker');
-                        
-                        // 等待一下，检查新注册的 Service Worker
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        
-                        if (newReg.waiting) {
-                          console.log('✅ 强制重新注册后，发现 waiting 状态，立即激活');
-                          newReg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                          await new Promise(resolve => setTimeout(resolve, 200));
-                          
-                          // 清除缓存
-                          try {
-                            const cacheNames = await caches.keys();
-                            await Promise.all(cacheNames.map(name => caches.delete(name)));
-                            console.log('✅ 已清除所有缓存');
-                          } catch (err) {
-                            console.warn('⚠️ 清除缓存失败:', err);
-                          }
-                          
-                          // 设置刷新标志
-                          sessionStorage.setItem('sw_auto_refresh', 'true');
-                          sessionStorage.setItem('sw_refresh_time', Date.now().toString());
-                          
-                          // 立即刷新
-                          console.log('🔄 立即刷新页面以应用新版本');
-                          window.location.reload(true);
-                          return;
-                        } else if (newReg.installing) {
-                          console.log('✅ 强制重新注册后，发现 installing 状态，等待安装完成');
-                          await new Promise((resolve) => {
-                            const timeout = setTimeout(resolve, 2000);
-                            newReg.installing.addEventListener('statechange', () => {
-                              if (newReg.installing && (newReg.installing.state === 'installed' || newReg.installing.state === 'activated')) {
-                                clearTimeout(timeout);
-                                resolve();
-                              }
-                            });
-                          });
-                          
-                          if (newReg.waiting) {
-                            console.log('✅ 安装完成，立即激活');
-                            newReg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                            await new Promise(resolve => setTimeout(resolve, 200));
-                            
-                            // 清除缓存
-                            try {
-                              const cacheNames = await caches.keys();
-                              await Promise.all(cacheNames.map(name => caches.delete(name)));
-                              console.log('✅ 已清除所有缓存');
-                            } catch (err) {
-                              console.warn('⚠️ 清除缓存失败:', err);
-                            }
-                            
-                            // 设置刷新标志
-                            sessionStorage.setItem('sw_auto_refresh', 'true');
-                            sessionStorage.setItem('sw_refresh_time', Date.now().toString());
-                            
-                            // 立即刷新
-                            console.log('🔄 立即刷新页面以应用新版本');
-                            window.location.reload(true);
-                            return;
-                          }
-                        }
-                        
-                        // 更新全局注册对象
-                        window.serviceWorkerRegistration = newReg;
-                      } catch (reRegisterErr) {
-                        console.warn('⚠️ 强制重新注册失败:', reRegisterErr);
-                      }
-                    }
-                    
-                    // 6. 如果以上方法都失败，直接清除缓存并刷新页面
-                    console.log('⚠️ 无法通过 Service Worker 更新，直接清除缓存并刷新页面');
+                    // 2. 清除所有缓存（确保获取最新代码）
                     try {
                       const cacheNames = await caches.keys();
                       await Promise.all(cacheNames.map(name => caches.delete(name)));
                       console.log('✅ 已清除所有缓存');
-                    } catch (err) {
-                      console.warn('⚠️ 清除缓存失败:', err);
+                    } catch (cacheErr) {
+                      console.warn('⚠️ 清除缓存失败:', cacheErr);
                     }
                     
-                    // 设置刷新标志
+                    // 3. 设置刷新标志
                     sessionStorage.setItem('sw_auto_refresh', 'true');
                     sessionStorage.setItem('sw_refresh_time', Date.now().toString());
                     
-                    // 立即刷新
+                    // 4. 立即刷新页面（使用location.href强制刷新，确保获取最新代码）
                     console.log('🔄 立即刷新页面以应用新版本');
-                    window.location.reload(true);
+                    const currentUrl = window.location.href.split('?')[0];
+                    window.location.href = currentUrl + '?t=' + Date.now();
                     return;
                   } catch (updateErr) {
                     console.error('❌ 自动更新失败:', updateErr);
-                    // 如果自动更新失败，显示更新对话框让用户手动更新
-                    showUpdateNotification();
+                    // 如果自动更新失败，尝试简单刷新
+                    try {
+                      const currentUrl = window.location.href.split('?')[0];
+                      window.location.href = currentUrl + '?t=' + Date.now();
+                    } catch (refreshErr) {
+                      console.error('❌ 刷新页面也失败:', refreshErr);
+                      // 最后的手段：显示更新对话框让用户手动更新
+                      if (typeof showUpdateNotification === 'function') {
+                        showUpdateNotification();
+                      }
+                    }
                   }
                 } else {
                   // ✅ 版本匹配，但检查是否有等待中的 Service Worker（未激活）
@@ -1124,9 +990,10 @@
                       sessionStorage.setItem('sw_auto_refresh', 'true');
                       sessionStorage.setItem('sw_refresh_time', Date.now().toString());
                       
-                      // 立即刷新页面
+                      // 立即刷新页面（使用location.href强制刷新）
                       console.log('🔄 立即刷新页面以应用新版本');
-                      window.location.reload(true);
+                      const currentUrl = window.location.href.split('?')[0];
+                      window.location.href = currentUrl + '?t=' + Date.now();
                       return;
                     } catch (updateErr) {
                       console.error('❌ 自动更新失败:', updateErr);
@@ -1546,8 +1413,9 @@
                         current: APP_VERSION,
                         server: serverVersion
                       });
-                      // 直接刷新，不使用缓存
-                      window.location.reload(true);
+                      // 直接刷新页面（使用location.href强制刷新）
+                      const currentUrl = window.location.href.split('?')[0];
+                      window.location.href = currentUrl + '?t=' + Date.now();
                       return;
                     }
                   }
@@ -1586,8 +1454,9 @@
             
             setTimeout(() => {
               console.log('🔄 开始刷新页面');
-              // ✅ 强制刷新，不使用缓存
-              window.location.reload(true);
+              // ✅ 强制刷新页面（使用location.href强制刷新）
+              const currentUrl = window.location.href.split('?')[0];
+              window.location.href = currentUrl + '?t=' + Date.now();
             }, 300);
           } catch (err) {
             console.error('❌ 更新失败:', err);
@@ -1770,8 +1639,9 @@
           // 清除自动刷新标志
           sessionStorage.removeItem('sw_auto_refresh');
           sessionStorage.removeItem('sw_refresh_time');
-          // 刷新页面
-          window.location.reload(true);
+          // 刷新页面（使用location.href强制刷新）
+          const currentUrl = window.location.href.split('?')[0];
+          window.location.href = currentUrl + '?t=' + Date.now();
           return;
         }
         

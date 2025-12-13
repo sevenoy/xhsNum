@@ -2030,7 +2030,7 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   alert(`✅ 云端数据已加载\n最后保存人：${savedBy}`);
 }
 
-async function renderCloudHistory(maxCount = 3) {
+async function renderCloudHistory(maxCount = 1) {
   const panel = $("#cloudHistoryPanel");
   if (!panel) return;
   if (!supabase) {
@@ -2045,11 +2045,12 @@ async function renderCloudHistory(maxCount = 3) {
   try {
     // ✅ 改进：查询所有可访问的快照（包括授权的快照）
     // RLS策略会自动过滤出有权限的快照
+    // ✅ 只查询最新的一条快照
   const { data, error } = await supabase
     .from(SUPABASE_TABLE)
       .select("key,payload,updated_at,owner_id")
     .order("updated_at", { ascending: false })
-      .limit(Math.max(maxCount + 5, 20)); // 查询稍多一些以确保有足够的数据
+      .limit(1); // ✅ 只查询最新的一条快照
     
   if (error) {
       console.error('❌ 加载历史失败:', error);
@@ -2081,49 +2082,38 @@ async function renderCloudHistory(maxCount = 3) {
       }
     }
     
-    // ✅ 只显示我的快照，不显示授权快照，并限制显示数量
-    const mySnapshots = data.filter(s => s.owner_id === currentUserId).slice(0, maxCount);
+    // ✅ 只显示我的快照，不显示授权快照
+    // ✅ 只显示最新的一条快照
+    const mySnapshots = data.filter(s => s.owner_id === currentUserId).slice(0, 1);
     
     let html = '';
     
-    // 显示我的快照（限制数量）
+    // 显示我的快照（只显示最新的一条）
     if (mySnapshots.length > 0) {
-      html += mySnapshots.map((row, index) => {
-        const name = (row.payload?.snapshot_label || row.key).trim();
-        const t = fmtTime(row.updated_at);
-        const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
-        const metaCount = Array.isArray(row.payload?.rows)
-          ? `${row.payload.rows.length} 条`
-          : "";
-        const isDefault = row.key === 'default';
-        const displayName = isDefault ? '📌 默认快照' : name;
-        // ✅ 第一个（最新的）快照添加 latest 类和"最新"标记
-        const isLatest = index === 0;
-        const latestClass = isLatest ? ' latest' : '';
-        const latestBadge = isLatest ? '<span class="cloud-item-latest-badge">最新</span>' : '';
-        
-        return `<div class="cloud-item${latestClass}" data-key="${row.key}">
-          <div class="cloud-item-main">
-            <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
-            <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
-          </div>
-          <div class="cloud-item-time">${escapeHtml(t)}</div>
-        </div>`;
-      }).join("");
+      const row = mySnapshots[0];
+      const name = (row.payload?.snapshot_label || row.key).trim();
+      const t = fmtTime(row.updated_at);
+      const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
+      const metaCount = Array.isArray(row.payload?.rows)
+        ? `${row.payload.rows.length} 条`
+        : "";
+      const isDefault = row.key === 'default';
+      const displayName = isDefault ? '📌 默认快照' : name;
+      // ✅ 最新快照添加 latest 类和"最新"标记
+      const latestBadge = '<span class="cloud-item-latest-badge">最新</span>';
+      
+      html = `<div class="cloud-item latest" data-key="${row.key}">
+        <div class="cloud-item-main">
+          <div class="cloud-item-name">${escapeHtml(displayName)}${latestBadge}</div>
+          <div class="cloud-item-meta">${escapeHtml(metaCount)} · 修改人：${escapeHtml(userName)}</div>
+        </div>
+        <div class="cloud-item-time">${escapeHtml(t)}</div>
+      </div>`;
     }
     
     if (html === '') {
       panel.innerHTML = `<div style="padding:8px 10px;color:#888;">暂无历史快照</div>`;
       return;
-    }
-    
-    // ✅ 如果快照数量达到限制，添加提示信息
-    const totalCount = data.filter(s => s.owner_id === currentUserId).length;
-    if (totalCount > maxCount) {
-      html += `<div style="padding:8px 10px;color:#666;font-size:12px;text-align:center;border-top:1px solid #eee;">
-        显示最新 ${maxCount} 条，共 ${totalCount} 条快照<br/>
-        <a href="admin.html" style="color:#1990FF;text-decoration:none;">前往管理中心查看全部 →</a>
-      </div>`;
     }
     
     panel.innerHTML = html;
@@ -2147,7 +2137,7 @@ async function renderCloudHistory(maxCount = 3) {
     });
   });
     
-    console.log(`✅ 云端历史加载成功: ${mySnapshots.length} 个我的快照`);
+    console.log(`✅ 云端历史加载成功: 显示最新 1 条快照`);
     
   } catch (err) {
     console.error('❌ 渲染云端历史失败:', err);

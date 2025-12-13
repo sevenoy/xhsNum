@@ -82,12 +82,29 @@
         userAgent: navigator.userAgent 
       });
       
+      // ✅ 关键修复：在 standalone 模式下，强制清除 Service Worker 缓存（如果存在）
+      if (isStandalone && 'serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            console.log('🔧 Standalone 模式：清除 Service Worker 缓存');
+            // 发送消息清除缓存
+            if (registration.active) {
+              registration.active.postMessage({ type: 'CLEAR_CACHE' });
+            }
+          }
+        } catch (swErr) {
+          console.warn('⚠️ 清除 Service Worker 缓存失败:', swErr);
+        }
+      }
+      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (!session) {
         // 未登录，跳转到登录页
         console.log('❌ 未找到 session，跳转到登录页');
-        window.location.href = 'login.html';
+        // ✅ 使用 replace 避免缓存问题
+        window.location.replace('login.html');
         return;
       }
       
@@ -119,11 +136,34 @@
           .single();
         
         // ✅ 如果查询失败且是认证错误，说明 session 无效
-        if (profileError && (profileError.code === 'PGRST116' || profileError.message?.includes('JWT'))) {
+        if (profileError && (profileError.code === 'PGRST116' || profileError.message?.includes('JWT') || 
+            profileError.message?.includes('expired') || profileError.message?.includes('Invalid'))) {
           console.log('❌ Session 无效（认证失败），清除并跳转到登录页:', profileError);
-          await supabase.auth.signOut();
-          window.location.href = 'login.html';
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutErr) {
+            console.error('清除 session 失败:', signOutErr);
+          }
+          // ✅ 使用 replace 避免缓存问题，特别是在 standalone 模式下
+          window.location.replace('login.html');
           return;
+        }
+        
+        // ✅ 额外验证：如果查询失败且是网络错误，但在 standalone 模式下，可能是 session 过期
+        if (profileError && isStandalone && !profile) {
+          console.log('⚠️ Standalone 模式：查询用户信息失败，可能是 session 过期:', profileError);
+          // 尝试再次验证 session
+          const { data: { session: recheckSession } } = await supabase.auth.getSession();
+          if (!recheckSession || !recheckSession.user) {
+            console.log('❌ Session 验证失败，跳转到登录页');
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutErr) {
+              console.error('清除 session 失败:', signOutErr);
+            }
+            window.location.replace('login.html');
+            return;
+          }
         }
         
         // ✅ 已登录且 session 有效，从 user_profiles 查询用户信息
@@ -182,8 +222,25 @@
             } catch (signOutErr) {
               console.error('清除 session 失败:', signOutErr);
             }
-            window.location.href = 'login.html';
+            // ✅ 使用 replace 避免缓存问题
+            window.location.replace('login.html');
             return;
+          }
+          
+          // ✅ 在 standalone 模式下，如果查询失败，更严格地验证
+          if (isStandalone && err) {
+            console.log('⚠️ Standalone 模式：查询失败，进行额外验证:', err);
+            const { data: { session: finalCheck } } = await supabase.auth.getSession();
+            if (!finalCheck || !finalCheck.user) {
+              console.log('❌ Standalone 模式：最终验证失败，跳转到登录页');
+              try {
+                await supabase.auth.signOut();
+              } catch (signOutErr) {
+                console.error('清除 session 失败:', signOutErr);
+              }
+              window.location.replace('login.html');
+              return;
+            }
           }
           
           // 其他错误：降级处理，使用 session 信息或 localStorage
@@ -397,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.24';
+    const APP_VERSION = 'V251213.25';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -690,19 +747,25 @@
                   console.log('🔄 检测到版本不匹配，显示更新提示', {
                     serverVersion: serverVersion,
                     currentVersion: APP_VERSION,
-                    note: '服务器版本和当前页面版本不同，需要更新'
+                    note: '服务器版本和当前页面版本不同，需要更新',
+                    userAgent: navigator.userAgent,
+                    isStandalone: window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
                   });
                   // ✅ 兼容旧版本号格式
                   const lastShown = localStorage.getItem('update_notification_shown');
                   if (lastShown && !lastShown.startsWith('V')) {
                     console.log('🔄 清除旧格式版本号记录:', lastShown);
                     localStorage.removeItem('update_notification_shown');
+                    localStorage.removeItem('update_notification_time');
                   }
-                  // ✅ 如果服务器版本和当前版本不同，清除已显示记录
+                  // ✅ 如果服务器版本和当前版本不同，清除已显示记录（重要：确保能显示新版本提示）
                   if (lastShown === APP_VERSION) {
                     console.log('🔄 服务器版本已更新，清除已显示记录');
                     localStorage.removeItem('update_notification_shown');
+                    localStorage.removeItem('update_notification_time');
                   }
+                  // ✅ 强制显示更新提示（不检查已显示记录，因为已经清除）
+                  console.log('🔔 强制调用 showUpdateNotification');
                   showUpdateNotification();
                 } else {
                   // ✅ 版本匹配，检查是否有等待中的更新
@@ -775,7 +838,9 @@
         console.log('🔍 检查是否已显示过:', {
           lastShownVersion: lastShownVersion,
           currentVersion: APP_VERSION,
-          isEqual: lastShownVersion === APP_VERSION
+          isEqual: lastShownVersion === APP_VERSION,
+          userAgent: navigator.userAgent,
+          isStandalone: window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
         });
         
         // ✅ 兼容旧版本号格式：如果 localStorage 中是旧格式（如 20251212.8），清除它
@@ -785,10 +850,32 @@
         }
         
         // ✅ 关键修复：如果已显示过当前版本，直接跳过（不再检查 pendingUpdate）
+        // ✅ 但如果是 iPhone X 等设备，可能需要强制显示（调试用）
         const currentLastShown = localStorage.getItem('update_notification_shown');
+        const isIPhoneX = /iPhone/.test(navigator.userAgent) && !/iPhone OS 1[3-9]/.test(navigator.userAgent);
+        
         if (currentLastShown === APP_VERSION) {
-          console.log('✅ 当前版本已显示过更新提示，跳过');
-          return;
+          // ✅ 如果是 iPhone X 且超过 5 分钟，强制重新显示（可能是缓存问题）
+          if (isIPhoneX) {
+            const lastShownTime = localStorage.getItem('update_notification_time');
+            if (lastShownTime) {
+              const timeSinceShown = Date.now() - parseInt(lastShownTime, 10);
+              if (timeSinceShown > 5 * 60 * 1000) { // 5分钟
+                console.log('🔄 iPhone X：超过5分钟，强制重新显示更新提示');
+                localStorage.removeItem('update_notification_shown');
+                localStorage.removeItem('update_notification_time');
+              } else {
+                console.log('✅ 当前版本已显示过更新提示（' + Math.floor(timeSinceShown / 1000) + '秒前），跳过');
+                return;
+              }
+            } else {
+              console.log('✅ 当前版本已显示过更新提示，跳过');
+              return;
+            }
+          } else {
+            console.log('✅ 当前版本已显示过更新提示，跳过');
+            return;
+          }
         }
         
         // ✅ 标记有待处理的更新
@@ -946,10 +1033,11 @@
             // 这样可以确保状态已保存，即使后续出错也不会重复显示
             try {
               localStorage.setItem('update_notification_shown', APP_VERSION);
+              localStorage.setItem('update_notification_time', Date.now().toString());
               // 验证是否成功保存
               const saved = localStorage.getItem('update_notification_shown');
               if (saved === APP_VERSION) {
-                console.log('✅ 已记录更新提示显示状态:', APP_VERSION);
+                console.log('✅ 已记录更新提示显示状态:', APP_VERSION, '时间:', new Date().toISOString());
               } else {
                 console.error('❌ 保存更新提示状态失败:', {
                   expected: APP_VERSION,
@@ -957,6 +1045,7 @@
                 });
                 // 如果保存失败，尝试再次保存
                 localStorage.setItem('update_notification_shown', APP_VERSION);
+                localStorage.setItem('update_notification_time', Date.now().toString());
               }
             } catch (e) {
               console.error('❌ 保存更新提示状态时发生错误:', e);

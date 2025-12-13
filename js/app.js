@@ -1455,6 +1455,93 @@ async function cloudSave() {
       console.warn('⚠️ 这些字段将在数据比较时被排除:', metadataKeys);
     }
 
+    // ✅ 新增：保存前检查云端是否有更新（防止覆盖其他设备的更新）
+    console.log('🔍 开始检查云端更新...');
+    const localSnapshotTime = localStorage.getItem('local_snapshot_updated_at');
+    const localSnapshotKey = localStorage.getItem('local_snapshot_key');
+    
+    if (localSnapshotTime && localSnapshotKey === SUPABASE_DEFAULT_KEY) {
+      // 查询云端最新快照的更新时间
+      const { data: latestCloudSnapshot, error: cloudCheckError } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('updated_at, payload')
+        .eq('key', SUPABASE_DEFAULT_KEY)
+        .maybeSingle();
+      
+      if (!cloudCheckError && latestCloudSnapshot && latestCloudSnapshot.updated_at) {
+        const cloudTime = new Date(latestCloudSnapshot.updated_at).getTime();
+        const localTime = parseInt(localSnapshotTime);
+        
+        console.log('🔍 版本检查:', {
+          cloudTime: new Date(cloudTime).toLocaleString(),
+          localTime: new Date(localTime).toLocaleString(),
+          cloudNewer: cloudTime > localTime
+        });
+        
+        // 如果云端快照比本地记录新，说明有其他设备更新了
+        if (cloudTime > localTime) {
+          const cloudSnapshotLabel = latestCloudSnapshot.payload?.snapshot_label || '未知';
+          const cloudUpdatedBy = latestCloudSnapshot.payload?.updated_by_name || '未知用户';
+          
+          const shouldLoad = confirm(
+            '⚠️ 检测到云端有更新\n\n' +
+            '云端快照：' + cloudSnapshotLabel + '\n' +
+            '更新人：' + cloudUpdatedBy + '\n' +
+            '更新时间：' + new Date(cloudTime).toLocaleString() + '\n' +
+            '本地快照时间：' + new Date(localTime).toLocaleString() + '\n\n' +
+            '⚠️ 如果现在保存，将覆盖云端的最新数据！\n\n' +
+            '建议：\n' +
+            '1. 点击【确定】先加载云端数据\n' +
+            '2. 检查并合并数据后再保存\n\n' +
+            '点击【确定】加载云端数据\n' +
+            '点击【取消】强制保存（不推荐）'
+          );
+          
+          if (shouldLoad) {
+            console.log('✅ 用户选择加载云端数据');
+            await cloudLoad();
+            alert('✅ 已加载云端数据\n\n请检查数据是否正确，然后再保存。\n\n如果您的本地修改丢失，请重新编辑后保存。');
+            return; // 停止保存流程
+          } else {
+            // 用户选择强制保存，显示严重警告
+            const confirmForce = confirm(
+              '⚠️⚠️ 严重警告 ⚠️⚠️\n\n' +
+              '您选择强制保存，这将覆盖云端的最新数据！\n\n' +
+              '云端数据包含：\n' +
+              '- 快照：' + cloudSnapshotLabel + '\n' +
+              '- 更新人：' + cloudUpdatedBy + '\n' +
+              '- 数据条数：' + (latestCloudSnapshot.payload?.rows?.length || 0) + '\n\n' +
+              '⚠️ 此操作可能导致数据丢失！\n\n' +
+              '您确定要继续吗？'
+            );
+            
+            if (!confirmForce) {
+              console.log('✅ 用户取消强制保存');
+              return; // 用户取消，停止保存
+            }
+            
+            console.warn('⚠️ 用户选择强制保存，可能覆盖云端数据');
+          }
+        }
+      } else if (cloudCheckError) {
+        console.warn('⚠️ 检查云端更新失败:', cloudCheckError);
+        // 查询失败时，允许保存但显示警告
+        const shouldContinue = confirm(
+          '⚠️ 无法检查云端更新状态\n\n' +
+          '可能原因：网络问题或权限问题\n\n' +
+          '如果继续保存，可能会覆盖云端数据。\n\n' +
+          '是否继续保存？'
+        );
+        if (!shouldContinue) {
+          return;
+        }
+      }
+    } else {
+      // 没有本地版本记录（首次使用或清除过数据）
+      console.log('ℹ️ 没有本地快照版本记录，允许保存');
+      // 可以显示一个提示，但不阻止保存
+    }
+
     // ✅ 获取最新的快照（用于数据比较）- 查询所有快照，按时间排序
     console.log('🔍 开始检查数据改动...', { 
       authUid,
@@ -1855,6 +1942,16 @@ async function cloudSave() {
     }
 
     console.log('✅ 默认快照保存成功');
+    
+    // ✅ 新增：保存后更新本地快照版本记录
+    const savedTime = new Date(now).getTime();
+    localStorage.setItem('local_snapshot_updated_at', savedTime.toString());
+    localStorage.setItem('local_snapshot_key', SUPABASE_DEFAULT_KEY);
+    console.log('✅ 已更新本地快照版本记录:', {
+      key: SUPABASE_DEFAULT_KEY,
+      timestamp: savedTime,
+      time: new Date(savedTime).toLocaleString()
+    });
 
     const histKey = `snap_${now}`;
     const { error: historyInsertError } = await supabase.from(SUPABASE_TABLE).insert({
@@ -2006,6 +2103,18 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   saveCats(cats);
   console.log('💾 分类数据已保存:', cats);
   saveView({ ...DEFAULT_VIEW, ...view });
+
+  // ✅ 新增：记录加载的快照版本信息（用于冲突检测）
+  if (data && data.updated_at) {
+    const snapshotTime = new Date(data.updated_at).getTime();
+    localStorage.setItem('local_snapshot_updated_at', snapshotTime.toString());
+    localStorage.setItem('local_snapshot_key', key);
+    console.log('✅ 已记录本地快照版本:', {
+      key: key,
+      updated_at: data.updated_at,
+      timestamp: snapshotTime
+    });
+  }
 
   await refreshFilters();
   applyView(readView());

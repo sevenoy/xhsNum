@@ -2043,19 +2043,19 @@ async function renderCloudHistory(maxCount = 1) {
   const currentUserId = await getCurrentUserId();
   
   try {
-    // ✅ 改进：查询所有可访问的快照（包括授权的快照）
-    // RLS策略会自动过滤出有权限的快照
-    // ✅ 只查询最新的一条快照
+    // ✅ 修复：先查询当前用户的快照，然后取最新的一条
+    // 查询当前用户拥有的快照，按时间排序，只取最新的一条
   const { data, error } = await supabase
     .from(SUPABASE_TABLE)
       .select("key,payload,updated_at,owner_id")
+    .eq("owner_id", currentUserId) // ✅ 先过滤出当前用户的快照
     .order("updated_at", { ascending: false })
       .limit(1); // ✅ 只查询最新的一条快照
     
   if (error) {
       console.error('❌ 加载历史失败:', error);
     panel.innerHTML =
-        `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败: ${escapeHtml(error.message)}</div>`;
+      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败: ${escapeHtml(error.message)}</div>`;
     return;
   }
     
@@ -2065,31 +2065,30 @@ async function renderCloudHistory(maxCount = 1) {
     return;
   }
     
-    // ✅ 获取所有快照所有者的用户信息
-    const ownerIds = [...new Set(data.map(s => s.owner_id).filter(Boolean))];
+    // ✅ 获取快照所有者的用户信息
+    const row = data[0];
+    const ownerId = row.owner_id;
     let ownerMap = {};
     
-    if (ownerIds.length > 0) {
+    if (ownerId) {
       const { data: ownerProfiles } = await supabase
         .from('user_profiles')
         .select('user_id, username')
-        .in('user_id', ownerIds);
+        .eq('user_id', ownerId)
+        .maybeSingle();
       
       if (ownerProfiles) {
-        ownerProfiles.forEach(profile => {
-          ownerMap[profile.user_id] = profile.username;
-        });
+        ownerMap[ownerId] = ownerProfiles.username;
       }
     }
     
-    // ✅ 只显示我的快照，不显示授权快照
-    // ✅ 只显示最新的一条快照
-    const mySnapshots = data.filter(s => s.owner_id === currentUserId).slice(0, 1);
+    // ✅ 只显示最新的一条快照（已经是当前用户的了）
+    const mySnapshots = data;
     
     let html = '';
     
     // 显示我的快照（只显示最新的一条）
-    if (mySnapshots.length > 0) {
+    if (mySnapshots && mySnapshots.length > 0) {
       const row = mySnapshots[0];
       const name = (row.payload?.snapshot_label || row.key).trim();
       const t = fmtTime(row.updated_at);

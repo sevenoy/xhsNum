@@ -3485,6 +3485,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // ✅ 初始化状态信息栏
   updateStatusInfoBar();
+  
+  // ✅ 启动定期版本检查定时器
+  startStatusBarVersionCheck();
 });
 
 /* =========================
@@ -3509,13 +3512,16 @@ async function updateStatusInfoBar() {
     // 3. 检查云端版本
     let cloudVersionStatus = '检查中...';
     try {
-      const cacheBuster = Date.now() + '_' + Math.random() + '_' + Math.random();
-      const swResponse = await fetch('./sw.js?v=' + currentVersion + '&t=' + cacheBuster + '&nocache=' + Math.random() + '&force=' + Math.random(), {
-        cache: 'no-store',
+      // ✅ 强制绕过所有缓存：使用时间戳和随机数组合
+      const cacheBuster = Date.now() + '_' + Math.random() + '_' + Math.random() + '_' + performance.now();
+      const swResponse = await fetch('./sw.js?v=' + currentVersion + '&t=' + cacheBuster + '&nocache=' + Math.random() + '&force=' + Math.random() + '&_=' + Date.now(), {
+        cache: 'reload', // ✅ 使用 reload 模式强制重新获取
+        mode: 'cors', // ✅ 明确指定 CORS 模式
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
           'Pragma': 'no-cache',
-          'Expires': '0'
+          'Expires': '0',
+          'X-Requested-With': 'XMLHttpRequest' // ✅ 某些服务器可能根据此 header 禁用缓存
         }
       });
       
@@ -3582,3 +3588,64 @@ async function updateStatusInfoBar() {
     statusBar.style.textAlign = 'center';
   }
 }
+
+// ✅ 定期检查版本更新（每2分钟检查一次）
+let statusBarCheckInterval = null;
+
+function startStatusBarVersionCheck() {
+  // 如果已经有定时器在运行，先清除
+  if (statusBarCheckInterval) {
+    clearInterval(statusBarCheckInterval);
+  }
+  
+  // 每2分钟检查一次版本
+  statusBarCheckInterval = setInterval(() => {
+    console.log('⏰ 定期检查版本更新（每2分钟）');
+    updateStatusInfoBar();
+  }, 2 * 60 * 1000); // 2分钟 = 120000毫秒
+  
+  console.log('✅ 已启动状态栏版本检查定时器（每2分钟）');
+}
+
+function stopStatusBarVersionCheck() {
+  if (statusBarCheckInterval) {
+    clearInterval(statusBarCheckInterval);
+    statusBarCheckInterval = null;
+    console.log('⏸️ 已停止状态栏版本检查定时器');
+  }
+}
+
+// ✅ 页面可见性变化时检查版本
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    // 页面变为可见时，立即检查版本并重启定时器
+    console.log('👁️ 页面可见，检查版本更新');
+    updateStatusInfoBar();
+    startStatusBarVersionCheck();
+  } else {
+    // 页面隐藏时停止定时器以节省资源
+    stopStatusBarVersionCheck();
+  }
+});
+
+// ✅ 窗口获得焦点时检查版本
+window.addEventListener('focus', () => {
+  console.log('🔍 窗口获得焦点，检查版本更新');
+  updateStatusInfoBar();
+  startStatusBarVersionCheck();
+});
+
+// ✅ 窗口失去焦点时停止定时器
+window.addEventListener('blur', () => {
+  stopStatusBarVersionCheck();
+});
+
+// ✅ 页面卸载时清理定时器
+window.addEventListener('beforeunload', () => {
+  stopStatusBarVersionCheck();
+});
+
+// ✅ 页面隐藏时清理定时器（移动端）
+document.addEventListener('pagehide', () => {
+  stopStatusBarVersionCheck();
+});

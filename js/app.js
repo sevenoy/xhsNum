@@ -3543,8 +3543,24 @@ async function updateStatusInfoBar() {
     
     // 更新状态栏内容
     statusBar.textContent = `数据总数：${dataCount} 条 | 当前版本：${currentVersion} | ${cloudVersionStatus}`;
+    
+    // ✅ 强制设置内联样式，确保在安卓设备上正确显示
+    statusBar.style.color = '#007aff';
+    statusBar.style.fontSize = '12px';
+    statusBar.style.fontWeight = 'normal';
+    
+    // ✅ 移动端特定样式
+    if (window.innerWidth <= 768) {
+      statusBar.style.fontSize = '12px';
+      statusBar.style.color = '#007aff';
+      statusBar.style.fontWeight = 'normal';
+    }
   } catch (err) {
     console.error('❌ 更新状态信息栏失败:', err);
     statusBar.textContent = '状态信息加载失败';
+    // ✅ 即使出错也设置样式
+    statusBar.style.color = '#007aff';
+    statusBar.style.fontSize = '12px';
+    statusBar.style.fontWeight = 'normal';
   }
 }

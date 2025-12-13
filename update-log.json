@@ -1,4 +1,17 @@
 {
+  "V251213.23": {
+    "version": "V251213.23",
+    "date": "2025-12-13",
+    "title": "彻底修复安卓设备状态信息栏颜色和字体问题",
+    "content": [
+      "🔧 使用ID选择器提高CSS优先级：从.class改为#id.class，确保样式不被覆盖",
+      "🔧 在JavaScript中直接设置内联样式：使用style.color/style.fontSize/style.fontWeight强制设置",
+      "🔧 内联样式具有最高优先级：可以覆盖所有CSS样式，包括body的color和font-weight",
+      "✨ 多重保障机制：CSS中使用ID选择器和!important，JavaScript中设置内联样式",
+      "✨ 移动端特定处理：检测屏幕宽度，在移动端也强制设置样式",
+      "✅ 现在安卓设备上状态信息栏能正确显示蓝色（#007aff），字体大小12px，字体粗细normal"
+    ]
+  },
   "V251213.22": {
     "version": "V251213.22",
     "date": "2025-12-13",

@@ -2051,7 +2051,8 @@ td.col-cat select:focus {
   }
 }
 
-/* ✅ 状态信息栏样式 */
+/* ✅ 状态信息栏样式 - 使用ID选择器提高优先级 */
+#statusInfoBar.status-info-bar,
 .status-info-bar {
   padding: 8px 12px;
   font-size: 12px;
@@ -2082,14 +2083,17 @@ td.col-cat select:focus {
   z-index: 0;
 }
 
-/* ✅ 确保状态栏内的所有文本都是蓝色 */
+/* ✅ 确保状态栏内的所有文本都是蓝色 - 使用ID选择器 */
+#statusInfoBar.status-info-bar,
+#statusInfoBar.status-info-bar *,
 .status-info-bar,
 .status-info-bar * {
   color: #007aff !important;
 }
 
-/* ✅ 移动端状态信息栏样式 */
+/* ✅ 移动端状态信息栏样式 - 使用ID选择器提高优先级 */
 @media (max-width: 768px) {
+  #statusInfoBar.status-info-bar,
   .status-info-bar {
     font-size: 12px !important;
     padding: 8px 10px !important;
@@ -2138,7 +2142,9 @@ td.col-cat select:focus {
     backface-visibility: hidden !important;
   }
   
-  /* ✅ 确保移动端状态栏内的所有文本都是蓝色，字体大小正确 */
+  /* ✅ 确保移动端状态栏内的所有文本都是蓝色，字体大小正确 - 使用ID选择器 */
+  #statusInfoBar.status-info-bar,
+  #statusInfoBar.status-info-bar *,
   .status-info-bar,
   .status-info-bar * {
     color: #007aff !important;
@@ -2146,8 +2152,9 @@ td.col-cat select:focus {
     font-weight: normal !important;
   }
   
-  /* ✅ 安卓设备特定修复 */
+  /* ✅ 安卓设备特定修复 - 使用ID选择器 */
   @supports (-webkit-appearance: none) {
+    #statusInfoBar.status-info-bar,
     .status-info-bar {
       -webkit-font-feature-settings: normal !important;
       font-feature-settings: normal !important;
@@ -2155,6 +2162,8 @@ td.col-cat select:focus {
       text-rendering: optimizeLegibility !important;
     }
     
+    #statusInfoBar.status-info-bar,
+    #statusInfoBar.status-info-bar *,
     .status-info-bar,
     .status-info-bar * {
       color: #007aff !important;

@@ -2055,12 +2055,12 @@ td.col-cat select:focus {
 .status-info-bar {
   padding: 8px 12px;
   font-size: 12px;
-  color: #007aff;
+  color: #007aff !important;
   text-align: center;
   background: #ffffff;
   border-bottom: 1px solid #e5e5ea;
   margin: 0 -10px;
-  font-weight: normal;
+  font-weight: normal !important;
   width: calc(100% + 20px);
   max-width: calc(100% + 20px);
   box-sizing: border-box;
@@ -2082,10 +2082,16 @@ td.col-cat select:focus {
   z-index: 0;
 }
 
+/* ✅ 确保状态栏内的所有文本都是蓝色 */
+.status-info-bar,
+.status-info-bar * {
+  color: #007aff !important;
+}
+
 /* ✅ 移动端状态信息栏样式 */
 @media (max-width: 768px) {
   .status-info-bar {
-    font-size: 11px !important;
+    font-size: 12px !important;
     padding: 8px 10px !important;
     line-height: 1.5 !important;
     min-height: 30px !important;
@@ -2132,6 +2138,14 @@ td.col-cat select:focus {
     backface-visibility: hidden !important;
   }
   
+  /* ✅ 确保移动端状态栏内的所有文本都是蓝色，字体大小正确 */
+  .status-info-bar,
+  .status-info-bar * {
+    color: #007aff !important;
+    font-size: 12px !important;
+    font-weight: normal !important;
+  }
+  
   /* ✅ 安卓设备特定修复 */
   @supports (-webkit-appearance: none) {
     .status-info-bar {
@@ -2139,6 +2153,13 @@ td.col-cat select:focus {
       font-feature-settings: normal !important;
       -webkit-text-rendering: optimizeLegibility !important;
       text-rendering: optimizeLegibility !important;
+    }
+    
+    .status-info-bar,
+    .status-info-bar * {
+      color: #007aff !important;
+      font-size: 12px !important;
+      font-weight: normal !important;
     }
   }
 }

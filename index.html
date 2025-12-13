@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.39';
+    const APP_VERSION = 'V251213.40';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -564,28 +564,62 @@
             // ✅ 改进：检查多个状态，包括 installed 和 activating
             if (newWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
-                // 有旧版本在运行，新版本已安装，提示更新
-                console.log('✅ 新版本已安装，等待激活');
+                // 有旧版本在运行，新版本已安装，立即执行自动更新
+                console.log('✅ 新版本已安装，立即执行自动更新');
                 // ✅ 兼容旧版本号格式
                 const lastShown = localStorage.getItem('update_notification_shown');
                 if (lastShown && !lastShown.startsWith('V')) {
                   console.log('🔄 清除旧格式版本号记录:', lastShown);
                   localStorage.removeItem('update_notification_shown');
                 }
-                // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
-                setTimeout(() => {
-                  showUpdateNotification();
-                }, 100);
+                
+                // ✅ 强制清除已显示记录
+                localStorage.removeItem('update_notification_shown');
+                localStorage.removeItem('update_notification_time');
+                
+                // ✅ 显示Toast提示
+                showUpdateToast('发现新版本，正在自动更新...');
+                
+                // ✅ 延迟一下确保状态稳定，然后执行自动更新
+                setTimeout(async () => {
+                  if (reg.waiting) {
+                    try {
+                      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                      console.log('✅ 已通知 Service Worker 跳过等待');
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                      
+                      // 清除所有缓存
+                      try {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        console.log('✅ 已清除所有缓存');
+                      } catch (err) {
+                        console.warn('⚠️ 清除缓存失败:', err);
+                      }
+                      
+                      // 设置刷新标志
+                      sessionStorage.setItem('sw_auto_refresh', 'true');
+                      sessionStorage.setItem('sw_refresh_time', Date.now().toString());
+                      
+                      // 立即刷新页面
+                      console.log('🔄 立即刷新页面以应用新版本');
+                      window.location.reload(true);
+                    } catch (updateErr) {
+                      console.error('❌ 自动更新失败:', updateErr);
+                      showUpdateNotification();
+                    }
+                  }
+                }, 200);
               } else {
                 // 首次安装，直接激活
                 console.log('✅ 首次安装 Service Worker');
               }
             } else if (newWorker.state === 'activating') {
-              // ✅ 如果直接进入 activating 状态（由于 skipWaiting），也触发更新
+              // ✅ 如果直接进入 activating 状态（由于 skipWaiting），等待完成
               if (navigator.serviceWorker.controller) {
                 console.log('✅ 新版本正在激活');
                 // 延迟一下，确保状态稳定
-                setTimeout(() => {
+                setTimeout(async () => {
                   if (reg.waiting || reg.installing) {
                     // ✅ 兼容旧版本号格式
                     const lastShown = localStorage.getItem('update_notification_shown');
@@ -593,12 +627,43 @@
                       console.log('🔄 清除旧格式版本号记录:', lastShown);
                       localStorage.removeItem('update_notification_shown');
                     }
-                    // ✅ 延迟一下，确保状态稳定
-                    setTimeout(() => {
-                      showUpdateNotification();
-                    }, 200);
+                    
+                    // ✅ 强制清除已显示记录
+                    localStorage.removeItem('update_notification_shown');
+                    localStorage.removeItem('update_notification_time');
+                    
+                    // ✅ 显示Toast提示
+                    showUpdateToast('发现新版本，正在自动更新...');
+                    
+                    // ✅ 执行自动更新
+                    if (reg.waiting) {
+                      try {
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                        
+                        // 清除缓存
+                        try {
+                          const cacheNames = await caches.keys();
+                          await Promise.all(cacheNames.map(name => caches.delete(name)));
+                          console.log('✅ 已清除所有缓存');
+                        } catch (err) {
+                          console.warn('⚠️ 清除缓存失败:', err);
+                        }
+                        
+                        // 设置刷新标志
+                        sessionStorage.setItem('sw_auto_refresh', 'true');
+                        sessionStorage.setItem('sw_refresh_time', Date.now().toString());
+                        
+                        // 立即刷新
+                        console.log('🔄 立即刷新页面以应用新版本');
+                        window.location.reload(true);
+                      } catch (updateErr) {
+                        console.error('❌ 自动更新失败:', updateErr);
+                        showUpdateNotification();
+                      }
+                    }
                   }
-                }, 100);
+                }, 200);
               }
             } else if (newWorker.state === 'activated') {
               // ✅ 如果新版本已激活，检查是否是手动刷新（用户点击确定按钮）
@@ -616,8 +681,7 @@
             }
           });
           
-          // ✅ 注意：不在这里自动刷新，等待用户点击确定按钮
-          // 如果新 Worker 直接激活了（skipWaiting 导致），会在全局 controllerchange 监听器中处理
+          // ✅ 注意：已改为自动更新，无需等待用户点击确定按钮
         });
 
         // ✅ 定期检查更新（每5分钟）
@@ -687,40 +751,112 @@
           // ✅ 延迟检查，确保状态已更新（增加延迟时间，确保不同设备都能检测到）
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          // ✅ 检查是否有等待中的新版本
+          // ✅ 检查是否有等待中的新版本 - 如果存在，直接执行自动更新
           if (reg.waiting) {
-            console.log('🔄 发现等待中的新版本');
+            console.log('🔄 发现等待中的 Service Worker，立即执行自动更新');
             // ✅ 兼容旧版本号格式
             const lastShown = localStorage.getItem('update_notification_shown');
             if (lastShown && !lastShown.startsWith('V')) {
               console.log('🔄 清除旧格式版本号记录:', lastShown);
               localStorage.removeItem('update_notification_shown');
             }
-            // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
-            setTimeout(() => {
+            
+            // ✅ 强制清除已显示记录
+            localStorage.removeItem('update_notification_shown');
+            localStorage.removeItem('update_notification_time');
+            
+            // ✅ 显示Toast提示
+            showUpdateToast('发现新版本，正在自动更新...');
+            
+            // ✅ 立即执行自动更新流程
+            try {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              console.log('✅ 已通知 Service Worker 跳过等待');
+              await new Promise(resolve => setTimeout(resolve, 200));
+              
+              // 清除所有缓存
+              try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log('✅ 已清除所有缓存');
+              } catch (err) {
+                console.warn('⚠️ 清除缓存失败:', err);
+              }
+              
+              // 设置刷新标志
+              sessionStorage.setItem('sw_auto_refresh', 'true');
+              sessionStorage.setItem('sw_refresh_time', Date.now().toString());
+              
+              // 立即刷新页面
+              console.log('🔄 立即刷新页面以应用新版本');
+              window.location.reload(true);
+              return;
+            } catch (updateErr) {
+              console.error('❌ 自动更新失败:', updateErr);
+              // 如果自动更新失败，显示更新对话框让用户手动更新
               showUpdateNotification();
-            }, 200);
+            }
             return;
           }
           
-          // ✅ 检查是否有正在安装的新版本
+          // ✅ 检查是否有正在安装的新版本 - 等待安装完成后执行自动更新
           if (reg.installing) {
-            console.log('🔄 发现正在安装的新版本');
-            // 等待安装完成后再显示通知
-            reg.installing.addEventListener('statechange', () => {
-              if (reg.installing && reg.installing.state === 'installed' && navigator.serviceWorker.controller) {
-                // ✅ 兼容旧版本号格式
-                const lastShown = localStorage.getItem('update_notification_shown');
-                if (lastShown && !lastShown.startsWith('V')) {
-                  console.log('🔄 清除旧格式版本号记录:', lastShown);
-                  localStorage.removeItem('update_notification_shown');
+            console.log('🔄 发现正在安装的 Service Worker，等待安装完成后自动更新');
+            // 等待安装完成
+            await new Promise((resolve) => {
+              const timeout = setTimeout(resolve, 2000);
+              reg.installing.addEventListener('statechange', () => {
+                if (reg.installing && (reg.installing.state === 'installed' || reg.installing.state === 'activated')) {
+                  clearTimeout(timeout);
+                  resolve();
                 }
-                // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
-                setTimeout(() => {
-                  showUpdateNotification();
-                }, 200);
-              }
+              });
             });
+            
+            // 检查是否有 waiting 状态
+            if (reg.waiting) {
+              console.log('✅ 安装完成，立即执行自动更新');
+              // ✅ 兼容旧版本号格式
+              const lastShown = localStorage.getItem('update_notification_shown');
+              if (lastShown && !lastShown.startsWith('V')) {
+                console.log('🔄 清除旧格式版本号记录:', lastShown);
+                localStorage.removeItem('update_notification_shown');
+              }
+              
+              // ✅ 强制清除已显示记录
+              localStorage.removeItem('update_notification_shown');
+              localStorage.removeItem('update_notification_time');
+              
+              // ✅ 显示Toast提示
+              showUpdateToast('发现新版本，正在自动更新...');
+              
+              try {
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // 清除缓存
+                try {
+                  const cacheNames = await caches.keys();
+                  await Promise.all(cacheNames.map(name => caches.delete(name)));
+                  console.log('✅ 已清除所有缓存');
+                } catch (err) {
+                  console.warn('⚠️ 清除缓存失败:', err);
+                }
+                
+                // 设置刷新标志
+                sessionStorage.setItem('sw_auto_refresh', 'true');
+                sessionStorage.setItem('sw_refresh_time', Date.now().toString());
+                
+                // 立即刷新
+                console.log('🔄 立即刷新页面以应用新版本');
+                window.location.reload(true);
+                return;
+              } catch (updateErr) {
+                console.error('❌ 自动更新失败:', updateErr);
+                showUpdateNotification();
+              }
+            }
+            // 注意：即使安装完成但没有waiting状态，继续执行后续的版本检查逻辑
           }
           
           // ✅ 检查当前 Service Worker 的版本（通过 fetch 获取 sw.js 内容）
@@ -952,19 +1088,51 @@
                     showUpdateNotification();
                   }
                 } else {
-                  // ✅ 版本匹配，检查是否有等待中的更新
+                  // ✅ 版本匹配，但检查是否有等待中的 Service Worker（未激活）
                   if (reg.waiting) {
-                    console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
+                    console.log('🔄 发现等待中的 Service Worker（版本匹配但未激活），立即执行自动更新');
                     // ✅ 兼容旧版本号格式
                     const lastShown = localStorage.getItem('update_notification_shown');
                     if (lastShown && !lastShown.startsWith('V')) {
                       console.log('🔄 清除旧格式版本号记录:', lastShown);
                       localStorage.removeItem('update_notification_shown');
                     }
-                    // ✅ 延迟一下，确保状态稳定
-                    setTimeout(() => {
+                    
+                    // ✅ 强制清除已显示记录
+                    localStorage.removeItem('update_notification_shown');
+                    localStorage.removeItem('update_notification_time');
+                    
+                    // ✅ 显示Toast提示
+                    showUpdateToast('发现新版本，正在自动更新...');
+                    
+                    // ✅ 立即执行自动更新流程
+                    try {
+                      reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                      console.log('✅ 已通知 Service Worker 跳过等待');
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                      
+                      // 清除所有缓存
+                      try {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        console.log('✅ 已清除所有缓存');
+                      } catch (err) {
+                        console.warn('⚠️ 清除缓存失败:', err);
+                      }
+                      
+                      // 设置刷新标志
+                      sessionStorage.setItem('sw_auto_refresh', 'true');
+                      sessionStorage.setItem('sw_refresh_time', Date.now().toString());
+                      
+                      // 立即刷新页面
+                      console.log('🔄 立即刷新页面以应用新版本');
+                      window.location.reload(true);
+                      return;
+                    } catch (updateErr) {
+                      console.error('❌ 自动更新失败:', updateErr);
+                      // 如果自动更新失败，显示更新对话框让用户手动更新
                       showUpdateNotification();
-                    }, 200);
+                    }
                   }
                 }
               } else {

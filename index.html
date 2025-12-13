@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
 
-  <link rel="stylesheet" href="./css/style.css?v=20250115" />
+  <link rel="stylesheet" href="./css/style.css?v=V251213" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -335,7 +335,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.18';
+    const APP_VERSION = 'V251213.19';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -440,19 +440,10 @@
               if (navigator.serviceWorker.controller) {
                 // 有旧版本在运行，新版本已安装，提示更新
                 console.log('✅ 新版本已安装，等待激活');
-                // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                // ✅ 兼容旧版本号格式
                 const lastShown = localStorage.getItem('update_notification_shown');
                 if (lastShown && !lastShown.startsWith('V')) {
                   console.log('🔄 清除旧格式版本号记录:', lastShown);
-                  localStorage.removeItem('update_notification_shown');
-                }
-                // ✅ 关键修复：如果新版本已安装，清除已显示记录，确保显示提示
-                // 无论 lastShown 是什么，只要有新版本安装，就应该显示提示
-                if (lastShown) {
-                  console.log('🔄 检测到新版本已安装，清除已显示记录，强制显示提示', {
-                    lastShown: lastShown,
-                    currentVersion: APP_VERSION
-                  });
                   localStorage.removeItem('update_notification_shown');
                 }
                 // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
@@ -470,22 +461,13 @@
                 // 延迟一下，确保状态稳定
                 setTimeout(() => {
                   if (reg.waiting || reg.installing) {
-                    // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                    // ✅ 兼容旧版本号格式
                     const lastShown = localStorage.getItem('update_notification_shown');
                     if (lastShown && !lastShown.startsWith('V')) {
                       console.log('🔄 清除旧格式版本号记录:', lastShown);
                       localStorage.removeItem('update_notification_shown');
                     }
-                    // ✅ 关键修复：如果新版本正在激活，清除已显示记录，确保显示提示
-                    // 无论 lastShown 是什么，只要有新版本激活，就应该显示提示
-                    if (lastShown) {
-                      console.log('🔄 检测到新版本正在激活，清除已显示记录，强制显示提示', {
-                        lastShown: lastShown,
-                        currentVersion: APP_VERSION
-                      });
-                      localStorage.removeItem('update_notification_shown');
-                    }
-                    // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
+                    // ✅ 延迟一下，确保状态稳定
                     setTimeout(() => {
                       showUpdateNotification();
                     }, 200);
@@ -581,19 +563,10 @@
           // ✅ 检查是否有等待中的新版本
           if (reg.waiting) {
             console.log('🔄 发现等待中的新版本');
-            // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+            // ✅ 兼容旧版本号格式
             const lastShown = localStorage.getItem('update_notification_shown');
             if (lastShown && !lastShown.startsWith('V')) {
               console.log('🔄 清除旧格式版本号记录:', lastShown);
-              localStorage.removeItem('update_notification_shown');
-            }
-            // ✅ 关键修复：如果有等待中的新版本，清除已显示记录，确保显示提示
-            // 无论 lastShown 是什么，只要有等待中的新版本，就应该显示提示
-            if (lastShown) {
-              console.log('🔄 检测到等待中的新版本，清除已显示记录，强制显示提示', {
-                lastShown: lastShown,
-                currentVersion: APP_VERSION
-              });
               localStorage.removeItem('update_notification_shown');
             }
             // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
@@ -609,19 +582,10 @@
             // 等待安装完成后再显示通知
             reg.installing.addEventListener('statechange', () => {
               if (reg.installing && reg.installing.state === 'installed' && navigator.serviceWorker.controller) {
-                // ✅ 清除旧格式版本号记录（兼容性处理，针对 iPhone X）
+                // ✅ 兼容旧版本号格式
                 const lastShown = localStorage.getItem('update_notification_shown');
                 if (lastShown && !lastShown.startsWith('V')) {
                   console.log('🔄 清除旧格式版本号记录:', lastShown);
-                  localStorage.removeItem('update_notification_shown');
-                }
-                // ✅ 关键修复：如果新版本已安装，清除已显示记录，确保显示提示
-                // 无论 lastShown 是什么，只要有新版本安装，就应该显示提示
-                if (lastShown) {
-                  console.log('🔄 检测到新版本已安装，清除已显示记录，强制显示提示', {
-                    lastShown: lastShown,
-                    currentVersion: APP_VERSION
-                  });
                   localStorage.removeItem('update_notification_shown');
                 }
                 // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
@@ -666,69 +630,32 @@
                     currentVersion: APP_VERSION,
                     note: '服务器版本和当前页面版本不同，需要更新'
                   });
-                  // ✅ 清除旧格式的版本号记录（兼容性处理）
+                  // ✅ 兼容旧版本号格式
                   const lastShown = localStorage.getItem('update_notification_shown');
                   if (lastShown && !lastShown.startsWith('V')) {
                     console.log('🔄 清除旧格式版本号记录:', lastShown);
                     localStorage.removeItem('update_notification_shown');
                   }
-                  // ✅ 关键修复：如果服务器版本和当前版本不同，清除已显示记录，确保显示提示
-                  // 无论 lastShown 是什么，只要服务器版本不同，就应该显示提示
-                  if (lastShown) {
-                    console.log('🔄 服务器版本已更新，清除已显示记录，强制显示提示', {
-                      lastShown: lastShown,
-                      serverVersion: serverVersion,
-                      currentVersion: APP_VERSION
-                    });
+                  // ✅ 如果服务器版本和当前版本不同，清除已显示记录
+                  if (lastShown === APP_VERSION) {
+                    console.log('🔄 服务器版本已更新，清除已显示记录');
                     localStorage.removeItem('update_notification_shown');
                   }
                   showUpdateNotification();
                 } else {
-                  // ✅ 版本匹配，但也要检查是否有等待中的更新（针对某些设备）
+                  // ✅ 版本匹配，检查是否有等待中的更新
                   if (reg.waiting) {
                     console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
-                    // ✅ 清除旧格式版本号记录（兼容性处理）
+                    // ✅ 兼容旧版本号格式
                     const lastShown = localStorage.getItem('update_notification_shown');
                     if (lastShown && !lastShown.startsWith('V')) {
                       console.log('🔄 清除旧格式版本号记录:', lastShown);
                       localStorage.removeItem('update_notification_shown');
                     }
-                    // ✅ 关键修复：如果有等待中的新版本，清除已显示记录，确保显示提示
-                    // 无论 lastShown 是什么，只要有等待中的新版本，就应该显示提示
-                    if (lastShown) {
-                      console.log('🔄 检测到等待中的新版本，清除已显示记录，强制显示提示', {
-                        lastShown: lastShown,
-                        currentVersion: APP_VERSION
-                      });
-                      localStorage.removeItem('update_notification_shown');
-                    }
-                    // ✅ 延迟一下，确保状态稳定（针对 iPhone X）
+                    // ✅ 延迟一下，确保状态稳定
                     setTimeout(() => {
                       showUpdateNotification();
                     }, 200);
-                  } else {
-                    // ✅ 即使版本匹配，也检查当前 Service Worker 的版本
-                    // 某些设备可能 Service Worker 已经更新但页面版本号还没更新
-                    if (navigator.serviceWorker.controller) {
-                      try {
-                        // 尝试从当前 Service Worker 获取版本信息
-                        const controllerVersion = await navigator.serviceWorker.controller.scriptURL;
-                        console.log('🔍 当前 Service Worker URL:', controllerVersion);
-                        // ✅ 如果 URL 中包含不同的版本号，也可能需要更新
-                        // 检查 URL 中是否包含旧格式的版本号
-                        if (controllerVersion && !controllerVersion.includes(APP_VERSION)) {
-                          console.log('🔄 Service Worker URL 中版本号不匹配，可能需要更新');
-                          // ✅ 清除旧格式版本号记录
-                          const lastShown = localStorage.getItem('update_notification_shown');
-                          if (lastShown && !lastShown.startsWith('V')) {
-                            console.log('🔄 清除旧格式版本号记录:', lastShown);
-                            localStorage.removeItem('update_notification_shown');
-                          }
-                        }
-                      } catch (err) {
-                        console.warn('⚠️ 无法获取当前 Service Worker 信息:', err);
-                      }
-                    }
                   }
                 }
               } else {
@@ -749,21 +676,25 @@
       async function showUpdateNotification() {
         console.log('🔔 showUpdateNotification 被调用，当前版本:', APP_VERSION);
         
+        // ✅ 优先检查：如果已经有提示框在显示，直接返回（防止重复创建）
+        if (document.getElementById('updateOverlay')) {
+          console.log('⚠️ 更新提示框已显示，跳过重复显示');
+          return;
+        }
+        
         // ✅ 检查是否是手动刷新（用户点击确定按钮），如果是则不显示提示
-        // 注意：这个检查只在刷新后的短时间内有效，不应该阻止正常的新版本提示
         const isManualRefresh = sessionStorage.getItem('sw_manual_refresh') === 'true';
         const swRefreshTime = sessionStorage.getItem('sw_refresh_time');
         
-        // ✅ 关键修复：如果刷新标志存在且是最近10秒内设置的，说明刚刷新过，不显示提示
-        // 缩短时间窗口，只阻止刷新后立即弹出的提示，不影响正常的新版本检测
+        // ✅ 如果刷新标志存在且是最近30秒内设置的，说明刚刷新过，不显示提示
         if (isManualRefresh && swRefreshTime) {
           const refreshTime = parseInt(swRefreshTime, 10);
           const timeSinceRefresh = Date.now() - refreshTime;
-          if (timeSinceRefresh < 10000) { // 10秒内
+          if (timeSinceRefresh < 30000) { // 30秒内
             console.log('⚠️ 检测到最近刷新过（' + Math.floor(timeSinceRefresh / 1000) + '秒前），跳过显示更新提示');
             return;
           } else {
-            // 超过10秒，清除标志（说明刷新已完成，可以正常检测新版本了）
+            // 超过30秒，清除标志（说明刷新已完成，可以正常检测新版本了）
             console.log('✅ 刷新标志已过期，清除标志');
             sessionStorage.removeItem('sw_manual_refresh');
             sessionStorage.removeItem('sw_refreshing');
@@ -777,20 +708,11 @@
           return;
         }
         
-        // ✅ 检查是否已经有提示框在显示（优先检查，防止重复创建）
-        if (document.getElementById('updateOverlay')) {
-          console.log('⚠️ 更新提示框已显示，跳过重复显示');
-          return;
-        }
-        
-        // ✅ 关键修复：检查是否已经显示过通知
-        // 重要：这里检查的是"是否已显示过当前版本的提示"
-        // 如果版本号不同，说明有新版本，应该显示
+        // ✅ 关键修复：检查是否已经显示过当前版本的提示
         const lastShownVersion = localStorage.getItem('update_notification_shown');
         console.log('🔍 检查是否已显示过:', {
           lastShownVersion: lastShownVersion,
           currentVersion: APP_VERSION,
-          pendingUpdate: pendingUpdate,
           isEqual: lastShownVersion === APP_VERSION
         });
         
@@ -800,31 +722,14 @@
           localStorage.removeItem('update_notification_shown');
         }
         
-        // ✅ 关键修复：重新获取（可能已被清除）
+        // ✅ 关键修复：如果已显示过当前版本，直接跳过（不再检查 pendingUpdate）
         const currentLastShown = localStorage.getItem('update_notification_shown');
-        
-        // ✅ 关键修复：只有当已显示过当前版本且没有待处理的更新时，才跳过
-        // 如果版本号不同，说明有新版本，应该显示
-        // 如果版本号相同，但 pendingUpdate 为 true，说明正在处理，也应该显示
-        if (currentLastShown === APP_VERSION && pendingUpdate === false) {
+        if (currentLastShown === APP_VERSION) {
           console.log('✅ 当前版本已显示过更新提示，跳过');
           return;
         }
         
-        // ✅ 关键修复：如果版本号不同，说明有新版本，清除旧记录并显示
-        // 注意：showUpdateNotification 被调用时，已经确认有新版本了（在 checkForUpdate 中已检查）
-        // 所以这里不需要再次检查服务器版本，直接显示即可
-        if (currentLastShown && currentLastShown !== APP_VERSION) {
-          console.log('🔄 检测到版本号变化，清除旧记录:', {
-            oldVersion: currentLastShown,
-            newVersion: APP_VERSION,
-            note: '检测到新版本，清除旧记录并显示提示'
-          });
-          // 清除旧版本记录，确保显示新版本提示
-          localStorage.removeItem('update_notification_shown');
-        }
-        
-        // ✅ 标记有待处理的更新（在检查之后设置，防止重复）
+        // ✅ 标记有待处理的更新
         pendingUpdate = true;
         
         console.log('✅ 准备显示更新提示，版本:', APP_VERSION);
@@ -963,8 +868,11 @@
           
           // ✅ 防止重复点击
           if (btnUpdateConfirm.disabled) {
+            console.log('⚠️ 按钮已禁用，忽略重复点击');
             return;
           }
+          
+          console.log('✅ 用户点击确定按钮，开始更新流程');
           
           btnUpdateConfirm.disabled = true;
           btnUpdateConfirm.textContent = '更新中...';
@@ -972,32 +880,8 @@
           btnUpdateConfirm.style.pointerEvents = 'none';
 
           try {
-            // ✅ 立即移除提示框，防止重复显示
-            if (overlay && overlay.parentNode) {
-              overlay.remove();
-            }
-            
-            // ✅ 关键修复：先设置刷新标志，再记录已显示状态
-            // 这样可以防止刷新后立即检测到更新
-            const refreshTime = Date.now();
-            
-            // ✅ 标记正在刷新（使用 sessionStorage 持久化，防止刷新循环）
-            refreshing = true;
-            pendingUpdate = false;
-            
-            // ✅ 设置手动刷新标志，防止 controllerchange 触发自动刷新
-            // ✅ 关键修复：使用时间戳，确保刷新后能正确清除
-            sessionStorage.setItem('sw_manual_refresh', 'true');
-            sessionStorage.setItem('sw_refreshing', 'true');
-            sessionStorage.setItem('sw_refresh_time', refreshTime.toString());
-            
-            console.log('✅ 已设置刷新标志:', {
-              refreshTime: refreshTime,
-              time: new Date(refreshTime).toLocaleString()
-            });
-            
-            // ✅ 记录已显示通知（在刷新前记录，避免重复显示）
-            // ✅ 关键修复：确保在所有设备上都能正确保存
+            // ✅ 关键修复：先记录已显示状态，再移除提示框
+            // 这样可以确保状态已保存，即使后续出错也不会重复显示
             try {
               localStorage.setItem('update_notification_shown', APP_VERSION);
               // 验证是否成功保存
@@ -1009,14 +893,40 @@
                   expected: APP_VERSION,
                   actual: saved
                 });
+                // 如果保存失败，尝试再次保存
+                localStorage.setItem('update_notification_shown', APP_VERSION);
               }
             } catch (e) {
               console.error('❌ 保存更新提示状态时发生错误:', e);
             }
+            
+            // ✅ 立即移除提示框，防止重复显示
+            if (overlay && overlay.parentNode) {
+              overlay.remove();
+              console.log('✅ 已移除更新提示框');
+            }
+            
+            // ✅ 设置刷新标志，防止刷新后立即检测到更新
+            const refreshTime = Date.now();
+            
+            // ✅ 标记正在刷新（使用 sessionStorage 持久化，防止刷新循环）
+            refreshing = true;
+            pendingUpdate = false;
+            
+            // ✅ 设置手动刷新标志，防止 controllerchange 触发自动刷新
+            sessionStorage.setItem('sw_manual_refresh', 'true');
+            sessionStorage.setItem('sw_refreshing', 'true');
+            sessionStorage.setItem('sw_refresh_time', refreshTime.toString());
+            
+            console.log('✅ 已设置刷新标志:', {
+              refreshTime: refreshTime,
+              time: new Date(refreshTime).toLocaleString()
+            });
 
             // 通知 Service Worker 跳过等待
             if (registration && registration.waiting) {
               registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              console.log('✅ 已通知 Service Worker 跳过等待');
             }
 
             // ✅ 清除所有缓存（强制清除，确保获取最新代码）
@@ -1044,31 +954,19 @@
             }
 
             // ✅ 延迟一小段时间，确保标志已设置，然后刷新
-            // 使用 setTimeout 确保 sessionStorage 已写入
-            // ✅ 关键修复：增加延迟时间，确保所有标志都已正确设置
-            console.log('⏳ 准备刷新页面，延迟200ms确保标志已设置');
-            
-            // ✅ 关键修复：在刷新前，再次确认已保存状态
-            try {
-              const finalCheck = localStorage.getItem('update_notification_shown');
-              if (finalCheck !== APP_VERSION) {
-                console.warn('⚠️ 刷新前检查：已显示状态未正确保存，重新保存');
-                localStorage.setItem('update_notification_shown', APP_VERSION);
-              }
-            } catch (e) {
-              console.error('❌ 刷新前检查失败:', e);
-            }
+            console.log('⏳ 准备刷新页面，延迟300ms确保标志已设置');
             
             setTimeout(() => {
               console.log('🔄 开始刷新页面');
               // ✅ 强制刷新，不使用缓存
               window.location.reload(true);
-            }, 200);
+            }, 300);
           } catch (err) {
-            console.error('更新失败:', err);
+            console.error('❌ 更新失败:', err);
             alert('更新失败，请手动刷新页面');
             refreshing = false;
             pendingUpdate = false;
+            // 如果出错，确保提示框已移除
             if (overlay && overlay.parentNode) {
               overlay.remove();
             }

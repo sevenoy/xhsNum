@@ -454,7 +454,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251213.42';
+    const APP_VERSION = 'V251213.43';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）
@@ -588,14 +588,8 @@
                       console.log('✅ 已通知 Service Worker 跳过等待');
                       await new Promise(resolve => setTimeout(resolve, 200));
                       
-                      // 清除所有缓存
-                      try {
-                        const cacheNames = await caches.keys();
-                        await Promise.all(cacheNames.map(name => caches.delete(name)));
-                        console.log('✅ 已清除所有缓存');
-                      } catch (err) {
-                        console.warn('⚠️ 清除缓存失败:', err);
-                      }
+                      // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+                      console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
                       
                       // 设置刷新标志
                       sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -642,14 +636,8 @@
                         reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                         await new Promise(resolve => setTimeout(resolve, 200));
                         
-                        // 清除缓存
-                        try {
-                          const cacheNames = await caches.keys();
-                          await Promise.all(cacheNames.map(name => caches.delete(name)));
-                          console.log('✅ 已清除所有缓存');
-                        } catch (err) {
-                          console.warn('⚠️ 清除缓存失败:', err);
-                        }
+                        // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+                        console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
                         
                         // 设置刷新标志
                         sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -776,14 +764,8 @@
               console.log('✅ 已通知 Service Worker 跳过等待');
               await new Promise(resolve => setTimeout(resolve, 200));
               
-              // 清除所有缓存
-              try {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-                console.log('✅ 已清除所有缓存');
-              } catch (err) {
-                console.warn('⚠️ 清除缓存失败:', err);
-              }
+              // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+              console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
               
               // 设置刷新标志
               sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -837,14 +819,8 @@
                 reg.waiting.postMessage({ type: 'SKIP_WAITING' });
                 await new Promise(resolve => setTimeout(resolve, 200));
                 
-                // 清除缓存
-                try {
-                  const cacheNames = await caches.keys();
-                  await Promise.all(cacheNames.map(name => caches.delete(name)));
-                  console.log('✅ 已清除所有缓存');
-                } catch (err) {
-                  console.warn('⚠️ 清除缓存失败:', err);
-                }
+                // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+                console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
                 
                 // 设置刷新标志
                 sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -912,7 +888,7 @@
                     console.log('⚠️ showUpdateToast 函数未定义，跳过Toast提示');
                   }
                   
-                  // ✅ 简化自动更新流程：直接清除缓存并刷新页面（最可靠的方式）
+                  // ✅ 简化自动更新流程：激活Service Worker并刷新页面（让Service Worker自己处理缓存）
                   try {
                     // 1. 先尝试激活等待中的 Service Worker（如果存在）
                     if (reg.waiting) {
@@ -921,14 +897,9 @@
                       await new Promise(resolve => setTimeout(resolve, 100));
                     }
                     
-                    // 2. 清除所有缓存（确保获取最新代码）
-                    try {
-                      const cacheNames = await caches.keys();
-                      await Promise.all(cacheNames.map(name => caches.delete(name)));
-                      console.log('✅ 已清除所有缓存');
-                    } catch (cacheErr) {
-                      console.warn('⚠️ 清除缓存失败:', cacheErr);
-                    }
+                    // 2. ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+                    // 手动清除会导致更新时页面崩溃（app.js加载失败）
+                    console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
                     
                     // 3. 设置刷新标志
                     sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -977,14 +948,8 @@
                       console.log('✅ 已通知 Service Worker 跳过等待');
                       await new Promise(resolve => setTimeout(resolve, 200));
                       
-                      // 清除所有缓存
-                      try {
-                        const cacheNames = await caches.keys();
-                        await Promise.all(cacheNames.map(name => caches.delete(name)));
-                        console.log('✅ 已清除所有缓存');
-                      } catch (err) {
-                        console.warn('⚠️ 清除缓存失败:', err);
-                      }
+                      // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+                      console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
                       
                       // 设置刷新标志
                       sessionStorage.setItem('sw_auto_refresh', 'true');
@@ -1425,29 +1390,9 @@
               }
             }
 
-            // ✅ 清除所有缓存（强制清除，确保获取最新代码）
-            if (registration) {
-              try {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-                console.log('✅ 所有缓存已清除');
-              } catch (err) {
-                console.warn('⚠️ 清除缓存失败:', err);
-              }
-            }
-            
-            // ✅ 额外清除：强制清除所有可能的缓存（针对安卓设备）
-            try {
-              if ('caches' in window) {
-                const allCacheNames = await caches.keys();
-                for (const cacheName of allCacheNames) {
-                  await caches.delete(cacheName);
-                }
-                console.log('✅ 额外缓存清除完成');
-              }
-            } catch (err) {
-              console.warn('⚠️ 额外缓存清除失败:', err);
-            }
+            // ❌ 不再手动清除缓存！让Service Worker的activate事件负责清理旧缓存
+            // 手动清除会导致更新时页面崩溃（app.js加载失败）
+            console.log('✅ 跳过手动清除缓存，由Service Worker自动处理');
 
             // ✅ 延迟一小段时间，确保标志已设置，然后刷新
             console.log('⏳ 准备刷新页面，延迟300ms确保标志已设置');

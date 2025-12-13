@@ -4192,24 +4192,25 @@ async function initRealtimeVersionCheck() {
               console.log('⚠️ showUpdateToast 函数未定义，跳过Toast提示');
             }
 
-            // 3. 延迟一下，确保Toast显示出来，然后触发更新
+            // 3. 简化更新流程：直接激活Service Worker并刷新（不调用checkForUpdate，避免清除缓存）
             setTimeout(async () => {
-              // 调用全局更新检查 (index.html 中定义的逻辑)
-              if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
-                // 强制 Service Worker 检查更新 (这会下载新的 sw.js 并触发 updatefound)
-                try {
-                  console.log('🔄 [Realtime] 调用 checkForUpdate 触发更新');
-                  await window.checkForUpdate(window.serviceWorkerRegistration);
-                } catch (updateErr) {
-                  console.error('❌ [Realtime] 更新检查失败:', updateErr);
-                  // 备用方案：如果 SW 更新失败，直接刷新页面
-                  console.warn('⚠️ [Realtime] Service Worker 更新失败，执行强制刷新');
-                  const currentUrl = window.location.href.split('?')[0];
-                  window.location.href = currentUrl + '?t=' + Date.now();
+              try {
+                // 尝试激活等待中的 Service Worker（如果存在）
+                if (window.serviceWorkerRegistration && window.serviceWorkerRegistration.waiting) {
+                  console.log('🔄 [Realtime] 激活等待中的 Service Worker');
+                  window.serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                  await new Promise(resolve => setTimeout(resolve, 200));
                 }
-              } else {
-                // 备用方案：如果 SW 未就绪，直接刷新页面
-                console.warn('⚠️ [Realtime] Service Worker 未就绪，执行强制刷新');
+                
+                // ❌ 不再调用 checkForUpdate，避免其中的清除缓存逻辑导致数据消失
+                // 直接刷新页面，让Service Worker自动处理缓存
+                console.log('🔄 [Realtime] 立即刷新页面以应用新版本');
+                const currentUrl = window.location.href.split('?')[0];
+                window.location.href = currentUrl + '?t=' + Date.now();
+              } catch (updateErr) {
+                console.error('❌ [Realtime] 更新失败:', updateErr);
+                // 备用方案：直接刷新页面
+                console.warn('⚠️ [Realtime] 执行强制刷新');
                 const currentUrl = window.location.href.split('?')[0];
                 window.location.href = currentUrl + '?t=' + Date.now();
               }
@@ -4251,7 +4252,6 @@ function stopRealtimeVersionCheck() {
 // ✅ 页面卸载时清理实时监听
 window.addEventListener('beforeunload', () => {
   stopRealtimeVersionCheck();
-});
 });
 
 /* =========================

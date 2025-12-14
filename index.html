@@ -582,16 +582,21 @@
                   }
                   showUpdateNotification();
                 } else {
-                  // ✅ 版本匹配，但也要检查是否有等待中的更新（针对某些设备）
+                  // ✅ 版本匹配，检查是否有等待中的更新（但只在真正需要时显示）
                   if (reg.waiting) {
                     console.log('🔄 发现等待中的新版本（版本匹配但 Service Worker 未激活）');
-                    // ✅ 清除旧格式版本号记录（兼容性处理）
+                    // ✅ 只有在未显示过当前版本提示时才显示
                     const lastShown = localStorage.getItem('update_notification_shown');
-                    if (lastShown && !lastShown.startsWith('V')) {
-                      console.log('🔄 清除旧格式版本号记录:', lastShown);
-                      localStorage.removeItem('update_notification_shown');
+                    if (lastShown !== APP_VERSION) {
+                      // ✅ 清除旧格式版本号记录（兼容性处理）
+                      if (lastShown && !lastShown.startsWith('V')) {
+                        console.log('🔄 清除旧格式版本号记录:', lastShown);
+                        localStorage.removeItem('update_notification_shown');
+                      }
+                      showUpdateNotification();
+                    } else {
+                      console.log('✅ 当前版本已显示过更新提示，跳过（版本匹配但 Service Worker 等待中）');
                     }
-                    showUpdateNotification();
                   } else {
                     // ✅ 即使版本匹配，也检查当前 Service Worker 的版本
                     // 某些设备可能 Service Worker 已经更新但页面版本号还没更新

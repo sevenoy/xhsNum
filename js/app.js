@@ -67,8 +67,19 @@ async function initSupabase() {
   try {
     logger.log('⏳ 开始初始化 Supabase 连接...', {
       url: currentSupabaseUrl.substring(0, 30) + '...',
-      hasKey: !!currentSupabaseAnonKey
+      hasKey: !!currentSupabaseAnonKey,
+      urlLength: currentSupabaseUrl.length,
+      keyLength: currentSupabaseAnonKey.length
     });
+    
+    // ✅ 验证配置格式
+    if (!currentSupabaseUrl.startsWith('http')) {
+      throw new Error('Supabase URL 格式不正确，应以 http:// 或 https:// 开头');
+    }
+    if (currentSupabaseAnonKey.length < 100) {
+      logger.warn('⚠️ Supabase Anon Key 长度异常，可能配置不正确');
+    }
+    
     const { createClient } = await import(
       "https://esm.sh/@supabase/supabase-js@2"
     );
@@ -92,12 +103,23 @@ async function initSupabase() {
     });
     
     // ✅ 执行健康检查，确保连接正常
+    logger.log('⏳ 执行 Supabase 健康检查...');
     await cloudHealthCheck();
     logger.log('✅ Supabase 连接已建立');
   } catch (err) {
-    logger.error("❌ Supabase 初始化失败：", err);
+    logger.error("❌ Supabase 初始化失败：", {
+      error: err.message,
+      stack: err.stack,
+      url: currentSupabaseUrl ? '已设置' : '未设置',
+      key: currentSupabaseAnonKey ? '已设置' : '未设置'
+    });
     supabase = null;
     // ✅ 即使初始化失败，也继续执行，避免阻塞应用
+    // ✅ 更新 UI 显示连接失败
+    const dot = document.getElementById("cloudDot");
+    const text = document.getElementById("cloudText");
+    if (dot) dot.style.background = "#ff3b30";
+    if (text) text.textContent = "连接失败";
   }
 }
 
@@ -3896,14 +3918,23 @@ async function updateStatusInfoBar() {
               serverVersion: serverVersion
             });
             
-            // ✅ 关键修复：立即强制清除已显示记录，确保新版本提示能显示
-            logger.log('🔄 检测到新版本，强制清除已显示记录，确保新版本提示能显示', {
-              currentVersion: currentVersion,
-              serverVersion: serverVersion,
-              lastShown: localStorage.getItem('update_notification_shown')
-            });
-            localStorage.removeItem('update_notification_shown');
-            localStorage.removeItem('update_notification_time');
+            // ✅ 关键修复：只有在真正检测到新版本时才清除已显示记录
+            // 检查是否已经显示过新版本的提示
+            const lastShown = localStorage.getItem('update_notification_shown');
+            if (lastShown !== serverVersion) {
+              logger.log('🔄 检测到新版本，清除已显示记录，确保新版本提示能显示', {
+                currentVersion: currentVersion,
+                serverVersion: serverVersion,
+                lastShown: lastShown
+              });
+              localStorage.removeItem('update_notification_shown');
+              localStorage.removeItem('update_notification_time');
+            } else {
+              logger.log('✅ 新版本提示已显示过，跳过清除记录', {
+                serverVersion: serverVersion,
+                lastShown: lastShown
+              });
+            }
             
             // ✅ 关键修复：检测到新版本时，立即启动自动更新流程
             logger.log('🔄 状态栏检测到新版本，立即启动自动更新流程');
@@ -4373,9 +4404,20 @@ async function initRealtimeVersionCheck() {
 
         if (newVersion && newVersion !== currentVersion) {
           logger.log('🚀 版本不一致，触发全网更新流程');
-          // 清除已显示记录，确保提示框能弹出来
-          localStorage.removeItem('update_notification_shown');
-          localStorage.removeItem('update_notification_time');
+          // ✅ 只有在未显示过新版本提示时才清除记录
+          const lastShown = localStorage.getItem('update_notification_shown');
+          if (lastShown !== newVersion) {
+            logger.log('🔄 清除已显示记录，确保新版本提示能显示', {
+              newVersion: newVersion,
+              lastShown: lastShown
+            });
+            localStorage.removeItem('update_notification_shown');
+            localStorage.removeItem('update_notification_time');
+          } else {
+            logger.log('✅ 新版本提示已显示过，跳过清除记录', {
+              newVersion: newVersion
+            });
+          }
           
           if (typeof window.checkForUpdate === 'function' && window.serviceWorkerRegistration) {
             window.checkForUpdate(window.serviceWorkerRegistration);

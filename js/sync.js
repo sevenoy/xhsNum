@@ -23,23 +23,42 @@ export async function cloudHealthCheck() {
   const dot = $("#cloudDot");
   const text = $("#cloudText");
   if (!supabase) {
-    dot.style.background = "#999";
-    text.textContent = "未链接";
+    if (dot) dot.style.background = "#999";
+    if (text) text.textContent = "未链接";
+    console.warn('⚠️ Supabase 客户端未初始化');
     return;
   }
   try {
-    const { error } = await supabase
+    console.log('🔍 开始 Supabase 健康检查...', {
+      table: SUPABASE_TABLE,
+      key: SUPABASE_DEFAULT_KEY
+    });
+    
+    const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select("updated_at")
       .eq("key", SUPABASE_DEFAULT_KEY)
       .maybeSingle();
-    if (error) throw error;
-    dot.style.background = "#30d158";
-    text.textContent = "已链接";
+    
+    if (error) {
+      console.error('❌ Supabase 健康检查失败:', error);
+      throw error;
+    }
+    
+    console.log('✅ Supabase 健康检查成功', { data });
+    if (dot) dot.style.background = "#30d158";
+    if (text) text.textContent = "已链接";
   } catch (e) {
-    dot.style.background = "#999";
-    text.textContent = "未链接";
-    console.error(e);
+    console.error('❌ Supabase 连接错误:', e);
+    if (dot) dot.style.background = "#999";
+    if (text) {
+      // 显示更详细的错误信息
+      if (e.message) {
+        text.textContent = `未链接: ${e.message.substring(0, 20)}`;
+      } else {
+        text.textContent = "未链接";
+      }
+    }
   }
 }
 

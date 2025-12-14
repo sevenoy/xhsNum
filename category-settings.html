@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>分类设置 - XHSPHONE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="./icon/apple-touch-icon.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon/icon-192.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon/icon-512.png?v=20251107">
+  <link rel="icon" type="image/x-icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="shortcut icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="manifest" href="./site.webmanifest">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1990FF" />
+  <meta name="apple-mobile-web-app-title" content="分类设置" />
+  <style>
+    /* 基础样式 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      background: #fff;
+      font-size: 14px;
+      min-height: 100%;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    /* ✅ 标题已删除，保留样式以防其他地方使用 */
+    .header {
+      display: none; /* 隐藏标题区域 */
+    }
+    
+    /* 新增分类表单 */
+    .add-form {
+      background: #f9f9fb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      border: 1px solid #e5e5ea;
+    }
+    .add-form-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .add-form label {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .add-form input[type="text"] {
+      flex: 1;
+      min-width: 150px;
+      padding: 10px 14px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .add-form input[type="text"]:focus {
+      outline: none;
+      border-color: #1990FF;
+      box-shadow: 0 0 0 2px rgba(25, 144, 255, 0.1);
+    }
+    .color-preview {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #e5e5ea;
+    }
+    .add-form input[type="color"] {
+      width: 50px;
+      height: 40px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 2px;
+    }
+    .btn-add {
+      padding: 10px 24px;
+      background: #1990FF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .btn-add:hover {
+      background: #40a9ff;
+    }
+    .btn-add:active {
+      transform: scale(0.98);
+    }
+    
+    /* 分类列表 */
+    .category-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    /* 分类卡片：强制两行布局 */
+    .category-card {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      padding: 14px;
+      background: white;
+      border: 1px solid #e5e5ea;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s;
+    }
+    .category-card:hover {
+      border-color: #1990FF;
+      box-shadow: 0 4px 12px rgba(25, 144, 255, 0.1);
+    }
+    
+    /* 第一行：序号 | 分类名称 | 颜色 */
+    .card-row-1 {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      gap: 12px !important;
+      width: 100%;
+    }
+    
+    /* 序号：固定宽度 */
+    .card-index {
+      font-size: 14px;
+      color: #666;
+      font-weight: 600;
+      min-width: 32px;
+      width: 32px;
+      flex: 0 0 32px !important;
+      text-align: center;
+    }
+    
+    /* 分类名称输入框：占据剩余空间 */
+    .card-name {
+      flex: 1 1 auto !important;
+      min-width: 0;
+    }
+    .card-name input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e5e5ea;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #f9f9fb;
+      transition: all 0.2s;
+    }
+    .card-name input:focus {
+      outline: none;
+      border-color: #1990FF;
+      background: white;
+      box-shadow: 0 0 0 2px rgba(25, 144, 255, 0.1);
+    }
+    
+    /* 颜色选择器：固定在右侧 */
+    .card-color {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px !important;
+    }
+    .card-color-preview {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      border: 2px solid #e5e5ea;
+      pointer-events: none;
+    }
+    .card-color input[type="color"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    /* 第二行：上移 | 下移 | 删除 */
+    .card-row-2 {
+      display: flex !important;
+      flex-direction: row !important;
+      gap: 8px !important;
+      width: 100%;
+    }
+    
+    /* 按钮：平均分配宽度 */
+    .card-row-2 button {
+      flex: 1 1 0% !important;
+      min-width: 0;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .btn-move {
+      background: #f5f5f7;
+      border: 1px solid #e5e5ea;
+      color: #333;
+    }
+    .btn-move:hover:not(:disabled) {
+      background: #e5e5ea;
+      border-color: #1990FF;
+      color: #1990FF;
+    }
+    .btn-move:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-delete {
+      background: white;
+      border: 1px solid #ff4d4f;
+      color: #ff4d4f;
+    }
+    .btn-delete:hover {
+      background: #ff4d4f;
+      color: white;
+    }
+    
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    /* 分页 */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+      padding: 12px;
+    }
+    .pagination button {
+      padding: 8px 16px;
+      border: 1px solid #e5e5ea;
+      background: white;
+      color: #333;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .pagination button:hover:not(:disabled) {
+      background: #f5f5f7;
+      border-color: #1990FF;
+      color: #1990FF;
+    }
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .pagination .page-info {
+      padding: 8px 16px;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 16px;
+      }
+      .add-form {
+        padding: 14px;
+      }
+      .add-form-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      .add-form input[type="text"] {
+        min-width: 100%;
+      }
+      .add-form input[type="color"] {
+        width: 100%;
+        height: 44px;
+      }
+      .btn-add {
+        width: 100%;
+        padding: 12px;
+      }
+      .category-card {
+        padding: 12px;
+        gap: 8px;
+      }
+      .card-row-1 {
+        gap: 10px;
+      }
+      .card-index {
+        font-size: 13px;
+        min-width: 28px;
+        width: 28px;
+        flex: 0 0 28px !important;
+      }
+      .card-name input {
+        font-size: 13px;
+        padding: 7px 10px;
+      }
+      .card-color {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px !important;
+      }
+      .card-row-2 {
+        gap: 6px;
+      }
+      .card-row-2 button {
+        padding: 7px 10px;
+        font-size: 12px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .container {
+        padding: 12px;
+      }
+      .add-form {
+        padding: 12px;
+        margin-bottom: 16px;
+      }
+      .category-card {
+        padding: 10px;
+        gap: 6px;
+      }
+      .card-row-1 {
+        gap: 8px;
+      }
+      .card-index {
+        font-size: 12px;
+        min-width: 24px;
+        width: 24px;
+        flex: 0 0 24px !important;
+      }
+      .card-name input {
+        font-size: 12px;
+        padding: 6px 8px;
+      }
+      .card-color {
+        width: 32px;
+        height: 32px;
+        flex: 0 0 32px !important;
+      }
+      .card-row-2 {
+        gap: 4px;
+      }
+      .card-row-2 button {
+        padding: 6px 8px;
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 新增分类表单 -->
+    <div class="add-form">
+      <div class="add-form-row">
+        <label>
+          <span class="color-preview" id="newColorPreview" style="background: #007aff;"></span>
+          分类名称：
+        </label>
+        <input type="text" id="catNameInput" placeholder="例如：Olina用" />
+        <label>颜色：</label>
+        <input type="color" id="catColorInput" value="#007aff" />
+        <button class="btn-add" id="btnAddCategory">新增分类</button>
+      </div>
+    </div>
+
+    <!-- 分类列表 -->
+    <div class="category-list" id="categoryList">
+      <!-- 动态渲染 -->
+    </div>
+    
+    <!-- 分页 -->
+    <div class="pagination" id="pagination" style="display:none;">
+      <button id="btnPrevPage" disabled>上一页</button>
+      <span class="page-info" id="pageInfo">第 1 页，共 1 页</span>
+      <button id="btnNextPage" disabled>下一页</button>
+    </div>
+  </div>
+
+  <script type="module">
+    const CATS_KEY = "xhs_cats_v7";
+    const DEFAULT_CATS = [
+      { id: "enterprise", name: "企业号", color: "#007aff" },
+      { id: "olina", name: "Olina用", color: "#34c759" },
+      { id: "jasper", name: "嘉用", color: "#ff9f0a" },
+      { id: "usable", name: "可用", color: "#8e8e93" },
+    ];
+
+    function uid() {
+      return (Date.now().toString(36) + Math.random().toString(36).slice(2, 7)).toUpperCase();
+    }
+
+    function readCats() {
+      try {
+        const raw = localStorage.getItem(CATS_KEY);
+        if (!raw) {
+          const defaultCats = DEFAULT_CATS.slice();
+          saveCats(defaultCats);
+          return defaultCats;
+        }
+        const obj = JSON.parse(raw);
+        if (Array.isArray(obj) && obj.length) {
+          const fixed = obj.map(cat => {
+            if (!cat.id) return { ...cat, id: uid() };
+            return cat;
+          });
+          if (fixed.some((cat, idx) => cat.id !== obj[idx]?.id)) {
+            saveCats(fixed);
+          }
+          return fixed;
+        }
+        const defaultCats = DEFAULT_CATS.slice();
+        saveCats(defaultCats);
+        return defaultCats;
+      } catch (err) {
+        console.error('读取分类数据失败:', err);
+        const defaultCats = DEFAULT_CATS.slice();
+        saveCats(defaultCats);
+        return defaultCats;
+      }
+    }
+
+    function saveCats(cats) {
+      localStorage.setItem(CATS_KEY, JSON.stringify(cats));
+      if (window.parent && window.parent !== window) {
+        try {
+          window.parent.postMessage({ type: 'categoriesUpdated' }, '*');
+        } catch (e) {}
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    const ITEMS_PER_PAGE = 10;
+    let currentPage = 1;
+    let allCategories = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const colorInput = document.getElementById('catColorInput');
+      const colorPreview = document.getElementById('newColorPreview');
+      
+      colorInput.addEventListener('input', (e) => {
+        colorPreview.style.background = e.target.value;
+      });
+
+      document.getElementById('btnAddCategory').addEventListener('click', () => {
+        const name = document.getElementById('catNameInput').value.trim();
+        const color = colorInput.value;
+        
+        if (!name) {
+          alert('请填写分类名称');
+          return;
+        }
+        
+        const cats = readCats();
+        cats.push({ id: uid(), name, color });
+        saveCats(cats);
+        
+        document.getElementById('catNameInput').value = '';
+        colorInput.value = '#007aff';
+        colorPreview.style.background = '#007aff';
+        
+        renderCategories();
+      });
+
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'categoriesUpdated') {
+          renderCategories();
+        }
+      });
+
+      renderCategories();
+    });
+
+    function renderCategories() {
+      allCategories = readCats();
+      const totalPages = Math.max(1, Math.ceil(allCategories.length / ITEMS_PER_PAGE));
+      const list = document.getElementById('categoryList');
+      
+      if (allCategories.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📂</div>
+            <div>暂无分类数据</div>
+          </div>
+        `;
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+      
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      const endIndex = startIndex + ITEMS_PER_PAGE;
+      const pageCategories = allCategories.slice(startIndex, endIndex);
+      
+      // 渲染卡片式布局（所有屏幕尺寸都使用两行布局）
+      list.innerHTML = pageCategories.map((cat, idx) => {
+        const globalIndex = startIndex + idx;
+        return `
+          <div class="category-card" data-id="${cat.id}">
+            <div class="card-row-1">
+              <div class="card-index">${globalIndex + 1}</div>
+              <div class="card-name">
+                <input type="text" value="${escapeHtml(cat.name)}" 
+                       class="cat-name-input" 
+                       data-id="${cat.id}" />
+              </div>
+              <div class="card-color">
+                <div class="card-color-preview" style="background: ${escapeHtml(cat.color)};"></div>
+                <input type="color" value="${escapeHtml(cat.color)}" 
+                       class="cat-color-input" 
+                       data-id="${cat.id}" />
+              </div>
+            </div>
+            <div class="card-row-2">
+              <button class="btn-move" data-act="up" data-id="${cat.id}" 
+                      ${globalIndex === 0 ? 'disabled' : ''}>上移</button>
+              <button class="btn-move" data-act="down" data-id="${cat.id}" 
+                      ${globalIndex === allCategories.length - 1 ? 'disabled' : ''}>下移</button>
+              <button class="btn-delete" data-act="del" data-id="${cat.id}">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      bindEvents();
+      updatePagination(totalPages);
+    }
+
+    function bindEvents() {
+      // 分类名称编辑
+      document.querySelectorAll('.cat-name-input').forEach(input => {
+        input.addEventListener('blur', () => {
+          const id = input.getAttribute('data-id');
+          const newName = input.value.trim();
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx >= 0 && newName) {
+            cats[idx].name = newName;
+            saveCats(cats);
+            renderCategories();
+          }
+        });
+        
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+          }
+        });
+      });
+      
+      // 颜色编辑
+      document.querySelectorAll('.cat-color-input').forEach(input => {
+        input.addEventListener('change', () => {
+          const id = input.getAttribute('data-id');
+          const newColor = input.value;
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx >= 0) {
+            cats[idx].color = newColor;
+            saveCats(cats);
+            const card = input.closest('.category-card');
+            if (card) {
+              const preview = card.querySelector('.card-color-preview');
+              if (preview) preview.style.background = newColor;
+            }
+          }
+        });
+      });
+      
+      // 操作按钮
+      document.querySelectorAll('[data-act]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const act = btn.getAttribute('data-act');
+          const cats = readCats();
+          const idx = cats.findIndex(c => c.id === id);
+          if (idx < 0) return;
+          
+          if (act === 'up' && idx > 0) {
+            [cats[idx - 1], cats[idx]] = [cats[idx], cats[idx - 1]];
+            saveCats(cats);
+            renderCategories();
+          } else if (act === 'down' && idx < cats.length - 1) {
+            [cats[idx + 1], cats[idx]] = [cats[idx], cats[idx + 1]];
+            saveCats(cats);
+            renderCategories();
+          } else if (act === 'del') {
+            if (!confirm('确定删除该分类？')) return;
+            cats.splice(idx, 1);
+            saveCats(cats);
+            renderCategories();
+          }
+        });
+      });
+    }
+
+    function updatePagination(totalPages) {
+      if (totalPages <= 1) {
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('pagination').style.display = 'flex';
+      document.getElementById('pageInfo').textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+      document.getElementById('btnPrevPage').disabled = currentPage === 1;
+      document.getElementById('btnNextPage').disabled = currentPage === totalPages;
+      
+      document.getElementById('btnPrevPage').onclick = () => {
+        if (currentPage > 1) {
+          currentPage--;
+          renderCategories();
+        }
+      };
+      
+      document.getElementById('btnNextPage').onclick = () => {
+        if (currentPage < totalPages) {
+          currentPage++;
+          renderCategories();
+        }
+      };
+    }
+  </script>
+</body>
+</html>

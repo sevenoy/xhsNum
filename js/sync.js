@@ -36,7 +36,20 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     const savedTime = localStorage.getItem('last_sync_time');
     if (savedTime) lastSyncTimestamp = parseInt(savedTime);
     
-    // 必须倒序取最新一条
+    console.log('🔍 开始查询云端数据', { 
+      key, 
+      isSilent, 
+      currentLastSync: lastSyncTimestamp 
+    });
+    
+    // 必须倒序取最新一条（手动加载时强制从网络获取最新数据）
+    const queryOptions = {
+      eq: ['key', key],
+      order: { column: 'updated_at', ascending: false },
+      limit: 1
+    };
+    
+    // 如果是手动加载，添加时间戳参数强制从网络获取
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select('payload, updated_at, updated_by_name')
@@ -45,16 +58,28 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
       .limit(1)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ 查询云端数据失败:', error);
+      throw error;
+    }
     
     if (!data) {
-      if (!isSilent) console.log("云端无数据");
+      console.log('⚠️ 云端无数据');
+      if (!isSilent) alert('云端无数据');
       return; 
     }
     
     const row = data;
-
     const serverTime = new Date(row.updated_at).getTime();
+    
+    console.log('📊 查询结果:', {
+      serverTime,
+      lastSyncTimestamp,
+      serverTimeNewer: serverTime > lastSyncTimestamp,
+      updatedBy: row.updated_by_name,
+      rowsCount: (row.payload?.rows || []).length
+    });
+    
     // 如果是手动加载（非静默），总是加载，不检查时间戳
     // 只有自动同步时才检查时间戳
     if (isSilent && serverTime <= lastSyncTimestamp) {
@@ -64,6 +89,15 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
         diff: serverTime - lastSyncTimestamp 
       });
       return;
+    }
+    
+    // 手动加载时，即使时间戳相同也强制加载（确保获取最新数据）
+    if (!isSilent) {
+      console.log('📥 手动加载模式：强制加载云端数据', {
+        serverTime,
+        lastSyncTimestamp,
+        updatedBy: row.updated_by_name
+      });
     }
     
     console.log('📥 开始加载云端数据', { 
@@ -84,8 +118,26 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     });
     
     // 事务写入本地，防止写一半失败
+    console.log('📝 开始写入数据到本地数据库...', {
+      rowsCount: (payload.rows || []).length,
+      firstRow: payload.rows?.[0] ? {
+        phone: payload.rows[0].phone,
+        xhs_name: payload.rows[0].xhs_name
+      } : null
+    });
+    
     await overwriteAllRows(payload.rows || []);
-    console.log('✅ 数据已写入本地数据库');
+    
+    // 验证数据是否已写入
+    const verifyRows = await getAllRows();
+    console.log('✅ 数据已写入本地数据库', {
+      expectedCount: (payload.rows || []).length,
+      actualCount: verifyRows.length,
+      firstRow: verifyRows[0] ? {
+        phone: verifyRows[0].phone,
+        xhs_name: verifyRows[0].xhs_name
+      } : null
+    });
     
     // 静默更新配置
     if (payload.cats) {
@@ -136,6 +188,27 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     // 验证数据是否已加载
     const verifyRows = await getAllRows();
     console.log('✅ 验证：本地数据条数', verifyRows.length);
+    
+    // 再次验证：检查第一条数据是否已更新
+    if (verifyRows.length > 0 && payload.rows && payload.rows.length > 0) {
+      const firstLocalRow = verifyRows.find(r => r.phone === payload.rows[0].phone);
+      const firstCloudRow = payload.rows[0];
+      if (firstLocalRow && firstCloudRow) {
+        console.log('🔍 数据验证对比:', {
+          phone: firstLocalRow.phone,
+          localXhsName: firstLocalRow.xhs_name,
+          cloudXhsName: firstCloudRow.xhs_name,
+          match: firstLocalRow.xhs_name === firstCloudRow.xhs_name
+        });
+        
+        if (firstLocalRow.xhs_name !== firstCloudRow.xhs_name) {
+          console.warn('⚠️ 警告：数据可能未正确加载！', {
+            local: firstLocalRow.xhs_name,
+            cloud: firstCloudRow.xhs_name
+          });
+        }
+      }
+    }
     
     if (isSilent) {
       showToast(`🔄 已同步 ${row.updated_by_name || '其他设备'} 的修改`);
@@ -365,37 +438,41 @@ export async function cloudSave() {
           return;
         }
       } else {
-        // 数据内容不同，检查是否有冲突
+        // 数据内容不同，检查是否有冲突（基于服务器时间戳）
         console.log('⚠️ 数据内容不同，检查冲突', { cloudTime, lastSyncTimestamp, cloudTimeNewer: cloudTime > lastSyncTimestamp });
         if (cloudTime > lastSyncTimestamp) {
-          // 数据库被其他设备更新了，且内容不同，需要确认覆盖
-          const who = cloudRow.updated_by_name || '其他人';
-          console.log('⚠️ 检测到冲突，询问用户', { who });
-          const ok = confirm(`⚠️ 冲突警告\n\n"${who}" 刚刚更新了数据。\n\n继续保存将覆盖对方修改。\n\n【确定】覆盖\n【取消】先拉取最新`);
-          if (!ok) {
-            console.log('用户选择先拉取最新数据');
-            if (btn) {
-              btn.disabled = false;
-              btn.textContent = btn.dataset.cleanText || cleanText;
-            }
-            // 先拉取最新数据
-            try {
-              const loadFunc = window.cloudLoad || cloudLoad;
-              console.log('开始拉取最新数据...');
-              await loadFunc(SUPABASE_DEFAULT_KEY, false);
-              console.log('✅ 拉取最新数据完成');
-              // 拉取后刷新历史面板
-              const renderFunc = window.renderCloudHistory || renderCloudHistory;
-              await renderFunc();
-            } catch (loadErr) {
-              console.error('❌ 拉取最新数据失败:', loadErr);
-              alert('拉取最新数据失败: ' + (loadErr.message || loadErr));
-            }
-            // 拉取后不继续保存，让用户重新操作
-            return;
-          } else {
-            console.log('用户选择覆盖，继续保存');
+          // 云端数据更新（基于服务器时间戳），自动加载最新数据
+          const who = cloudRow.updated_by_name || '其他设备';
+          console.log('⚠️ 检测到云端有更新，自动加载最新数据', { who, cloudTime, lastSyncTimestamp });
+          
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = btn.dataset.cleanText || cleanText;
           }
+          
+          // 自动加载最新数据（LWW策略：总是使用最新的服务器时间戳）
+          try {
+            const loadFunc = window.cloudLoad || cloudLoad;
+            console.log('📥 自动加载云端最新数据（LWW策略）...');
+            
+            // 清除本地时间戳，强制加载最新数据
+            lastSyncTimestamp = 0;
+            localStorage.setItem('last_sync_time', '0');
+            
+            await loadFunc(SUPABASE_DEFAULT_KEY, false);
+            
+            console.log('✅ 已自动加载云端最新数据');
+            
+            // 提示用户已更新
+            alert(`✅ 已自动加载云端最新数据\n\n"${who}" 刚刚更新了数据，已自动同步到本地。\n\n请重新修改并保存。`);
+            
+          } catch (loadErr) {
+            console.error('❌ 自动加载最新数据失败:', loadErr);
+            alert('自动加载最新数据失败: ' + (loadErr.message || loadErr));
+          }
+          
+          // 加载后不继续保存，让用户重新操作
+          return;
         } else {
           console.log('✅ 数据有改动，且云端没有更新，可以正常保存');
         }
@@ -489,7 +566,22 @@ export async function initAutoSync() {
         });
 
         if (isLocalDirty()) {
-          showToast(`🔔 ${newRow.updated_by_name || '其他设备'} 更新了数据，请先保存或手动加载`);
+          // 本地有未保存修改，弹出提示要求用户更新
+          const who = newRow.updated_by_name || '其他设备';
+          const ok = confirm(`⚠️ 云端数据已更新\n\n"${who}" 刚刚更新了数据。\n\n点击【确定】自动加载最新数据（本地未保存的修改将被覆盖）\n\n点击【取消】稍后手动加载`);
+          if (ok) {
+            console.log('📥 用户确认加载最新数据');
+            // 清除本地时间戳，强制加载最新数据
+            lastSyncTimestamp = 0;
+            localStorage.setItem('last_sync_time', '0');
+            // 使用 window.cloudLoad 确保使用桥接的函数
+            const loadFunc = window.cloudLoad || cloudLoad;
+            await loadFunc(SUPABASE_DEFAULT_KEY, false);
+            console.log('✅ 自动刷新完成');
+          } else {
+            console.log('⏭️ 用户取消加载，稍后手动处理');
+            showToast(`🔔 ${who} 更新了数据，请稍后手动加载`);
+          }
           return;
         }
 

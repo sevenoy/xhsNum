@@ -9,6 +9,38 @@ import { SUPABASE_DEFAULT_KEY, SUPABASE_TABLE } from './config.js';
 let lastSyncTimestamp = Number(localStorage.getItem('last_sync_time') || '0');
 let isAutoSyncStarted = false;
 
+// 获取最后已知的快照名称（用于检测快照变化）
+function getLastSnapshotName() {
+  return localStorage.getItem('last_snapshot_name') || '';
+}
+
+// 保存最后已知的快照名称
+function saveLastSnapshotName(name) {
+  if (name) {
+    localStorage.setItem('last_snapshot_name', name);
+  }
+}
+
+// 生成快照名称（用户名+日期时间格式）
+function generateSnapshotName(userName, updatedAt) {
+  const formatDateTime = (ts) => {
+    try {
+      const d = new Date(ts);
+      const Y = d.getFullYear();
+      const M = String(d.getMonth() + 1).padStart(2, '0');
+      const D = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const m = String(d.getMinutes()).padStart(2, '0');
+      return `${Y}${M}${D}${h}${m}`;
+    } catch {
+      return '';
+    }
+  };
+  
+  const dateTimeStr = formatDateTime(updatedAt);
+  return `${userName} ${dateTimeStr}`;
+}
+
 /* 1. 加载云端数据 */
 export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = false) {
   // 兼容旧调用方式：如果第一个参数是 boolean，则视为 silent
@@ -152,11 +184,17 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     // 更新本地时间戳（只更新一次）
     lastSyncTimestamp = serverTime;
     localStorage.setItem('last_sync_time', String(serverTime));
-    console.log('✅ 已更新本地时间戳', { 
+    
+    // 更新最后已知的快照名称
+    const snapshotName = payload.snapshot_label || generateSnapshotName(row.updated_by_name || '未知用户', row.updated_at);
+    saveLastSnapshotName(snapshotName);
+    
+    console.log('✅ 已更新本地时间戳和快照名称', { 
       serverTime, 
       lastSyncTimestamp,
       rowsCount: (payload.rows || []).length,
-      updatedBy: row.updated_by_name
+      updatedBy: row.updated_by_name,
+      snapshotName
     });
 
     clearDirty();
@@ -506,6 +544,14 @@ export async function cloudSave() {
     const serverTime = new Date(saved.updated_at).getTime();
     lastSyncTimestamp = serverTime;
     localStorage.setItem('last_sync_time', String(serverTime));
+    
+    // 更新最后已知的快照名称（保存后，当前快照名称就是最新的）
+    const snapshotName = generateSnapshotName(userName, saved.updated_at);
+    saveLastSnapshotName(snapshotName);
+    console.log('✅ 已更新本地时间戳和快照名称', { 
+      serverTime, 
+      snapshotName 
+    });
 
     clearDirty();
     alert('✅ 保存成功');
@@ -540,7 +586,36 @@ export async function initAutoSync() {
 
   const savedTime = localStorage.getItem('last_sync_time');
   if (savedTime) lastSyncTimestamp = parseInt(savedTime);
-  console.log('📊 初始化时间戳:', { lastSyncTimestamp, savedTime });
+  
+  // 初始化时，如果没有保存的快照名称，尝试从云端获取
+  const lastSnapshotName = getLastSnapshotName();
+  console.log('📊 初始化时间戳和快照名称:', { 
+    lastSyncTimestamp, 
+    savedTime,
+    lastSnapshotName
+  });
+  
+  // 如果没有保存的快照名称，尝试从云端获取最新快照名称
+  if (!lastSnapshotName) {
+    try {
+      const { data } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('payload, updated_at, updated_by_name')
+        .eq('key', SUPABASE_DEFAULT_KEY)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (data && data.payload) {
+        const snapshotName = data.payload.snapshot_label || 
+          generateSnapshotName(data.updated_by_name || '未知用户', data.updated_at);
+        saveLastSnapshotName(snapshotName);
+        console.log('✅ 初始化：已从云端获取快照名称', { snapshotName });
+      }
+    } catch (err) {
+      console.warn('⚠️ 初始化时获取快照名称失败:', err);
+    }
+  }
 
   const channel = supabase
     .channel('smart-auto-sync')
@@ -572,38 +647,64 @@ export async function initAutoSync() {
         const currentLastSync = savedTime ? parseInt(savedTime) : 0;
         lastSyncTimestamp = currentLastSync;
         
-        console.log('📊 时间戳比较:', {
+        // 获取当前快照名称
+        const currentSnapshotName = getLastSnapshotName();
+        
+        // 生成新的快照名称（用于比较）
+        const newSnapshotName = newRow.payload?.snapshot_label || 
+          generateSnapshotName(newRow.updated_by_name || '未知用户', newRow.updated_at);
+        
+        console.log('📊 快照名称和时间戳比较:', {
           serverTime,
           lastSyncTimestamp,
           serverTimeNewer: serverTime > lastSyncTimestamp,
           diff: serverTime - lastSyncTimestamp,
-          updatedBy: newRow.updated_by_name
+          updatedBy: newRow.updated_by_name,
+          currentSnapshotName,
+          newSnapshotName,
+          snapshotNameChanged: currentSnapshotName !== newSnapshotName
         });
         
-        // 简单的时间戳判定：只更新比本地新的
-        if (serverTime <= lastSyncTimestamp) {
-          console.log('⏭️ 云端数据不比本地新，跳过自动同步', { 
+        // 关键检测：快照名称是否改变（这是检测新快照的主要方式）
+        const snapshotNameChanged = currentSnapshotName !== newSnapshotName;
+        
+        // 如果快照名称改变，说明有新快照，需要更新
+        if (!snapshotNameChanged && serverTime <= lastSyncTimestamp) {
+          console.log('⏭️ 快照名称未改变且时间戳不比本地新，跳过自动同步', { 
             serverTime, 
             lastSyncTimestamp, 
-            diff: serverTime - lastSyncTimestamp 
+            diff: serverTime - lastSyncTimestamp,
+            currentSnapshotName,
+            newSnapshotName
           });
           return;
         }
 
-        console.log('🔄 检测到云端更新，准备自动同步', { 
-          serverTime, 
-          lastSyncTimestamp, 
-          diff: serverTime - lastSyncTimestamp,
-          updatedBy: newRow.updated_by_name 
-        });
+        // 快照名称改变或时间戳更新，需要同步
+        if (snapshotNameChanged) {
+          console.log('🔄 检测到快照名称改变，说明有新快照！', { 
+            currentSnapshotName,
+            newSnapshotName,
+            updatedBy: newRow.updated_by_name
+          });
+        } else {
+          console.log('🔄 检测到云端更新（时间戳更新），准备自动同步', { 
+            serverTime, 
+            lastSyncTimestamp, 
+            diff: serverTime - lastSyncTimestamp,
+            updatedBy: newRow.updated_by_name 
+          });
+        }
 
+        // 检测到快照名称改变，弹出提示要求用户更新
+        const who = newRow.updated_by_name || '其他设备';
+        
         if (isLocalDirty()) {
           // 本地有未保存修改，弹出提示要求用户更新
-          const who = newRow.updated_by_name || '其他设备';
-          console.log('⚠️ 本地有未保存修改，弹出提示', { who });
-          const ok = confirm(`⚠️ 云端数据已更新\n\n"${who}" 刚刚更新了数据。\n\n点击【确定】自动加载最新数据（本地未保存的修改将被覆盖）\n\n点击【取消】稍后手动加载`);
+          console.log('⚠️ 本地有未保存修改，弹出提示', { who, snapshotNameChanged });
+          const ok = confirm(`⚠️ 检测到最新快照已更新\n\n"${who}" 刚刚保存了新快照。\n\n点击【确定】自动加载最新快照（本地未保存的修改将被覆盖）\n\n点击【取消】稍后手动加载`);
           if (ok) {
-            console.log('📥 用户确认加载最新数据');
+            console.log('📥 用户确认加载最新快照');
             // 清除本地时间戳，强制加载最新数据
             lastSyncTimestamp = 0;
             localStorage.setItem('last_sync_time', '0');
@@ -613,27 +714,35 @@ export async function initAutoSync() {
             console.log('✅ 自动刷新完成');
           } else {
             console.log('⏭️ 用户取消加载，稍后手动处理');
-            showToast(`🔔 ${who} 更新了数据，请稍后手动加载`);
+            showToast(`🔔 ${who} 更新了快照，请稍后手动加载`);
           }
           return;
         }
 
-        // 本地没有未保存修改，自动加载最新数据
-        console.log('🔄 本地无未保存修改，开始自动刷新...', { 
+        // 本地没有未保存修改，弹出提示并自动加载最新数据
+        console.log('🔄 本地无未保存修改，检测到快照更新，弹出提示...', { 
           serverTime, 
           lastSyncTimestamp, 
-          updatedBy: newRow.updated_by_name 
+          updatedBy: newRow.updated_by_name,
+          snapshotNameChanged
         });
         
-        // 使用 window.cloudLoad 确保使用桥接的函数
-        const loadFunc = window.cloudLoad || cloudLoad;
-        await loadFunc(SUPABASE_DEFAULT_KEY, true);
+        // 弹出提示，告知用户有新快照
+        const ok = confirm(`⚠️ 检测到最新快照已更新\n\n"${who}" 刚刚保存了新快照。\n\n点击【确定】自动加载最新快照\n\n点击【取消】稍后手动加载`);
         
-        // 显示提示，告知用户数据已自动更新
-        const who = newRow.updated_by_name || '其他设备';
-        showToast(`🔄 已自动同步 ${who} 的修改`);
-        
-        console.log('✅ 自动刷新完成');
+        if (ok) {
+          console.log('📥 用户确认加载最新快照');
+          // 清除本地时间戳，强制加载最新数据
+          lastSyncTimestamp = 0;
+          localStorage.setItem('last_sync_time', '0');
+          // 使用 window.cloudLoad 确保使用桥接的函数
+          const loadFunc = window.cloudLoad || cloudLoad;
+          await loadFunc(SUPABASE_DEFAULT_KEY, false);
+          console.log('✅ 自动刷新完成');
+        } else {
+          console.log('⏭️ 用户取消加载，稍后手动处理');
+          showToast(`🔔 ${who} 更新了快照，请稍后手动加载`);
+        }
       }
     )
     .subscribe((status) => {

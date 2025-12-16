@@ -520,26 +520,50 @@ export async function cloudSave() {
 
 /* 3. 自动同步监听 */
 export async function initAutoSync() {
-  if (isAutoSyncStarted) return;
-  if (!supabase) return;
+  if (isAutoSyncStarted) {
+    console.log('⏭️ 自动同步已启动，跳过重复初始化');
+    return;
+  }
+  if (!supabase) {
+    console.warn('⚠️ Supabase 未配置，无法启动自动同步');
+    return;
+  }
   
   const myUid = await getCurrentUserId();
-  if (!myUid) return;
+  if (!myUid) {
+    console.warn('⚠️ 用户未登录，无法启动自动同步');
+    return;
+  }
 
   isAutoSyncStarted = true;
-  console.log('📡 开启极简同步监听...');
+  console.log('📡 开启极简同步监听...', { userId: myUid });
 
   const savedTime = localStorage.getItem('last_sync_time');
   if (savedTime) lastSyncTimestamp = parseInt(savedTime);
+  console.log('📊 初始化时间戳:', { lastSyncTimestamp, savedTime });
 
   const channel = supabase
     .channel('smart-auto-sync')
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: SUPABASE_TABLE, filter: `key=eq.${SUPABASE_DEFAULT_KEY}` },
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: SUPABASE_TABLE, 
+        filter: `key=eq.${SUPABASE_DEFAULT_KEY}` 
+      },
       async (evt) => {
+        console.log('🔔 Realtime 事件触发:', { 
+          event: evt.eventType, 
+          hasNewRow: !!evt.new,
+          hasOldRow: !!evt.old
+        });
+        
         const newRow = evt.new;
-        if (!newRow) return;
+        if (!newRow) {
+          console.log('⏭️ 事件中没有新数据，跳过');
+          return;
+        }
 
         const serverTime = new Date(newRow.updated_at).getTime();
         
@@ -547,6 +571,14 @@ export async function initAutoSync() {
         const savedTime = localStorage.getItem('last_sync_time');
         const currentLastSync = savedTime ? parseInt(savedTime) : 0;
         lastSyncTimestamp = currentLastSync;
+        
+        console.log('📊 时间戳比较:', {
+          serverTime,
+          lastSyncTimestamp,
+          serverTimeNewer: serverTime > lastSyncTimestamp,
+          diff: serverTime - lastSyncTimestamp,
+          updatedBy: newRow.updated_by_name
+        });
         
         // 简单的时间戳判定：只更新比本地新的
         if (serverTime <= lastSyncTimestamp) {
@@ -568,6 +600,7 @@ export async function initAutoSync() {
         if (isLocalDirty()) {
           // 本地有未保存修改，弹出提示要求用户更新
           const who = newRow.updated_by_name || '其他设备';
+          console.log('⚠️ 本地有未保存修改，弹出提示', { who });
           const ok = confirm(`⚠️ 云端数据已更新\n\n"${who}" 刚刚更新了数据。\n\n点击【确定】自动加载最新数据（本地未保存的修改将被覆盖）\n\n点击【取消】稍后手动加载`);
           if (ok) {
             console.log('📥 用户确认加载最新数据');
@@ -585,16 +618,35 @@ export async function initAutoSync() {
           return;
         }
 
-        console.log('🔄 开始自动刷新...', { serverTime, lastSyncTimestamp, updatedBy: newRow.updated_by_name });
+        // 本地没有未保存修改，自动加载最新数据
+        console.log('🔄 本地无未保存修改，开始自动刷新...', { 
+          serverTime, 
+          lastSyncTimestamp, 
+          updatedBy: newRow.updated_by_name 
+        });
+        
         // 使用 window.cloudLoad 确保使用桥接的函数
         const loadFunc = window.cloudLoad || cloudLoad;
         await loadFunc(SUPABASE_DEFAULT_KEY, true);
+        
+        // 显示提示，告知用户数据已自动更新
+        const who = newRow.updated_by_name || '其他设备';
+        showToast(`🔄 已自动同步 ${who} 的修改`);
+        
         console.log('✅ 自动刷新完成');
       }
     )
     .subscribe((status) => {
       console.log('📡 Realtime 订阅状态:', status);
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Realtime 订阅成功，开始监听数据变化');
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('❌ Realtime 订阅失败');
+      }
     });
+  
+  // 保存 channel 引用，防止被垃圾回收
+  window._syncChannel = channel;
 }
 
 function showToast(msg) {

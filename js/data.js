@@ -38,7 +38,28 @@ db.version(2).stores({
 });
 
 export async function ensureDbReady() {
-  if (!db.isOpen()) await db.open().catch(console.error);
+  if (!db.isOpen()) {
+    try {
+      await db.open();
+      console.log('✅ IndexedDB 已打开');
+    } catch (err) {
+      console.error('❌ IndexedDB 打开失败:', err);
+      // iOS Safari 可能需要重新初始化
+      if (err.name === 'InvalidStateError' || err.name === 'UnknownError') {
+        console.log('⚠️ 检测到数据库状态错误，尝试重新打开...');
+        try {
+          await db.close();
+          await db.open();
+          console.log('✅ 重新打开成功');
+        } catch (retryErr) {
+          console.error('❌ 重新打开也失败:', retryErr);
+          throw retryErr;
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
   return db;
 }
 export function getDb() { return db; }
@@ -46,10 +67,45 @@ export function getDb() { return db; }
 /* --- 核心：事务覆盖写入 (加固点) --- */
 export async function overwriteAllRows(rows) {
   await ensureDbReady();
-  await db.transaction('rw', db.rows, async () => {
-    await db.rows.clear();
-    if (rows?.length) await db.rows.bulkAdd(rows);
-  });
+  
+  // iOS Safari 兼容性：使用更明确的错误处理和重试机制
+  try {
+    await db.transaction('rw', db.rows, async (tx) => {
+      // 先清空
+      await tx.rows.clear();
+      
+      // 如果有数据，批量添加
+      if (rows && rows.length > 0) {
+        // iOS Safari 可能需要分批处理大量数据
+        const batchSize = 100;
+        for (let i = 0; i < rows.length; i += batchSize) {
+          const batch = rows.slice(i, i + batchSize);
+          await tx.rows.bulkAdd(batch);
+        }
+      }
+    });
+    
+    console.log('✅ 数据写入成功，条数:', rows?.length || 0);
+  } catch (err) {
+    console.error('❌ 数据写入失败:', err);
+    // iOS Safari 可能需要重试
+    if (err.name === 'QuotaExceededError' || err.name === 'UnknownError') {
+      console.log('⚠️ 检测到存储错误，尝试清理后重试...');
+      try {
+        // 先清理，再重试
+        await db.rows.clear();
+        if (rows && rows.length > 0) {
+          await db.rows.bulkAdd(rows);
+        }
+        console.log('✅ 重试成功');
+      } catch (retryErr) {
+        console.error('❌ 重试也失败:', retryErr);
+        throw retryErr;
+      }
+    } else {
+      throw err;
+    }
+  }
 }
 
 /* --- 视图 & 分类 --- */

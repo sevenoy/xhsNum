@@ -155,10 +155,29 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
       firstRow: payload.rows?.[0] ? {
         phone: payload.rows[0].phone,
         xhs_name: payload.rows[0].xhs_name
-      } : null
+      } : null,
+      userAgent: navigator.userAgent
     });
     
-    await overwriteAllRows(payload.rows || []);
+    // iOS Safari 兼容性：添加重试机制
+    let retryCount = 0;
+    const maxRetries = 3;
+    while (retryCount < maxRetries) {
+      try {
+        await overwriteAllRows(payload.rows || []);
+        break; // 成功则退出循环
+      } catch (writeErr) {
+        retryCount++;
+        console.error(`❌ 数据写入失败 (尝试 ${retryCount}/${maxRetries}):`, writeErr);
+        
+        if (retryCount >= maxRetries) {
+          throw new Error(`数据写入失败，已重试 ${maxRetries} 次: ${writeErr.message}`);
+        }
+        
+        // 等待一段时间后重试（iOS Safari 可能需要时间释放资源）
+        await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+      }
+    }
     
     // 验证数据是否已写入
     const verifyRows = await getAllRows();
@@ -170,6 +189,29 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
         xhs_name: verifyRows[0].xhs_name
       } : null
     });
+    
+    // iOS Safari 验证：如果数据条数不匹配，可能是写入失败
+    if (verifyRows.length !== (payload.rows || []).length) {
+      console.warn('⚠️ 数据条数不匹配，可能写入不完整', {
+        expected: (payload.rows || []).length,
+        actual: verifyRows.length
+      });
+      
+      // 如果是iOS，尝试再次写入
+      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        console.log('🔄 iOS设备检测到数据不匹配，尝试重新写入...');
+        try {
+          await overwriteAllRows(payload.rows || []);
+          const reVerifyRows = await getAllRows();
+          console.log('✅ 重新写入后验证:', {
+            expected: (payload.rows || []).length,
+            actual: reVerifyRows.length
+          });
+        } catch (retryErr) {
+          console.error('❌ 重新写入失败:', retryErr);
+        }
+      }
+    }
     
     // 静默更新配置
     if (payload.cats) {
@@ -890,8 +932,12 @@ export async function renderCloudHistory() {
     const t = formatTime(row.updated_at);
     
     // 快照名称：优先使用 payload.snapshot_label，否则使用 用户名+日期时间
+    // ✅ 修复：确保总是使用用户名+日期时间格式，不使用"默认快照"
     let snapshotName = row.payload?.snapshot_label;
-    if (!snapshotName || snapshotName.trim() === '') {
+    const userName = row.updated_by_name || '未知用户';
+    
+    // 如果没有 snapshot_label 或为空，或者包含"默认快照"字样，都重新生成
+    if (!snapshotName || snapshotName.trim() === '' || snapshotName.includes('默认快照')) {
       const dateTimeStr = formatDateTime(row.updated_at);
       snapshotName = `${userName} ${dateTimeStr}`;
     }

@@ -2706,30 +2706,36 @@ function bindEvents() {
     const btn = $("#btnLoadCloud");
     const original = btn.textContent;
     const panel = $("#cloudHistoryPanel");
+    
+    // 如果面板已打开，则关闭面板
+    if (panel && panel.style.display !== "none") {
+      panel.style.display = "none";
+      return;
+    }
+    
+    // 显示快照选择面板
     try {
-      btn.disabled = true; btn.textContent = '⏳ 加载中...';
-      if (panel.style.display === "none") {
+      btn.disabled = true; 
+      btn.textContent = '⏳ 加载中...';
+      
+      // 显示历史面板，让用户选择快照
+      if (panel) {
         panel.style.display = "block";
-        await renderCloudHistory();
-        // 操作日志（忽略失败）
-        try {
-          if (window.supabase) {
-            const { data: { session } } = await supabase.auth.getSession();
-            const uid = session?.user?.id;
-            await supabase.from('operation_logs').insert({
-              action: 'open_cloud_history',
-              target: 'panel',
-              user_id: uid || null,
-              details: '打开云端历史面板',
-              created_at: new Date().toISOString()
-            });
-          }
-        } catch (_) {}
+        // 使用桥接的 renderCloudHistory 函数
+        const renderFunc = window.renderCloudHistory || renderCloudHistory;
+        await renderFunc();
       } else {
-        panel.style.display = "none";
+        // 如果没有面板，直接加载默认快照
+        const loadFunc = window.cloudLoad || cloudLoad;
+        await loadFunc(SUPABASE_DEFAULT_KEY, false);
       }
+      
+    } catch (err) {
+      console.error('加载云端数据失败:', err);
+      alert('加载失败: ' + (err.message || err));
     } finally {
-      btn.disabled = false; btn.textContent = original;
+      btn.disabled = false; 
+      btn.textContent = original;
     }
   });
 
@@ -3309,3 +3315,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }, 500);
 });
+
+// 确保按钮/调用最终走桥接的新同步逻辑（防止旧函数覆盖）
+if (window.cloudSave) cloudSave = window.cloudSave;
+if (window.cloudLoad) cloudLoad = window.cloudLoad;
+if (window.renderCloudHistory) renderCloudHistory = window.renderCloudHistory;
+if (window.cloudHealthCheck) cloudHealthCheck = window.cloudHealthCheck;

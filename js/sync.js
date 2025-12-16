@@ -76,12 +76,26 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
 
     const payload = row.payload || {};
     
+    console.log('📥 准备加载数据:', {
+      rowsCount: (payload.rows || []).length,
+      hasCats: !!payload.cats,
+      hasView: !!payload.view,
+      updatedBy: row.updated_by_name
+    });
+    
     // 事务写入本地，防止写一半失败
     await overwriteAllRows(payload.rows || []);
+    console.log('✅ 数据已写入本地数据库');
     
     // 静默更新配置
-    if (payload.cats) saveCats(payload.cats, true);
-    if (payload.view) saveView(payload.view, true);
+    if (payload.cats) {
+      saveCats(payload.cats, true);
+      console.log('✅ 分类配置已更新');
+    }
+    if (payload.view) {
+      saveView(payload.view, true);
+      console.log('✅ 视图配置已更新');
+    }
 
     // 更新本地时间戳（只更新一次）
     lastSyncTimestamp = serverTime;
@@ -95,15 +109,33 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
 
     clearDirty();
     
-    // 刷新界面（确保异步完成）
+    // 强制刷新界面（确保异步完成）
+    console.log('🔄 开始刷新界面...');
     if (window.renderTable) {
-      await window.renderTable();
-      console.log('✅ 表格已刷新');
+      try {
+        await window.renderTable();
+        console.log('✅ 表格已刷新');
+      } catch (renderErr) {
+        console.error('❌ 刷新表格失败:', renderErr);
+      }
+    } else {
+      console.warn('⚠️ window.renderTable 不存在');
     }
+    
     if (window.refreshFilters) {
-      await window.refreshFilters();
-      console.log('✅ 筛选器已刷新');
+      try {
+        await window.refreshFilters();
+        console.log('✅ 筛选器已刷新');
+      } catch (filterErr) {
+        console.error('❌ 刷新筛选器失败:', filterErr);
+      }
+    } else {
+      console.warn('⚠️ window.refreshFilters 不存在');
     }
+    
+    // 验证数据是否已加载
+    const verifyRows = await getAllRows();
+    console.log('✅ 验证：本地数据条数', verifyRows.length);
     
     if (isSilent) {
       showToast(`🔄 已同步 ${row.updated_by_name || '其他设备'} 的修改`);
@@ -198,7 +230,52 @@ export async function cloudSave() {
 
       const currentRowsData = sortRows(rows);
       const latestRowsData = sortRows(latestRows);
+      
+      // 添加详细调试日志
+      console.log('🔍 数据比较调试:', {
+        currentRowsCount: currentRowsData.length,
+        latestRowsCount: latestRowsData.length,
+        currentFirst3: currentRowsData.slice(0, 3).map(r => ({ phone: r.phone, xhs_name: r.xhs_name })),
+        latestFirst3: latestRowsData.slice(0, 3).map(r => ({ phone: r.phone, xhs_name: r.xhs_name }))
+      });
+      
       const rowsEqual = JSON.stringify(currentRowsData) === JSON.stringify(latestRowsData);
+      
+      if (!rowsEqual) {
+        // 找出不同的行
+        const currentMap = new Map(currentRowsData.map(r => [r.phone, r]));
+        const latestMap = new Map(latestRowsData.map(r => [r.phone, r]));
+        
+        const differences = [];
+        latestMap.forEach((latestRow, phone) => {
+          const currentRow = currentMap.get(phone);
+          if (!currentRow) {
+            differences.push({ phone, type: '新增', latest: latestRow });
+          } else if (JSON.stringify(currentRow) !== JSON.stringify(latestRow)) {
+            differences.push({ 
+              phone, 
+              type: '修改', 
+              current: currentRow, 
+              latest: latestRow,
+              diff: {
+                xhs_name: currentRow.xhs_name !== latestRow.xhs_name ? { current: currentRow.xhs_name, latest: latestRow.xhs_name } : null,
+                wx_name: currentRow.wx_name !== latestRow.wx_name ? { current: currentRow.wx_name, latest: latestRow.wx_name } : null,
+                note1: currentRow.note1 !== latestRow.note1 ? { current: currentRow.note1, latest: latestRow.note1 } : null
+              }
+            });
+          }
+        });
+        
+        currentMap.forEach((currentRow, phone) => {
+          if (!latestMap.has(phone)) {
+            differences.push({ phone, type: '删除', current: currentRow });
+          }
+        });
+        
+        console.log('🔍 发现数据差异:', differences.slice(0, 5));
+      } else {
+        console.log('✅ 数据完全相同');
+      }
 
       // 标准化并比较 cats
       const normalizeCats = (catsData) => {
@@ -251,11 +328,23 @@ export async function cloudSave() {
       const cloudTime = new Date(cloudRow.updated_at).getTime();
       const dataContentEqual = rowsEqual && catsEqual && viewEqual;
       
+      console.log('🔍 数据比较结果:', {
+        rowsEqual,
+        catsEqual,
+        viewEqual,
+        dataContentEqual,
+        cloudTime,
+        lastSyncTimestamp,
+        cloudTimeNewer: cloudTime > lastSyncTimestamp,
+        updatedBy: cloudRow.updated_by_name
+      });
+      
       if (dataContentEqual) {
         // 数据内容相同
         if (cloudTime > lastSyncTimestamp) {
           // 数据库时间戳更新了，说明其他设备保存了（即使内容相同）
           const who = cloudRow.updated_by_name || '其他设备';
+          console.log('ℹ️ 数据内容相同，但云端时间戳更新了', { who, cloudTime, lastSyncTimestamp });
           if (btn) {
             btn.disabled = false;
             btn.textContent = btn.dataset.cleanText || cleanText;
@@ -267,6 +356,7 @@ export async function cloudSave() {
           return;
         } else {
           // 数据内容相同，且时间戳也没更新，说明确实没有改动
+          console.log('ℹ️ 数据内容相同，时间戳也没更新');
           if (btn) {
             btn.disabled = false;
             btn.textContent = btn.dataset.cleanText || cleanText;
@@ -276,11 +366,14 @@ export async function cloudSave() {
         }
       } else {
         // 数据内容不同，检查是否有冲突
+        console.log('⚠️ 数据内容不同，检查冲突', { cloudTime, lastSyncTimestamp, cloudTimeNewer: cloudTime > lastSyncTimestamp });
         if (cloudTime > lastSyncTimestamp) {
           // 数据库被其他设备更新了，且内容不同，需要确认覆盖
           const who = cloudRow.updated_by_name || '其他人';
+          console.log('⚠️ 检测到冲突，询问用户', { who });
           const ok = confirm(`⚠️ 冲突警告\n\n"${who}" 刚刚更新了数据。\n\n继续保存将覆盖对方修改。\n\n【确定】覆盖\n【取消】先拉取最新`);
           if (!ok) {
+            console.log('用户选择先拉取最新数据');
             if (btn) {
               btn.disabled = false;
               btn.textContent = btn.dataset.cleanText || cleanText;
@@ -288,17 +381,23 @@ export async function cloudSave() {
             // 先拉取最新数据
             try {
               const loadFunc = window.cloudLoad || cloudLoad;
+              console.log('开始拉取最新数据...');
               await loadFunc(SUPABASE_DEFAULT_KEY, false);
+              console.log('✅ 拉取最新数据完成');
               // 拉取后刷新历史面板
               const renderFunc = window.renderCloudHistory || renderCloudHistory;
               await renderFunc();
             } catch (loadErr) {
-              console.error('拉取最新数据失败:', loadErr);
+              console.error('❌ 拉取最新数据失败:', loadErr);
               alert('拉取最新数据失败: ' + (loadErr.message || loadErr));
             }
             // 拉取后不继续保存，让用户重新操作
             return;
+          } else {
+            console.log('用户选择覆盖，继续保存');
           }
+        } else {
+          console.log('✅ 数据有改动，且云端没有更新，可以正常保存');
         }
       }
     }

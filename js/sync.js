@@ -32,29 +32,47 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
   }
 
   try {
+    // 更新 lastSyncTimestamp（从 localStorage 重新读取，确保多标签页同步）
+    const savedTime = localStorage.getItem('last_sync_time');
+    if (savedTime) lastSyncTimestamp = parseInt(savedTime);
+    
     // 必须倒序取最新一条
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select('payload, updated_at, updated_by_name')
       .eq('key', key)
       .order('updated_at', { ascending: false })
-      .limit(1);
+      .limit(1)
+      .maybeSingle();
 
     if (error) throw error;
-    const row = data?.[0];
     
-    if (!row) {
+    if (!data) {
       if (!isSilent) console.log("云端无数据");
       return; 
     }
+    
+    const row = data;
 
     const serverTime = new Date(row.updated_at).getTime();
     // 如果是手动加载（非静默），总是加载，不检查时间戳
     // 只有自动同步时才检查时间戳
     if (isSilent && serverTime <= lastSyncTimestamp) {
-      console.log('云端数据不比本地新，跳过加载');
+      console.log('⏭️ 云端数据不比本地新，跳过加载', { 
+        serverTime, 
+        lastSyncTimestamp, 
+        diff: serverTime - lastSyncTimestamp 
+      });
       return;
     }
+    
+    console.log('📥 开始加载云端数据', { 
+      key, 
+      isSilent, 
+      serverTime, 
+      lastSyncTimestamp, 
+      updatedBy: row.updated_by_name 
+    });
 
     const payload = row.payload || {};
     
@@ -65,18 +83,27 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     if (payload.cats) saveCats(payload.cats, true);
     if (payload.view) saveView(payload.view, true);
 
+    // 更新本地时间戳（只更新一次）
     lastSyncTimestamp = serverTime;
     localStorage.setItem('last_sync_time', String(serverTime));
+    console.log('✅ 已更新本地时间戳', { 
+      serverTime, 
+      lastSyncTimestamp,
+      rowsCount: (payload.rows || []).length,
+      updatedBy: row.updated_by_name
+    });
 
     clearDirty();
     
-    // 更新本地时间戳
-    lastSyncTimestamp = serverTime;
-    localStorage.setItem('last_sync_time', String(serverTime));
-    
-    // 刷新界面
-    if (window.renderTable) await window.renderTable();
-    if (window.refreshFilters) await window.refreshFilters();
+    // 刷新界面（确保异步完成）
+    if (window.renderTable) {
+      await window.renderTable();
+      console.log('✅ 表格已刷新');
+    }
+    if (window.refreshFilters) {
+      await window.refreshFilters();
+      console.log('✅ 筛选器已刷新');
+    }
     
     if (isSilent) {
       showToast(`🔄 已同步 ${row.updated_by_name || '其他设备'} 的修改`);
@@ -258,7 +285,18 @@ export async function cloudSave() {
               btn.disabled = false;
               btn.textContent = btn.dataset.cleanText || cleanText;
             }
-            await cloudLoad(false);
+            // 先拉取最新数据
+            try {
+              const loadFunc = window.cloudLoad || cloudLoad;
+              await loadFunc(SUPABASE_DEFAULT_KEY, false);
+              // 拉取后刷新历史面板
+              const renderFunc = window.renderCloudHistory || renderCloudHistory;
+              await renderFunc();
+            } catch (loadErr) {
+              console.error('拉取最新数据失败:', loadErr);
+              alert('拉取最新数据失败: ' + (loadErr.message || loadErr));
+            }
+            // 拉取后不继续保存，让用户重新操作
             return;
           }
         }
@@ -318,30 +356,54 @@ export async function initAutoSync() {
   const savedTime = localStorage.getItem('last_sync_time');
   if (savedTime) lastSyncTimestamp = parseInt(savedTime);
 
-  supabase
+  const channel = supabase
     .channel('smart-auto-sync')
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: SUPABASE_TABLE, filter: `key=eq.${SUPABASE_DEFAULT_KEY}` },
-      (evt) => {
+      async (evt) => {
         const newRow = evt.new;
         if (!newRow) return;
 
         const serverTime = new Date(newRow.updated_at).getTime();
-
+        
+        // 更新 lastSyncTimestamp（从 localStorage 重新读取，确保多标签页同步）
+        const savedTime = localStorage.getItem('last_sync_time');
+        const currentLastSync = savedTime ? parseInt(savedTime) : 0;
+        lastSyncTimestamp = currentLastSync;
+        
         // 简单的时间戳判定：只更新比本地新的
-        if (serverTime <= lastSyncTimestamp) return;
+        if (serverTime <= lastSyncTimestamp) {
+          console.log('⏭️ 云端数据不比本地新，跳过自动同步', { 
+            serverTime, 
+            lastSyncTimestamp, 
+            diff: serverTime - lastSyncTimestamp 
+          });
+          return;
+        }
+
+        console.log('🔄 检测到云端更新，准备自动同步', { 
+          serverTime, 
+          lastSyncTimestamp, 
+          diff: serverTime - lastSyncTimestamp,
+          updatedBy: newRow.updated_by_name 
+        });
 
         if (isLocalDirty()) {
           showToast(`🔔 ${newRow.updated_by_name || '其他设备'} 更新了数据，请先保存或手动加载`);
           return;
         }
 
-        console.log('🔄 自动刷新...');
-        cloudLoad(true);
+        console.log('🔄 开始自动刷新...', { serverTime, lastSyncTimestamp, updatedBy: newRow.updated_by_name });
+        // 使用 window.cloudLoad 确保使用桥接的函数
+        const loadFunc = window.cloudLoad || cloudLoad;
+        await loadFunc(SUPABASE_DEFAULT_KEY, true);
+        console.log('✅ 自动刷新完成');
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log('📡 Realtime 订阅状态:', status);
+    });
 }
 
 function showToast(msg) {
@@ -418,12 +480,15 @@ export async function renderCloudHistory() {
     }
 
     // 查询默认快照（LWW 模式只支持 default）
+    // 注意：必须查询最新的，不限制 owner_id，因为可能是其他设备保存的
+    // 使用 RLS 策略自动过滤，只查询当前用户有权限的快照
+    // 注意：使用 maybeSingle() 而不是 limit(1)，因为只有一个 default key
     const { data, error } = await supabase
       .from(SUPABASE_TABLE)
       .select("key,payload,updated_at,owner_id,updated_by_name")
       .eq('key', SUPABASE_DEFAULT_KEY)
       .order('updated_at', { ascending: false })
-      .limit(1);
+      .maybeSingle();
 
     if (error) {
       console.error('❌ 加载历史失败:', error);
@@ -431,12 +496,12 @@ export async function renderCloudHistory() {
       return;
     }
 
-    if (!data || !data.length) {
+    if (!data) {
       panel.innerHTML = `<div style="padding:8px 10px;color:#888;">暂无云端数据</div>`;
       return;
     }
 
-    const row = data[0];
+    const row = data;
     const userName = row.updated_by_name || '未知用户';
     const metaCount = Array.isArray(row.payload?.rows) ? `${row.payload.rows.length} 条` : "";
     

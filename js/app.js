@@ -2724,6 +2724,7 @@ function bindEvents() {
         // 使用桥接的 renderCloudHistory 函数
         const renderFunc = window.renderCloudHistory || renderCloudHistory;
         await renderFunc();
+        console.log('✅ 历史面板已显示');
       } else {
         // 如果没有面板，直接加载默认快照
         const loadFunc = window.cloudLoad || cloudLoad;

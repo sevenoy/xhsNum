@@ -2166,14 +2166,37 @@ async function renderCloudHistory(maxCount = 1) {
     // 显示我的快照（只显示最新的一条）
     if (mySnapshots && mySnapshots.length > 0) {
       const row = mySnapshots[0];
-      const name = (row.payload?.snapshot_label || row.key).trim();
       const t = fmtTime(row.updated_at);
       const userName = row.payload?.updated_by_name || ownerMap[row.owner_id] || '未知';
       const metaCount = Array.isArray(row.payload?.rows)
         ? `${row.payload.rows.length} 条`
         : "";
-      const isDefault = row.key === 'default';
-      const displayName = isDefault ? '📌 默认快照' : name;
+      
+      // ✅ 修复：总是使用用户名+日期时间格式，不使用"默认快照"
+      let snapshotName = row.payload?.snapshot_label;
+      
+      // 格式化日期时间（用于快照名称）
+      const formatDateTime = (ts) => {
+        try {
+          const d = new Date(ts);
+          const Y = d.getFullYear();
+          const M = String(d.getMonth() + 1).padStart(2, '0');
+          const D = String(d.getDate()).padStart(2, '0');
+          const h = String(d.getHours()).padStart(2, '0');
+          const m = String(d.getMinutes()).padStart(2, '0');
+          return `${Y}${M}${D}${h}${m}`;
+        } catch {
+          return '';
+        }
+      };
+      
+      // 如果没有 snapshot_label 或为空，或者包含"默认快照"字样，都重新生成
+      if (!snapshotName || snapshotName.trim() === '' || snapshotName.includes('默认快照')) {
+        const dateTimeStr = formatDateTime(row.updated_at);
+        snapshotName = `${userName} ${dateTimeStr}`;
+      }
+      
+      const displayName = snapshotName;
       // ✅ 最新快照添加 latest 类和"最新"标记
       const latestBadge = '<span class="cloud-item-latest-badge">最新</span>';
       

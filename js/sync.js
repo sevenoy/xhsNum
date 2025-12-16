@@ -932,8 +932,12 @@ export async function renderCloudHistory() {
     const t = formatTime(row.updated_at);
     
     // 快照名称：优先使用 payload.snapshot_label，否则使用 用户名+日期时间
+    // ✅ 修复：确保总是使用用户名+日期时间格式，不使用"默认快照"
     let snapshotName = row.payload?.snapshot_label;
-    if (!snapshotName || snapshotName.trim() === '') {
+    const userName = row.updated_by_name || '未知用户';
+    
+    // 如果没有 snapshot_label 或为空，或者包含"默认快照"字样，都重新生成
+    if (!snapshotName || snapshotName.trim() === '' || snapshotName.includes('默认快照')) {
       const dateTimeStr = formatDateTime(row.updated_at);
       snapshotName = `${userName} ${dateTimeStr}`;
     }

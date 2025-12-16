@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>最近修改 - XHSPHONE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="./icon/apple-touch-icon.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon/icon-192.png?v=20251107">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon/icon-512.png?v=20251107">
+  <link rel="icon" type="image/x-icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="shortcut icon" href="./icon/favicon.ico?v=20251107">
+  <link rel="manifest" href="./site.webmanifest">
+  
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1990FF" />
+  <meta name="apple-mobile-web-app-title" content="最近修改" />
+  <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
+  <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
+  <link rel="stylesheet" href="./css/style.css">
+  <style>
+    /* ✅ 覆盖 style.css 中的背景设置 */
+    html, body {
+      margin: 0 !important;
+      padding: 16px !important;
+      background: #fff !important; /* ✅ 强制白色背景 */
+      font-size: 14px;
+      box-sizing: border-box;
+      height: 100%;
+      overflow-y: auto;
+      user-select: text !important; /* ✅ 允许选择文本 */
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+    }
+    /* ✅ 确保所有元素都可以被选择 */
+    * {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+    }
+    /* ✅ 按钮和交互元素保持可点击 */
+    button, a, input, select, textarea {
+      user-select: none !important; /* 按钮文本不需要选择 */
+      -webkit-user-select: none !important;
+      -moz-user-select: none !important;
+      cursor: pointer !important;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .stat-card h3 {
+      font-size: 12px;
+      color: #888;
+      margin: 0 0 8px 0;
+      font-weight: 500;
+    }
+    .stat-card .number {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1990FF;
+      margin: 0;
+    }
+    .change-item {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .change-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .change-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .change-time {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    .change-user {
+      font-size: 13px;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .change-user::before {
+      content: "👤";
+      font-size: 14px;
+    }
+    .change-snapshot-name {
+      font-size: 13px;
+      color: #1990FF;
+      font-weight: 500;
+    }
+    .change-summary {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .summary-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .summary-badge.added {
+      background: #d4edda;
+      color: #155724;
+    }
+    .summary-badge.removed {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .summary-badge.modified {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .change-details {
+      margin-top: 12px;
+    }
+    .detail-section {
+      margin-bottom: 16px;
+    }
+    .detail-section h4 {
+      font-size: 13px;
+      color: #666;
+      margin: 0 0 8px 0;
+      font-weight: 600;
+    }
+    .detail-list {
+      background: #f9f9fb;
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .detail-item {
+      padding: 8px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .detail-item.added {
+      background: #d4edda;
+      border-left: 3px solid #28a745;
+    }
+    .detail-item.removed {
+      background: #f8d7da;
+      border-left: 3px solid #dc3545;
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+    .detail-item.modified {
+      background: #fff3cd;
+      border-left: 3px solid #ffc107;
+    }
+    .detail-item.modified .old-value {
+      color: #dc3545;
+    }
+    .detail-item.modified .new-value {
+      color: #28a745;
+      font-weight: 500;
+    }
+    .empty-state, .loading-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+    }
+    .loading-state {
+      color: #1990FF;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .toggle-details {
+      background: #1990FF;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .toggle-details:hover {
+      background: #1478d7;
+    }
+    .no-changes {
+      color: #888;
+      font-style: italic;
+      padding: 8px;
+    }
+    
+    /* 手机端优化 */
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+      .stats {
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .stat-card {
+        padding: 10px 8px;
+      }
+      .stat-card h3 {
+        font-size: 11px;
+        margin-bottom: 6px;
+      }
+      .stat-card .number {
+        font-size: 20px;
+      }
+      .change-item {
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+    }
+    @media (max-width: 480px) {
+      body {
+        padding: 8px;
+      }
+      .stats {
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .stat-card {
+        padding: 8px 6px;
+      }
+      .stat-card h3 {
+        font-size: 10px;
+        margin-bottom: 4px;
+      }
+      .stat-card .number {
+        font-size: 18px;
+      }
+      .change-item {
+        padding: 10px;
+        margin-bottom: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 统计卡片 -->
+  <div class="stats">
+      <div class="stat-card">
+        <h3>总修改次数</h3>
+        <div class="number" id="totalChanges">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>新增行数</h3>
+        <div class="number" id="totalAdded">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>删除行数</h3>
+        <div class="number" id="totalRemoved">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>修改行数</h3>
+        <div class="number" id="totalModified">-</div>
+      </div>
+    </div>
+
+    <!-- 修改列表 -->
+    <div id="changesList">
+      <div class="loading-state">
+        <div style="font-size: 32px; margin-bottom: 10px;">⏳</div>
+        <div>加载中...</div>
+      </div>
+    </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module">
+    const SUPABASE_URL = localStorage.getItem("xhs_supabase_url");
+    const SUPABASE_ANON_KEY = localStorage.getItem("xhs_supabase_anon_key");
+    const { createClient } = supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const SUPABASE_TABLE = "xhsphone_snapshot";
+
+    // 检查登录
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) {
+      alert('请先登录');
+      window.location.href = 'login.html';
+    }
+
+    const currentUserId = session.user.id;
+    let allChanges = [];
+
+    // 格式化时间
+    function formatTime(timestamp) {
+      if (!timestamp) return '-';
+      const d = new Date(timestamp);
+      const now = new Date();
+      const diff = now - d;
+      
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+      if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
+      
+      return d.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // 对比两个快照的差异
+    function compareSnapshots(newSnapshot, oldSnapshot) {
+      const changes = {
+        added: [],
+        removed: [],
+        modified: [],
+        totalAdded: 0,
+        totalRemoved: 0,
+        totalModified: 0
+      };
+
+      const newRows = newSnapshot?.payload?.rows || [];
+      const oldRows = oldSnapshot?.payload?.rows || [];
+
+      // 创建行ID映射（使用电话号码作为唯一标识，如果没有则使用索引）
+      const oldRowMap = new Map();
+      oldRows.forEach((row, index) => {
+        const id = row.phone || `row_${index}`;
+        oldRowMap.set(id, row);
+      });
+
+      const newRowMap = new Map();
+      newRows.forEach((row, index) => {
+        const id = row.phone || `row_${index}`;
+        newRowMap.set(id, row);
+      });
+
+      // 找出新增的行
+      newRowMap.forEach((newRow, id) => {
+        if (!oldRowMap.has(id)) {
+          changes.added.push({
+            id,
+            row: newRow,
+            display: `${newRow.phone || '未知'} - ${newRow.xhs_name || '未命名'}`
+          });
+          changes.totalAdded++;
+        }
+      });
+
+      // 找出删除的行
+      oldRowMap.forEach((oldRow, id) => {
+        if (!newRowMap.has(id)) {
+          changes.removed.push({
+            id,
+            row: oldRow,
+            display: `${oldRow.phone || '未知'} - ${oldRow.xhs_name || '未命名'}`
+          });
+          changes.totalRemoved++;
+        }
+      });
+
+      // 找出修改的行
+      newRowMap.forEach((newRow, id) => {
+        if (oldRowMap.has(id)) {
+          const oldRow = oldRowMap.get(id);
+          const modified = compareRow(oldRow, newRow);
+          if (modified.length > 0) {
+            changes.modified.push({
+              id,
+              oldRow,
+              newRow,
+              fields: modified,
+              display: `${newRow.phone || '未知'} - ${newRow.xhs_name || '未命名'}`
+            });
+            changes.totalModified++;
+          }
+        }
+      });
+
+      return changes;
+    }
+
+    // 对比单行的字段变化
+    function compareRow(oldRow, newRow) {
+      const modified = [];
+      const fields = ['phone', 'owner', 'wx_real', 'wx_name', 'xhs_name', 'note', 'row_color'];
+      
+      fields.forEach(field => {
+        const oldVal = oldRow[field] || '';
+        const newVal = newRow[field] || '';
+        if (oldVal !== newVal) {
+          modified.push({
+            field,
+            oldValue: oldVal,
+            newValue: newVal
+          });
+        }
+      });
+
+      return modified;
+    }
+
+    // 加载修改历史
+    async function loadChanges() {
+      const listEl = document.getElementById('changesList');
+      listEl.innerHTML = '<div class="loading-state"><div style="font-size: 32px; margin-bottom: 10px;">⏳</div><div>加载中...</div></div>';
+
+      try {
+        // 查询所有历史快照（key 以 snap_ 开头）
+        // 注意：这里查询所有用户的历史记录，以便显示完整的修改历史
+        const { data: snapshots, error } = await supabaseClient
+          .from(SUPABASE_TABLE)
+          .select('key, payload, updated_at, owner_id')
+          .like('key', 'snap_%')
+          .order('updated_at', { ascending: false })
+          .limit(100);
+
+        if (error) throw error;
+
+        if (!snapshots || snapshots.length === 0) {
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">📝</div>
+              <div>暂无修改记录</div>
+            </div>
+          `;
+          return;
+        }
+
+        // 获取所有用户信息
+        const userIds = [...new Set(snapshots.map(s => s.payload?.updated_by || s.owner_id).filter(Boolean))];
+        let userMap = {};
+
+        if (userIds.length > 0) {
+          const { data: userProfiles } = await supabaseClient
+            .from('user_profiles')
+            .select('user_id, username')
+            .in('user_id', userIds);
+
+          if (userProfiles) {
+            userProfiles.forEach(profile => {
+              userMap[profile.user_id] = profile.username;
+            });
+          }
+        }
+
+        // 处理快照数据，计算差异
+        // 对比每个快照与前一个快照的差异
+        const changes = [];
+        for (let i = 0; i < snapshots.length; i++) {
+          const snapshot = snapshots[i];
+          const prevSnapshot = snapshots[i + 1] || null; // 前一个快照（时间更早的）
+
+          const userId = snapshot.payload?.updated_by || snapshot.owner_id;
+          const userName = snapshot.payload?.updated_by_name || userMap[userId] || '未知用户';
+          const snapshotName = snapshot.payload?.snapshot_label || '快照';
+
+          // 对比当前快照和前一个快照的差异
+          const diff = prevSnapshot ? compareSnapshots(snapshot, prevSnapshot) : {
+            added: [],
+            removed: [],
+            modified: [],
+            totalAdded: 0,
+            totalRemoved: 0,
+            totalModified: 0
+          };
+
+          changes.push({
+            snapshot,
+            userName,
+            snapshotName,
+            diff,
+            timestamp: snapshot.updated_at
+          });
+        }
+
+        allChanges = changes;
+        renderChanges(changes);
+        updateStats(changes);
+
+      } catch (err) {
+        console.error('加载修改历史失败:', err);
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <div>加载失败：${err.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // 渲染修改列表
+    function renderChanges(changes) {
+      const listEl = document.getElementById('changesList');
+      
+      if (changes.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <div>暂无修改记录</div>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = changes.map((change, index) => {
+        const { snapshot, userName, snapshotName, diff, timestamp } = change;
+        const hasChanges = diff.totalAdded > 0 || diff.totalRemoved > 0 || diff.totalModified > 0;
+        
+        return `
+          <div class="change-item" data-index="${index}">
+            <div class="change-header">
+              <div class="change-meta">
+                <div class="change-time">${formatTime(timestamp)}</div>
+                <div class="change-user">${userName}</div>
+                <div class="change-snapshot-name">📸 ${snapshotName}</div>
+              </div>
+              <button class="toggle-details" onclick="toggleDetails(${index})">
+                ${hasChanges ? '查看详情' : '无变化'}
+              </button>
+            </div>
+            
+            ${hasChanges ? `
+              <div class="change-summary">
+                ${diff.totalAdded > 0 ? `<span class="summary-badge added">+${diff.totalAdded} 新增</span>` : ''}
+                ${diff.totalRemoved > 0 ? `<span class="summary-badge removed">-${diff.totalRemoved} 删除</span>` : ''}
+                ${diff.totalModified > 0 ? `<span class="summary-badge modified">~${diff.totalModified} 修改</span>` : ''}
+              </div>
+              
+              <div class="change-details" id="details-${index}" style="display: none;">
+                ${diff.added.length > 0 ? `
+                  <div class="detail-section">
+                    <h4>➕ 新增的行 (${diff.added.length})</h4>
+                    <div class="detail-list">
+                      ${diff.added.map(item => `
+                        <div class="detail-item added">${item.display}</div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                ${diff.removed.length > 0 ? `
+                  <div class="detail-section">
+                    <h4>➖ 删除的行 (${diff.removed.length})</h4>
+                    <div class="detail-list">
+                      ${diff.removed.map(item => `
+                        <div class="detail-item removed">${item.display}</div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                ${diff.modified.length > 0 ? `
+                  <div class="detail-section">
+                    <h4>✏️ 修改的行 (${diff.modified.length})</h4>
+                    <div class="detail-list">
+                      ${diff.modified.map(item => `
+                        <div class="detail-item modified">
+                          <strong>${item.display}</strong><br>
+                          ${item.fields.map(f => `
+                            <span class="old-value">${f.field}: ${f.oldValue || '(空)'}</span> 
+                            → 
+                            <span class="new-value">${f.newValue || '(空)'}</span>
+                          `).join('<br>')}
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            ` : `
+              <div class="no-changes">本次保存无数据变化</div>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 切换详情显示
+    window.toggleDetails = function(index) {
+      const detailsEl = document.getElementById(`details-${index}`);
+      const btn = event.target;
+      
+      if (detailsEl.style.display === 'none') {
+        detailsEl.style.display = 'block';
+        btn.textContent = '隐藏详情';
+      } else {
+        detailsEl.style.display = 'none';
+        btn.textContent = '查看详情';
+      }
+    };
+
+    // 更新统计
+    function updateStats(changes) {
+      const total = changes.length;
+      const totalAdded = changes.reduce((sum, c) => sum + c.diff.totalAdded, 0);
+      const totalRemoved = changes.reduce((sum, c) => sum + c.diff.totalRemoved, 0);
+      const totalModified = changes.reduce((sum, c) => sum + c.diff.totalModified, 0);
+
+      document.getElementById('totalChanges').textContent = total;
+      document.getElementById('totalAdded').textContent = totalAdded;
+      document.getElementById('totalRemoved').textContent = totalRemoved;
+      document.getElementById('totalModified').textContent = totalModified;
+    }
+
+    // 初始加载
+    loadChanges();
+  </script>
+</body>
+</html>
+

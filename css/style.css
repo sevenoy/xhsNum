@@ -1,0 +1,2162 @@
+:root {
+  --bg: #f5f5f7;
+  --cell: #ffffff;
+  --cell-alt: #f9f9fb;
+  --line: #e5e5ea;
+  --muted: #6e6e73;
+  --active: #007aff;
+  --blue: #007aff;
+  --blue-press: #0051c6;
+  --highlight-blue: #e2f0ff;
+  
+  /* ✅ 按钮颜色变量 */
+  --btn-default: #3C78D7; /* RGB(60, 120, 215) */
+  --btn-active: #1890FF;
+  --btn-hover: #40a9ff;
+
+  /* 行高 / 列宽 / 隔行色，由显示设置控制 */
+  --pad: 6px;
+  --colScale: 1;
+  --zebra: #e2f0ff;
+
+  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-weight: normal; /* ✅ 优化：字体粗细设置 */
+
+  --w-phone: 120px; /* ✅ 优化：电话号码列宽设置为200px的3/5（120px） */
+  --w-owner: 165px; /* ✅ 优化：所属人列宽165px */
+  --w-real: 185px; /* ✅ 优化：微信实名人列宽185px */
+  --w-wx: 130px;
+  --w-xhs: 160px;
+  --w-note: 220px;
+  --w-cat: 90px;
+  --w-actions: 110px;
+}
+
+/* 基础 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  font-family: var(--font-main);
+  font-weight: var(--font-weight); /* ✅ 优化：应用字体粗细设置 */
+  -webkit-font-smoothing: antialiased;
+  /* ✅ 移除移动端点击高亮 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  color: #111;
+}
+
+/* iOS 安全区顶部背景，确保独立模式与Safari状态栏视觉融合 */
+@media (max-width: 768px) {
+  .wrap {
+    padding-top: 0; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加 */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+  }
+
+  .panel {
+    max-height: none !important;
+    overflow: visible;
+  }
+  
+  /* ✅ 确保 topbar 在所有手机型号下都紧贴状态栏 */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
+  }
+}
+
+/* ✅ 修复：添加到主屏幕后（standalone 模式）调整间距，避免双重间距 */
+@media (max-width: 768px) and (display-mode: standalone) {
+  .wrap {
+    padding-top: 0 !important; /* standalone 模式下，topbar 已经有 padding-top，不需要 wrap 的 */
+  }
+  
+  /* standalone 模式下，确保 topbar 紧贴状态栏下方（统一所有iPhone型号） */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
+  }
+}
+
+/* ✅ 修复：小屏幕 standalone 模式下的 topbar 间距 */
+@media (max-width: 480px) and (display-mode: standalone) {
+  .wrap {
+    padding-top: 0 !important;
+  }
+  
+  /* standalone 模式下，确保 topbar 紧贴状态栏下方（统一所有iPhone型号） */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
+  }
+}
+
+/* 容器 */
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 10px 24px;
+}
+
+/* 顶部栏 */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 10px;
+  position: relative;
+  z-index: 1;
+  background: #ffffff;
+}
+
+.topbar .top-left {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.topbar .top-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+#currentUserName {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+#appTitle {
+  font-size: 20px;
+  font-weight: 650;
+  margin: 0;
+  margin-left: 2px; /* ✅ 向右移动2px */
+}
+
+/* ✅ 版本号样式（桌面端） */
+#appVersion {
+  font-size: 12px;
+  color: #999;
+  font-weight: normal;
+  margin-left: 8px;
+  vertical-align: baseline;
+}
+
+/* ✅ 数据统计栏样式（桌面端和通用） */
+.data-stats-bar,
+#dataStatsBar.data-stats-bar,
+div#dataStatsBar {
+  background: #ffffff;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #007aff;
+  font-weight: normal;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.data-stats-bar span,
+#dataStatsBar span {
+  margin: 0 4px;
+  color: #007aff;
+  font-weight: normal;
+}
+
+.data-stats-bar .stats-separator,
+#dataStatsBar .stats-separator {
+  color: #ccc;
+  margin: 0 8px;
+}
+
+.cloud-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: #f2f2f7;
+  color: #111;
+}
+
+#cloudDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #30d158;
+}
+
+#cloudText {
+  white-space: nowrap;
+}
+
+/* 面板 */
+
+.panel {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 工具栏 */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.toolbar:last-child {
+  margin-bottom: 0;
+}
+
+.toolbar-wrap {
+  flex-wrap: wrap;
+}
+
+.status {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* 输入控件 */
+
+input,
+select,
+button {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  height: 32px;
+  background: #ffffff;
+  color: #111;
+  outline: none;
+  vertical-align: middle;
+}
+
+input::placeholder {
+  color: #b0b0b8;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--active);
+  box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.2);
+}
+
+/* ✅ 按钮失去焦点时不显示高亮 */
+button:focus-visible {
+  outline: none;
+}
+
+/* 下拉菜单统一白底 */
+
+table select,
+.m-detail-value select {
+  background-color: #ffffff;
+}
+
+/* 文本输入宽度 */
+
+#q {
+  min-width: 220px;
+  flex: 1 1 180px;
+}
+
+/* 搜索框清除按钮 */
+.search-wrapper {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 220px;
+}
+
+#clearSearch {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  display: none;
+  color: #999;
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+#clearSearch:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+#clearSearch.show {
+  display: flex;
+}
+
+/* 标签式控件 */
+
+.label-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+}
+
+/* ✅ 显示设置面板布局优化 */
+#panelView .view-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#panelView .view-settings-row:last-child {
+  margin-bottom: 0;
+}
+
+#panelView .view-settings-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* 2列布局：每个占50%减去gap */
+#panelView .view-settings-item-2col {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 120px;
+  max-width: calc(50% - 4px);
+}
+
+/* 3列布局：每个占33.333%减去gap */
+#panelView .view-settings-item-3col {
+  flex: 1 1 calc(33.333% - 6px);
+  min-width: 90px;
+  max-width: calc(33.333% - 6px);
+}
+
+/* 确保输入框和选择框不会超出容器 */
+#panelView .view-settings-item input,
+#panelView .view-settings-item select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 按钮行样式 */
+#panelView .view-settings-buttons {
+  justify-content: center;
+  gap: 12px;
+}
+
+#panelView .view-settings-btn {
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+/* ✅ 按钮基础样式 */
+
+button {
+  cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, transform .15s ease, opacity .2s ease;
+  position: relative;
+}
+
+button:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ✅ 功能按钮统一样式 - 默认蓝色 RGB(60, 120, 215) */
+button.ghost,
+button.function-btn {
+  background: var(--btn-default) !important; /* RGB(60, 120, 215) */
+  border-color: transparent;
+  color: #fff;
+  font-weight: 500;
+}
+
+/* ✅ 按钮激活状态（有active类时） */
+button.ghost.active,
+button.function-btn.active {
+  background: var(--btn-active) !important;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+/* ✅ 按钮悬停状态（仅在鼠标悬停时） */
+button.ghost:hover:not(.active),
+button.function-btn:hover:not(.active) {
+  background: var(--btn-hover) !important;
+}
+
+/* ✅ 按钮点击瞬间的状态 */
+button.ghost:active:not(.active),
+button.function-btn:active:not(.active) {
+  background: var(--btn-active) !important;
+}
+
+/* ✅ 按钮失去焦点时恢复默认背景色（最高优先级） */
+button.ghost:not(:active):not(.active):not(:hover),
+button.function-btn:not(:active):not(.active):not(:hover) {
+  background: var(--btn-default) !important;
+}
+
+/* ✅ 按钮失去焦点时恢复默认背景色，不显示高亮 */
+button.ghost:focus,
+button.function-btn:focus,
+button.ghost:focus-visible,
+button.function-btn:focus-visible {
+  background: var(--btn-default) !important;
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* ✅ 手机端：按钮点击后立即恢复默认背景色 */
+@media (max-width: 768px) {
+  /* ✅ 强制所有非激活状态的按钮使用默认背景色 */
+  button.ghost,
+  button.function-btn {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost.active,
+  button.function-btn.active {
+    background: var(--btn-active) !important;
+  }
+  
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost:hover:not(.active),
+  button.function-btn:hover:not(.active) {
+    background: var(--btn-hover) !important;
+  }
+  
+  /* ✅ 失去焦点时强制恢复默认背景色 */
+  button.ghost:not(:focus):not(.active):not(:hover):not(:active),
+  button.function-btn:not(:focus):not(.active):not(:hover):not(:active) {
+    background: var(--btn-default) !important;
+  }
+}
+
+/* ✅ 主操作按钮（新增一行） */
+button.primary {
+  background: #1990FF;
+  color: #fff;
+  border-color: transparent;
+  font-weight: 500;
+}
+
+button.primary:hover {
+  background: #1478d7;
+}
+
+button.primary.active {
+  background: #1990FF;
+  box-shadow: 0 2px 8px rgba(25, 144, 255, 0.3);
+}
+
+button.primary:active {
+  background: #1478d7;
+}
+
+/* ✅ iOS风格导入导出按钮 */
+#menuImport,
+#menuExport,
+#menuClearAll,
+#menuDeleteEmpty {
+  display: block;
+  width: auto;
+  min-width: 100px;
+  height: 36px;
+  padding: 0 16px;
+  text-align: center;
+  margin: 4px 8px;
+  background: rgb(32, 139, 238) !important; /* ✅ 优化：背景颜色改为 RGB(32, 139, 238) */
+  color: #ffffff !important;
+  border: none;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 36px;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+#menuImport:hover,
+#menuExport:hover,
+#menuClearAll:hover,
+#menuDeleteEmpty:hover {
+  background: rgb(24, 120, 220) !important; /* ✅ 优化：hover 状态颜色稍深 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+#menuImport:active,
+#menuExport:active,
+#menuClearAll:active,
+#menuDeleteEmpty:active {
+  background: rgb(20, 100, 200) !important; /* ✅ 优化：active 状态颜色更深 */
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+#importExportMenu,
+#deleteDataMenu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  border-top: none !important;
+}
+
+/* chip */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f2f7;
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 云端快照列表 */
+
+.cloud-history-panel {
+  margin-top: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.cloud-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  gap: 10px;
+  transition: background 0.15s ease;
+}
+
+.cloud-item + .cloud-item {
+  margin-top: 2px;
+}
+
+.cloud-item:hover {
+  background: #f2f6ff;
+}
+
+.cloud-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cloud-item-name {
+  font-weight: 500;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cloud-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cloud-item-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cloud-item.latest {
+  background: #e6f3ff !important;
+  border: 1px solid #1990FF;
+}
+
+.cloud-item.latest:hover {
+  background: #d0e7ff !important;
+}
+
+.cloud-item-latest-badge {
+  display: inline-block;
+  background: #1990FF;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 500;
+}
+
+/* 分类列表 */
+
+#catList {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* 确保分类设置面板样式与其他面板一致 */
+#panelCategories {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+#panelCategories .toolbar {
+  margin-bottom: 12px;
+}
+
+/* 分类行：强制垂直排列（所有屏幕尺寸） */
+.cat-row {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  border: 1px solid #e5e5ea;
+  background: white;
+  transition: background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  align-items: stretch !important;
+}
+
+.cat-row:hover {
+  background: #f5f5f7;
+}
+
+/* 第一排：序号、分类名称、颜色（强制水平排列） */
+.cat-row-main {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  flex-wrap: nowrap !important;
+  box-sizing: border-box !important;
+  order: 1 !important;
+}
+
+/* 序号：固定宽度，不收缩 */
+.cat-index {
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+  min-width: 35px;
+  width: 35px;
+  flex: 0 0 35px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/* 分类名称：占据剩余空间 */
+.cat-name {
+  flex: 1 1 auto !important;
+  min-width: 0;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+  border: 1px solid #e5e5ea;
+  background: #f9f9fb;
+  transition: all 0.2s ease;
+}
+
+.cat-name:focus {
+  background: white;
+  border-color: #1990FF;
+  box-shadow: 0 0 0 2px rgba(25, 144, 255, 0.1);
+}
+
+/* 颜色选择器：固定在右侧 */
+.cat-color-input {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  flex-shrink: 0;
+}
+
+.cat-color-preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  border: 2px solid #e5e5ea;
+  display: block;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.cat-color-picker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  border: none;
+  z-index: 1;
+}
+
+/* 第二排：上移、下移、删除按钮（强制水平排列） */
+.cat-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin-top: 0 !important;
+  order: 2 !important;
+}
+
+.cat-actions button {
+  flex: 1 1 0% !important;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  text-align: center;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .cat-row {
+    padding: 10px;
+    gap: 8px;
+    flex-direction: column !important; /* 确保垂直排列 */
+  }
+  
+  /* 第一排：序号、分类名称、颜色（水平排列） */
+  .cat-row-main {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  
+  /* 序号：固定宽度，不收缩 */
+  .cat-index {
+    font-size: 13px;
+    min-width: 30px;
+    width: 30px;
+    flex: 0 0 30px !important;
+    flex-shrink: 0 !important;
+    text-align: center;
+  }
+  
+  /* 分类名称：占据剩余空间 */
+  .cat-name {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+  
+  /* 颜色选择器：固定在右侧 */
+  .cat-color-input {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* 第二排：上移、下移、删除按钮（水平排列） */
+  .cat-actions {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* 按钮：平均分配宽度 */
+  .cat-actions button {
+    flex: 1 1 0% !important;
+    min-width: 0;
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .cat-row {
+    padding: 8px;
+    gap: 6px;
+    flex-direction: column !important; /* 确保垂直排列 */
+  }
+  
+  /* 第一排：序号、分类名称、颜色（水平排列） */
+  .cat-row-main {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  
+  /* 序号：小屏幕优化 */
+  .cat-index {
+    font-size: 12px;
+    min-width: 28px;
+    width: 28px;
+    flex: 0 0 28px !important;
+    flex-shrink: 0 !important;
+    text-align: center;
+  }
+  
+  /* 分类名称：占据剩余空间 */
+  .cat-name {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+  
+  /* 颜色选择器：固定在右侧 */
+  .cat-color-input {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* 第二排：上移、下移、删除按钮（水平排列） */
+  .cat-actions {
+    display: flex !important;
+    flex-direction: row !important; /* 确保水平排列 */
+    gap: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* 按钮：平均分配宽度 */
+  .cat-actions button {
+    flex: 1 1 0% !important;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    text-align: center;
+  }
+  
+  /* 确保所有元素在小屏幕上都能正常显示 */
+  .cat-row-main,
+  .cat-actions {
+    overflow: visible;
+  }
+  
+  .cat-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* 桌面表格 */
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cell-alt);
+}
+
+thead tr {
+  background: var(--cell-alt);
+}
+
+th,
+td {
+  padding: var(--pad) 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.2s ease;
+}
+
+th {
+  font-weight: 500;
+  color: #555;
+}
+
+/* 隔行着色（桌面） */
+
+tbody.zebra tr:nth-child(even) td {
+  background: var(--zebra);
+}
+
+/* hover 行 */
+
+tbody tr:hover td {
+  background: #e9f3ff;
+}
+
+/* 列宽 */
+
+th.col-phone,
+td.col-phone {
+  width: calc(var(--w-phone) * var(--colScale));
+}
+
+th.col-owner,
+td.col-owner {
+  width: 55px !important; /* ✅ 优化：固定宽度55px，不受colScale影响 */
+  min-width: 55px !important;
+  max-width: 55px !important;
+}
+
+th.col-real,
+td.col-real {
+  width: 55px !important; /* ✅ 优化：固定宽度55px，不受colScale影响 */
+  min-width: 55px !important;
+  max-width: 55px !important;
+}
+
+th.col-wx,
+td.col-wx {
+  width: calc(var(--w-wx) * var(--colScale));
+}
+
+/* ✅ 小红书名称：桌面左对齐，显示12个汉字 */
+th.col-xhs,
+td.col-xhs {
+  width: calc(var(--w-xhs) * var(--colScale));
+  text-align: left; /* ✅ 优化：改为左对齐 */
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ✅ 备注列：宽度与小红书名称列一致 */
+th.col-note,
+td.col-note {
+  width: calc(var(--w-xhs) * var(--colScale)); /* ✅ 优化：与小红书名称列宽度一致 */
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+th.col-cat,
+td.col-cat {
+  width: calc(var(--w-cat) * var(--colScale));
+  min-width: 140px; /* ✅ 优化：确保分类下拉按钮完整显示 */
+}
+
+th.col-act,
+td.col-act {
+  width: calc(var(--w-actions) * var(--colScale));
+  min-width: 120px; /* ✅ 优化：确保操作按钮完整显示 */
+  overflow: visible; /* ✅ 优化：防止按钮被截断 */
+  white-space: nowrap; /* ✅ 优化：防止按钮换行 */
+}
+
+/* 表格内联编辑 */
+
+td[contenteditable="true"] {
+  cursor: text;
+}
+
+td[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  outline-offset: -2px;
+  background: #ffffff !important;
+}
+
+/* ✅ 分类单元格 - 增强可点击性 */
+
+td.col-cat select {
+  width: 100%;
+  min-width: 80px; /* ✅ 优化：增加最小宽度，确保至少显示2个中文字 */
+  max-width: 100%; /* ✅ 优化：限制最大宽度，防止溢出 */
+  font-size: 13px;
+  height: 32px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.5;
+  box-sizing: border-box; /* ✅ 优化：确保padding不会导致溢出 */
+}
+
+td.col-cat select:hover {
+  border-color: var(--btn-active);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+td.col-cat select:focus {
+  border-color: var(--btn-active);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  outline: none;
+}
+
+/* 操作列（桌面） */
+
+.actions-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: visible; /* ✅ 优化：防止按钮被截断 */
+  white-space: nowrap; /* ✅ 优化：防止按钮换行 */
+}
+
+.actions-extra {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.actions-extra.hidden {
+  display: none;
+}
+
+.actions-container .btn-mini,
+.actions-extra .btn-mini {
+  padding: 2px 6px;
+  height: 24px;
+  font-size: 12px;
+  border-radius: 999px;
+  overflow: visible; /* ✅ 优化：防止按钮文字被截断 */
+  white-space: nowrap; /* ✅ 优化：防止按钮文字换行 */
+  text-overflow: clip; /* ✅ 优化：不使用省略号，直接显示完整文字 */
+}
+
+/* ✅ 删除按钮改为普通样式 */
+.btn-danger {
+  background: var(--btn-default);
+  border-color: transparent;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #ff4d4f;
+}
+
+.btn-danger:active {
+  background: #d9363e;
+}
+
+/* 桌面 / 手机显示切换 */
+
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+/* 手机版折叠列表卡片 */
+
+.m-row {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card-bg, #fff);
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, transform 0.1s ease;
+  color: #111;
+  /* ✅ 移除点击时的边框变化 */
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-row:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* ✅ 移除所有焦点和激活状态下的边框变化和轮廓 */
+.m-row:focus,
+.m-row:focus-visible,
+.m-row:focus-within,
+.m-row:active {
+  outline: none !important;
+  border: 1px solid var(--line) !important; /* 保持原有边框，不改变颜色或宽度 */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important; /* 保持原有阴影 */
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.m-row:active {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important; /* 点击时使用hover的阴影 */
+  border: 1px solid var(--line) !important; /* 确保点击时边框不变 */
+}
+
+/* ✅ 确保内部按钮获得焦点时，父元素不显示额外边框 */
+.m-row:focus-within {
+  border: 1px solid var(--line) !important;
+  outline: none !important;
+}
+
+/* 卡片头 */
+
+.m-row-header {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 16px 18px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: inherit;
+  height: auto;
+  border-radius: 0;
+  /* ✅ 移除所有焦点样式，防止点击时出现焦点轮廓 */
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.m-row:hover .m-row-header {
+  background: transparent; /* ✅ 取消悬停时的蓝色背景 */
+  color: inherit; /* ✅ 保持原色 */
+}
+
+/* ✅ 确保 .m-phone 不受悬停效果影响，保持原色 */
+.m-row:hover .m-row-header .m-phone {
+  color: inherit; /* 继承父元素颜色，但可以通过其他方式覆盖 */
+}
+
+.m-row:active .m-row-header,
+.m-row-header:active {
+  background: transparent; /* ✅ 取消点击时的蓝色背景 */
+  color: inherit; /* ✅ 保持原色 */
+  outline: none !important; /* ✅ 确保点击时没有焦点轮廓 */
+}
+
+/* ✅ 移除所有焦点状态下的样式 */
+.m-row-header:focus,
+.m-row-header:focus-visible,
+.m-row-header:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* 头部主行：手机号 + 小红书名称 */
+
+.m-main-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.m-phone {
+  font-size: 20px;
+  font-weight: 600;
+  flex: 0 0 auto;
+  pointer-events: none; /* ✅ 取消鼠标悬停效果 */
+  color: #111 !important; /* ✅ 强制保持原色，不受父元素悬停影响 */
+}
+
+/* ✅ 小红书名称：移动端右对齐，尽量完整显示 */
+.m-xhs {
+  font-size: 14px;
+  color: #333;
+  max-width: none; /* ✅ 移除宽度限制，尽量完整显示 */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  margin-left: auto;
+  text-align: right;
+  flex: 1 1 auto;
+}
+
+/* 头部第二行：所属人标签 + 分类 pill */
+
+.m-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  width: 100%;
+  padding-left: 0; /* ✅ 优化：移除左边距，确保与电话号左对齐 */
+}
+
+.m-owner {
+  padding: 2px 8px 2px 0; /* ✅ 优化：移除左边距，确保与电话号左对齐 */
+  border-radius: 999px;
+  background: transparent; /* ✅ 优化：背景色调整为透明，与表格背景一致 */
+  color: #333;
+  font-size: 14px;
+}
+
+/* ✅ 分类 pill - 根据分类颜色动态设置，右对齐 */
+.m-cat-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(0, 122, 255, 0.09);
+  transition: background 0.3s ease;
+  margin-left: auto;
+  text-align: right;
+}
+
+/* 下拉箭头 */
+
+.m-arrow {
+  font-size: 14px;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.m-row.open .m-arrow {
+  transform: rotate(180deg);
+}
+
+/* 手机详情区域 */
+
+.m-row-details {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0 18px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding 0.3s ease;
+}
+
+.m-row.open .m-row-details {
+  max-height: 1200px; /* ✅ 增加最大高度以容纳所有内容（包括新增的 textarea 和底部按钮） */
+  opacity: 1;
+  padding: 10px 18px 22px; /* ✅ 增加下方padding 12px -> 22px (+10px) */
+}
+
+.m-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* ✅ 优化：改为 center 确保垂直对齐 */
+  gap: 10px; /* ✅ 优化：增加间距，提高可读性 */
+  margin-bottom: 1px; /* ✅ 优化：每组和下方的高度距离改为1px */
+  min-height: 44px; /* ✅ 优化：设置最小高度，确保对齐一致 */
+}
+
+.m-detail-label {
+  font-size: 13px; /* ✅ 优化：稍微增大字体，提高可读性 */
+  color: var(--muted);
+  flex: 0 0 85px; /* ✅ 优化：稍微增加宽度，确保文字完整显示 */
+  padding-top: 0; /* ✅ 优化：移除 padding-top，确保对齐 */
+  line-height: 1.6; /* ✅ 优化：增加行高，与输入框对齐 */
+  display: flex; /* ✅ 优化：使用 flex 确保垂直居中 */
+  align-items: center; /* ✅ 优化：垂直居中对齐 */
+}
+
+.m-detail-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  padding: 4px 8px;
+  background: transparent; /* ✅ 优化：删除灰色背景 */
+  transition: background 0.2s ease;
+}
+
+/* ✅ 备注输入框设为2行高度，可调整大小 */
+.m-detail-value[data-field="note1"] {
+  min-height: 42px;
+  resize: vertical;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* 手机端可编辑文本 */
+
+.m-detail-value[contenteditable="true"] {
+  cursor: text;
+}
+
+.m-detail-value[contenteditable="true"]:focus-visible {
+  outline: 2px solid rgba(0, 122, 255, 0.35);
+  background: #ffffff !important;
+}
+
+/* ✅ 移动端输入框样式 */
+.m-input,
+.m-textarea {
+  width: 100%;
+  padding: 3px 12px; /* ✅ 优化：上下内边距改为3px */
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
+}
+
+/* ✅ 统一小红书名称输入框大小 - 使用 textarea */
+.m-textarea[data-field="xhs_name"] {
+  min-height: 50px;
+  line-height: 24px;
+  padding: 8px 12px;
+  resize: vertical;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.m-input:focus,
+.m-textarea:focus {
+  outline: none;
+  border-color: #1990FF;
+  box-shadow: 0 0 0 3px rgba(25, 144, 255, 0.1);
+  background: #ffffff;
+}
+
+.m-textarea {
+  resize: vertical;
+  min-height: 50px;
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
+}
+
+/* ✅ 移动端分类选择器增强 */
+.m-detail-value select {
+  width: 100%;
+  padding: 3px 12px; /* ✅ 优化：上下内边距改为3px */
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 45px; /* ✅ 优化：高度设置为45px */
+  height: 45px; /* ✅ 优化：固定高度45px */
+  line-height: 24px; /* ✅ 优化：内容区域高度22-25px，设置为24px */
+  box-sizing: border-box; /* ✅ 优化：确保内边距计算正确 */
+}
+
+.m-detail-value select:hover {
+  border-color: var(--btn-active);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.m-detail-value select:focus {
+  border-color: var(--btn-active);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  outline: none;
+}
+
+/* ✅ 卡片修改状态标识 */
+.m-row.modified {
+  border-color: #ff9f0a;
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.15);
+}
+
+.m-row.modified .m-row-header {
+  background: #fff9f0;
+}
+
+/* 底部操作区域（手机）*/
+
+.m-actions {
+  border-top: 1px solid var(--line);
+  padding: 6px 12px 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  background: #ffffff; /* ✅ 改为白色背景 */
+  flex-wrap: wrap; /* ✅ 允许按钮换行 */
+  min-height: 50px; /* ✅ 增加最小高度，确保有足够空间 */
+}
+
+.m-actions button {
+  height: 26px;
+  padding: 2px 12px; /* ✅ 稍微减少内边距以适应小屏幕 */
+  font-size: 12px;
+  min-width: 50px; /* ✅ 稍微减少最小宽度 */
+  flex: 0 0 auto; /* ✅ 防止按钮被压缩 */
+}
+
+/* 小屏优化 */
+
+@media (max-width: 1024px) {
+  .wrap {
+    padding: 10px 8px 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+
+  .panel {
+    border-radius: 12px;
+    padding: 12px 10px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important; /* ✅ 统一所有手机型号，紧贴状态栏 */
+    padding-bottom: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    position: static;
+    top: auto;
+    z-index: auto;
+    flex-wrap: wrap;
+  }
+
+  .topbar .top-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar .top-right {
+    display: flex !important;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .topbar .top-right #currentUserName {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-size: 12px;
+    margin-right: 6px;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .topbar .top-right #btnLogout {
+    font-size: 12px;
+    padding: 3px 10px;
+    height: auto;
+  }
+
+  .topbar .top-right #cloudStatus {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  /* ✅ 确保手机端（768px）最新快照高亮和标记正常显示 */
+  .cloud-item.latest {
+    background: #e6f3ff !important;
+    border: 1px solid #1990FF !important;
+  }
+
+  .cloud-item-latest-badge {
+    display: inline-block !important;
+    background: #1990FF !important;
+    color: white !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    margin-left: 6px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+  }
+
+  /* ✅ 手机端新增号码模态框样式优化 */
+  .add-number-modal {
+    padding: 10px !important;
+  }
+
+  .add-number-modal > div {
+    max-width: 100% !important;
+    max-height: 95vh !important;
+    padding: 15px !important;
+  }
+
+  .wrap {
+    padding-top: 0 !important; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加，统一所有手机型号 */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px) !important;
+  }
+
+  /* ✅ 确保 topbar 紧贴状态栏下方（统一所有iPhone型号，无空白间距） */
+  .topbar {
+    margin-top: 0;
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
+  }
+
+  #appTitle {
+    font-size: 18px;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* ✅ 版本号样式（移动端） */
+  #appVersion {
+    font-size: 11px !important;
+    margin-left: 6px !important;
+  }
+
+  /* ✅ 数据统计栏样式（移动端）- 使用ID选择器提高优先级 */
+  #dataStatsBar.data-stats-bar,
+  div#dataStatsBar,
+  .data-stats-bar#dataStatsBar {
+    font-size: 11px !important;
+    padding: 3px 10px !important;
+    color: #007aff !important; /* ✅ 确保移动端也是蓝色 */
+    font-weight: normal !important; /* ✅ 确保不是粗体 */
+    text-align: center !important; /* ✅ 确保居中对齐 */
+    background: #ffffff !important; /* ✅ 确保白色背景 */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* ✅ 数据统计栏内的所有元素样式（移动端）- 使用更具体的选择器 */
+  #dataStatsBar.data-stats-bar span,
+  #dataStatsBar.data-stats-bar #totalDataCount,
+  #dataStatsBar.data-stats-bar #statsVersion,
+  #dataStatsBar.data-stats-bar .stats-separator,
+  div#dataStatsBar span,
+  div#dataStatsBar #totalDataCount,
+  div#dataStatsBar #statsVersion,
+  div#dataStatsBar .stats-separator {
+    color: #007aff !important;
+    font-weight: normal !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    margin: 0 4px !important;
+    display: inline-block !important;
+  }
+  
+  /* ✅ 分隔符特殊样式 */
+  #dataStatsBar .stats-separator {
+    color: #ccc !important;
+    margin: 0 8px !important;
+  }
+
+  /* ✅ 优化：手机端字体默认粗体 */
+  body {
+    font-weight: bold !important;
+  }
+
+  .toolbar {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .toolbar:last-child {
+    margin-bottom: 0;
+  }
+
+  input,
+  select,
+  button {
+    font-size: 13px;
+    height: 32px;
+    padding: 6px 10px;
+    border-radius: 8px;
+  }
+
+  /* 防止手机端点击输入框时自动放大 */
+  #q {
+    font-size: 16px !important;
+    padding: 8px 36px 8px 12px;
+    height: 36px;
+  }
+
+  /* 防止手机端列表输入框自动放大 - 所有输入框字体至少16px */
+  .m-input,
+  .m-textarea,
+  .m-detail-value[contenteditable="true"] {
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+
+  .m-detail-value select {
+    font-size: 16px !important;
+  }
+
+  /* 调整输入框padding以适应16px字体 */
+  .m-input {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  .m-textarea {
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+
+  .m-detail-value[contenteditable="true"] {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  .search-wrapper {
+    min-width: 0;
+    flex: 1 1 100%;
+    margin-bottom: 6px;
+  }
+
+  /* 按钮在手机端优化 */
+  .toolbar button {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 下拉框在手机端优化 */
+  .toolbar select {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* 第一行工具栏：搜索和筛选 - 重新布局 */
+  .toolbar:first-of-type {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* 搜索框和搜索按钮在同一行 */
+  .toolbar:first-of-type .search-wrapper {
+    flex: 1 1 calc(100% - 140px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 1;
+  }
+
+  .toolbar:first-of-type #btnSearchMode {
+    flex: 0 0 130px;
+    white-space: nowrap;
+    margin-bottom: 0;
+    order: 2;
+  }
+
+  /* 三个下拉框在同一行，放在搜索行下面 */
+  .toolbar:first-of-type select {
+    flex: 1 1 calc(33.333% - 4px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 3;
+  }
+
+  /* 第二行工具栏：按钮网格布局 - 4列，2行 */
+  .toolbar:nth-of-type(2) {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .toolbar:nth-of-type(2) button,
+  .toolbar:nth-of-type(2) > div {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 100%;
+  }
+
+  th,
+  td {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wrap {
+    padding-top: 0 !important; /* ✅ 移除 wrap 的 padding-top，避免与 topbar 的 padding-top 叠加，统一所有手机型号 */
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 16px) !important;
+  }
+
+  /* ✅ 确保 topbar 紧贴状态栏下方（统一所有iPhone型号，无空白间距） */
+  .topbar {
+    padding-top: calc(env(safe-area-inset-top) + 2px) !important;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .panel {
+    border-radius: 10px;
+    padding: 10px 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .topbar .top-right #currentUserName {
+    font-size: 11px;
+    margin-right: 4px;
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: 50px;
+    text-align: right;
+  }
+
+  .topbar .top-right #btnLogout {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  .topbar .top-right #cloudStatus {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  /* ✅ 确保手机端最新快照高亮和标记正常显示 */
+  .cloud-item.latest {
+    background: #e6f3ff !important;
+    border: 1px solid #1990FF !important;
+  }
+
+  .cloud-item-latest-badge {
+    display: inline-block !important;
+    background: #1990FF !important;
+    color: white !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    margin-left: 6px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+  }
+
+  /* ✅ 数据统计栏样式（小屏幕移动端）- 确保所有安卓设备正确显示 */
+  #dataStatsBar.data-stats-bar,
+  div#dataStatsBar,
+  .data-stats-bar#dataStatsBar {
+    font-size: 11px !important;
+    padding: 3px 10px !important;
+    color: #007aff !important;
+    font-weight: normal !important;
+    text-align: center !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
+  }
+  
+  #dataStatsBar.data-stats-bar span,
+  #dataStatsBar.data-stats-bar #totalDataCount,
+  #dataStatsBar.data-stats-bar #statsVersion,
+  #dataStatsBar.data-stats-bar .stats-separator,
+  div#dataStatsBar span,
+  div#dataStatsBar #totalDataCount,
+  div#dataStatsBar #statsVersion,
+  div#dataStatsBar .stats-separator {
+    color: #007aff !important;
+    font-weight: normal !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+    margin: 0 4px !important;
+    display: inline-block !important;
+  }
+  
+  #dataStatsBar .stats-separator {
+    color: #ccc !important;
+    margin: 0 8px !important;
+  }
+
+  .cloud-item-name {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  
+  /* ✅ 小屏幕手机端设置页面布局优化 */
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 100px !important;
+    max-width: calc(50% - 3px) !important;
+  }
+  
+  #panelView .view-settings-item-3col {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 80px !important;
+    max-width: calc(33.333% - 4px) !important;
+  }
+  
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
+    flex: 0 0 auto;
+    min-width: 100px;
+  }
+
+  /* ✅ 手机端新增号码模态框样式优化 */
+  .add-number-modal {
+    padding: 10px !important;
+  }
+
+  .add-number-modal > div {
+    max-width: 100% !important;
+    max-height: 95vh !important;
+    padding: 15px !important;
+  }
+
+  .toolbar {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .toolbar:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 搜索框在小手机上全宽 */
+  .search-wrapper {
+    width: 100%;
+    margin-bottom: 8px;
+    min-width: 0;
+  }
+
+  #q {
+    min-width: 0;
+    width: 100%;
+    font-size: 16px !important;
+    padding: 8px 36px 8px 12px;
+    height: 36px;
+  }
+
+  /* 小手机上确保所有输入框字体至少16px */
+  .m-input,
+  .m-textarea,
+  .m-detail-value[contenteditable="true"] {
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+
+  .m-detail-value select {
+    font-size: 16px !important;
+  }
+
+  /* 调整输入框padding以适应16px字体 */
+  .m-input {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  .m-textarea {
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+
+  .m-detail-value[contenteditable="true"] {
+    padding: 8px 12px;
+    min-height: 44px;
+  }
+
+  /* 按钮在小手机上优化 - 4列网格布局，2行 */
+  .toolbar:nth-of-type(2) {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .toolbar button {
+    font-size: 11px;
+    padding: 6px 8px;
+    height: 32px;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 第二行工具栏按钮：4列布局 */
+  .toolbar:nth-of-type(2) button,
+  .toolbar:nth-of-type(2) > div {
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 100%;
+  }
+
+  /* 下拉框在小手机上优化 */
+  .toolbar select {
+    font-size: 11px;
+    padding: 6px 8px;
+    height: 32px;
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .toolbar select:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 第一行工具栏：搜索和筛选 - 重新布局 */
+  .toolbar:first-of-type {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* 搜索框和搜索按钮在同一行 */
+  .toolbar:first-of-type .search-wrapper {
+    flex: 1 1 calc(100% - 120px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 1;
+  }
+
+  .toolbar:first-of-type #btnSearchMode {
+    flex: 0 0 110px;
+    white-space: nowrap;
+    margin-bottom: 0;
+    order: 2;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  /* 三个下拉框在同一行 */
+  .toolbar:first-of-type select {
+    flex: 1 1 calc(33.333% - 4px);
+    min-width: 0;
+    margin-bottom: 0;
+    order: 3;
+  }
+
+  /* 标签式控件优化 */
+  .label-inline {
+    font-size: 11px;
+    flex: 1 1 100%;
+    margin-bottom: 8px;
+    min-width: 0;
+  }
+
+  .label-inline:last-child {
+    margin-bottom: 0;
+  }
+
+  .label-inline input[type="range"],
+  .label-inline input[type="color"],
+  .label-inline input[type="checkbox"] {
+    flex-shrink: 0;
+  }
+  
+  /* ✅ 手机端设置页面布局优化 - 使用新的view-settings样式 */
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 100px !important;
+    max-width: calc(50% - 3px) !important;
+  }
+  
+  #panelView .view-settings-item-3col {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 80px !important;
+    max-width: calc(33.333% - 4px) !important;
+  }
+  
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
+    flex: 0 0 auto;
+    min-width: 100px;
+  }
+  
+  /* ✅ 手机端按钮取消点击时不高亮 */
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+}
+
+/* ✅ 小屏幕手机端（480px）设置页面布局优化 */
+@media (max-width: 480px) {
+  /* ✅ 小屏幕手机端设置页面布局优化 - 使用新的view-settings样式 */
+  #panelView .view-settings-row {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  
+  #panelView .view-settings-item-2col {
+    flex: 1 1 calc(50% - 3px) !important;
+    min-width: 90px !important;
+    max-width: calc(50% - 3px) !important;
+  }
+  
+  #panelView .view-settings-item-3col {
+    flex: 1 1 calc(33.333% - 4px) !important;
+    min-width: 70px !important;
+    max-width: calc(33.333% - 4px) !important;
+  }
+  
+  #panelView .view-settings-buttons {
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  #panelView .view-settings-btn {
+    flex: 0 0 auto;
+    min-width: 100px;
+  }
+  
+  /* ✅ 小屏幕手机端：按钮取消点击时不高亮 */
+  button.ghost:active,
+  button.function-btn:active {
+    background: var(--btn-default) !important;
+  }
+  
+  button.ghost:not(.active),
+  button.function-btn:not(.active) {
+    background: var(--btn-default) !important;
+  }
+  
+  /* ✅ 确保按钮失去焦点时恢复默认背景色 */
+  button.ghost:not(:focus):not(.active):not(:hover),
+  button.function-btn:not(:focus):not(.active):not(:hover) {
+    background: var(--btn-default) !important;
+  }
+
+  .cloud-status {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+
+  .m-phone {
+    font-size: 18px;
+  }
+}

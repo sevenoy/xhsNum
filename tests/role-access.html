@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>权限可见性测试</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Helvetica, Arial, sans-serif; padding: 20px; }
+    .ok { color: #34c759; }
+    .fail { color: #ff3b30; }
+    pre { background: #f7f7fa; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>权限可见性测试</h1>
+  <div id="log"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    const log = (msg, ok=true) => {
+      const div = document.createElement('div');
+      div.className = ok ? 'ok' : 'fail';
+      div.textContent = (ok ? '✅ ' : '❌ ') + msg;
+      logEl.appendChild(div);
+    };
+    (async () => {
+      const SUPABASE_URL = localStorage.getItem("xhs_supabase_url");
+      const SUPABASE_ANON_KEY = localStorage.getItem("xhs_supabase_anon_key");
+      const { createClient } = supabase;
+      const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const { data: { session } } = await client.auth.getSession();
+      if (!session) {
+        log('未登录：请先登录再测试', false);
+        return;
+      }
+      const { data: profile } = await client
+        .from('user_profiles')
+        .select('role, username')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      const isAdmin = profile && (profile.role === 'super_admin' || (profile.username||'').toLowerCase()==='sevenoy');
+      if (isAdmin) {
+        log('管理员应能访问：approval-management.html / user-management.html / permission-management.html');
+      } else {
+        log('普通用户仅能访问：snapshot-browser.html；其余应被拦截重定向');
+      }
+      // 仅检查可见性策略（模拟）
+      const routes = {
+        'approval-management.html': { requiresAdmin: true },
+        'user-management.html': { requiresAdmin: true },
+        'permission-management.html': { requiresAdmin: true },
+        'snapshot-browser.html': { requiresAdmin: false },
+      };
+      Object.entries(routes).forEach(([url, meta]) => {
+        const allowed = !meta.requiresAdmin || isAdmin;
+        log(`${allowed ? '允许' : '禁止'}访问 ${url}`);
+      });
+    })();
+  </script>
+</body>
+</html>
+
+

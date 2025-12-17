@@ -477,6 +477,10 @@ async function getAllRows() {
 }
 
 // ✅ 更新云端快照信息显示（显示本地加载的快照号和云端最新快照号）
+// 使用静态变量避免重复弹出对话框
+let lastCheckedSnapshotKey = null;
+let isAutoUpdating = false;
+
 async function updateCloudSnapshotInfo() {
   try {
     const cloudSnapshotInfo = document.getElementById('cloudSnapshotInfo');
@@ -496,6 +500,7 @@ async function updateCloudSnapshotInfo() {
     // 获取云端最新的快照信息
     let latestCloudSnapshot = '未知';
     let latestCloudVersion = '未知';
+    let latestSnapshotData = null;
     
     if (supabase) {
       try {
@@ -517,6 +522,7 @@ async function updateCloudSnapshotInfo() {
             const snapshot = latestSnapshot[0];
             latestCloudSnapshot = snapshot.key || '未知';
             latestCloudVersion = snapshot.payload?.snapshot_label || '未知';
+            latestSnapshotData = snapshot;
             console.log('✅ 获取云端最新快照:', { key: latestCloudSnapshot, version: latestCloudVersion });
           } else {
             console.log('ℹ️ 云端没有快照数据');
@@ -556,8 +562,64 @@ async function updateCloudSnapshotInfo() {
       cloudSnapshotInfo.style.display = 'none';
       console.log('ℹ️ 没有快照信息可显示');
     }
+    
+    // ✅ 检测版本差异：如果本地版本和云端版本不同，且云端版本有更新，自动更新本地数据
+    if (latestSnapshotData && latestCloudSnapshot !== '未知' && !isAutoUpdating) {
+      const isVersionDifferent = 
+        (currentCloudSnapshot !== latestCloudSnapshot) || 
+        (currentCloudVersion !== latestCloudVersion);
+      
+      // 检查是否已经检查过这个快照（避免重复弹出）
+      const hasCheckedThisSnapshot = lastCheckedSnapshotKey === latestCloudSnapshot;
+      
+      if (isVersionDifferent && !hasCheckedThisSnapshot) {
+        console.log('🔄 检测到云端版本更新:', {
+          local: { key: currentCloudSnapshot, version: currentCloudVersion },
+          latest: { key: latestCloudSnapshot, version: latestCloudVersion }
+        });
+        
+        // 标记正在自动更新，避免重复触发
+        isAutoUpdating = true;
+        lastCheckedSnapshotKey = latestCloudSnapshot;
+        
+        // 弹出对话框提示用户
+        const shouldUpdate = confirm(
+          '🔄 检测到云端有更新的快照\n\n' +
+          `本地版本：${currentCloudSnapshot || '-'} (${currentCloudVersion || '-'})\n` +
+          `云端版本：${latestCloudSnapshot} (${latestCloudVersion})\n\n` +
+          '是否立即更新本地数据？\n\n' +
+          '⚠️ 注意：更新将覆盖本地数据'
+        );
+        
+        if (shouldUpdate) {
+          try {
+            console.log('✅ 用户确认更新，开始加载云端快照:', latestCloudSnapshot);
+            await cloudLoad(latestCloudSnapshot);
+            console.log('✅ 云端快照已自动更新');
+          } catch (err) {
+            console.error('❌ 自动更新失败:', err);
+            alert(`❌ 自动更新失败：${err.message || err}`);
+            // 更新失败时重置标志，允许下次重试
+            lastCheckedSnapshotKey = null;
+          }
+        } else {
+          console.log('ℹ️ 用户取消自动更新');
+          // 用户取消时也记录已检查，避免频繁弹出
+          lastCheckedSnapshotKey = latestCloudSnapshot;
+        }
+        
+        // 重置自动更新标志
+        isAutoUpdating = false;
+      } else if (!isVersionDifferent && currentCloudSnapshot) {
+        // 版本相同，重置检查标志（允许检测新的更新）
+        if (lastCheckedSnapshotKey !== latestCloudSnapshot) {
+          lastCheckedSnapshotKey = latestCloudSnapshot;
+        }
+      }
+    }
   } catch (err) {
     console.error('更新云端快照信息失败:', err);
+    isAutoUpdating = false;
   }
 }
 

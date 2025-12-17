@@ -2113,6 +2113,9 @@ async function cloudSave() {
 
     alert(`✅ 已保存到云端\n操作人：${getCurrentUserName()}`);
     await renderCloudHistory();
+    
+    // ✅ 保存后立即检测云端版本更新
+    await updateCloudSnapshotInfo();
   } catch (error) {
     console.error('❌ 保存云端时发生未捕获的错误:', error);
     alert(
@@ -3459,10 +3462,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ✅ 页面加载时立即显示云端快照信息
   await updateCloudSnapshotInfo();
   
-  // ✅ 定期更新云端快照信息（每10秒更新一次）
+  // ✅ 定期更新云端快照信息（每3秒更新一次，更实时地检测版本更新）
   setInterval(async () => {
     await updateCloudSnapshotInfo();
-  }, 10000);
+  }, 3000);
   
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";

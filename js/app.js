@@ -596,15 +596,19 @@ async function updateCloudSnapshotInfo() {
     const formattedRemote = formatSnapshotDisplay(latestCloudVersion);
     cloudSnapshotRemote.textContent = formattedRemote;
     
-    // ✅ 只要云端有快照信息，就显示（不再要求本地必须有快照）
+    // ✅ 云端快照信息已隐藏，但功能保持运行
+    // 始终隐藏显示，但继续执行版本检测和自动更新功能
+    if (cloudSnapshotInfo) {
+      cloudSnapshotInfo.style.display = 'none';
+    }
+    
+    // 记录日志（即使不显示）
     if (latestCloudSnapshot !== '未知' || currentCloudSnapshot) {
-      cloudSnapshotInfo.style.display = 'flex';
-      console.log('✅ 云端快照信息已显示:', { 
+      console.log('✅ 云端快照信息已检测（已隐藏）:', { 
         local: { key: currentCloudSnapshot, version: currentCloudVersion },
         latest: { key: latestCloudSnapshot, version: latestCloudVersion }
       });
     } else {
-      cloudSnapshotInfo.style.display = 'none';
       console.log('ℹ️ 没有快照信息可显示');
     }
     

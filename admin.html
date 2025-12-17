@@ -303,48 +303,73 @@
           const adminTotalCountEl = document.getElementById('adminTotalDataCount');
           const adminVersionEl = document.getElementById('adminStatsVersion');
           
-          // 更新版本号（从主页获取或使用默认值）
+          // 更新版本号（从 index.html 解析）
           if (adminVersionEl) {
-            // 尝试从主页的 iframe 获取版本号，或者使用 localStorage
             try {
-              const mainFrame = window.parent?.document?.getElementById('adminFrame');
-              if (mainFrame && mainFrame.contentWindow?.APP_VERSION) {
-                adminVersionEl.textContent = `版本 ${mainFrame.contentWindow.APP_VERSION}`;
+              const response = await fetch('./index.html?v=' + Date.now());
+              const html = await response.text();
+              const versionMatch = html.match(/const APP_VERSION = ['"](V\d{6}\.\d+)['"]/);
+              if (versionMatch && versionMatch[1]) {
+                adminVersionEl.textContent = `版本 ${versionMatch[1]}`;
+                console.log('✅ 管理中心版本号已更新:', versionMatch[1]);
               } else {
-                // 从主页加载版本号
-                const response = await fetch('./index.html');
-                const html = await response.text();
-                const versionMatch = html.match(/const APP_VERSION = ['"](.*?)['"]/);
-                if (versionMatch) {
-                  adminVersionEl.textContent = `版本 ${versionMatch[1]}`;
-                } else {
-                  adminVersionEl.textContent = '版本 未知';
-                }
+                adminVersionEl.textContent = '版本 未知';
+                console.warn('⚠️ 无法从 index.html 解析版本号');
               }
             } catch (err) {
+              console.error('读取版本号失败:', err);
               adminVersionEl.textContent = '版本 未知';
             }
           }
           
-          // 更新总数据数（从 Supabase 查询）
+          // 更新总数据数（从 IndexedDB 读取）
           if (adminTotalCountEl) {
             try {
-              const SUPABASE_TABLE = localStorage.getItem('xhs_supabase_table') || 'xhs_data';
-              const { data, error } = await client
-                .from(SUPABASE_TABLE)
-                .select('payload')
-                .eq('key', 'default')
-                .maybeSingle();
+              // 动态导入 Dexie 和 config
+              const DexieModule = await import('https://esm.sh/dexie@4.0.8');
+              const Dexie = DexieModule.default || DexieModule;
+              const configModule = await import('./js/config.js');
+              const DB_NAME = configModule.DB_NAME || 'xhs_db';
               
-              if (!error && data && data.payload && data.payload.rows) {
-                const totalCount = Array.isArray(data.payload.rows) ? data.payload.rows.length : 0;
-                adminTotalCountEl.textContent = `总数据：${totalCount}条`;
-              } else {
-                adminTotalCountEl.textContent = '总数据：0条';
+              // 初始化数据库
+              const db = new Dexie(DB_NAME);
+              db.version(2).stores({
+                rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
+                meta: "key"
+              });
+              
+              // 打开数据库
+              if (!db.isOpen()) {
+                await db.open();
               }
+              
+              // 读取所有数据
+              const all = await db.rows.toArray();
+              const totalCount = all.length;
+              adminTotalCountEl.textContent = `总数据：${totalCount}条`;
+              console.log('✅ 管理中心总数据数已更新:', totalCount);
             } catch (err) {
-              console.error('查询数据总数失败:', err);
-              adminTotalCountEl.textContent = '总数据：-';
+              console.error('从 IndexedDB 读取总数据数失败:', err);
+              // 尝试从 Supabase 查询作为备用方案
+              try {
+                const SUPABASE_TABLE = localStorage.getItem('xhs_supabase_table') || 'xhs_data';
+                const { data, error } = await client
+                  .from(SUPABASE_TABLE)
+                  .select('payload')
+                  .eq('key', 'default')
+                  .maybeSingle();
+                
+                if (!error && data && data.payload && data.payload.rows) {
+                  const totalCount = Array.isArray(data.payload.rows) ? data.payload.rows.length : 0;
+                  adminTotalCountEl.textContent = `总数据：${totalCount}条`;
+                  console.log('✅ 从 Supabase 读取总数据数:', totalCount);
+                } else {
+                  adminTotalCountEl.textContent = '总数据：0条';
+                }
+              } catch (supabaseErr) {
+                console.error('Supabase 查询也失败:', supabaseErr);
+                adminTotalCountEl.textContent = '总数据：-';
+              }
             }
           }
         } catch (err) {

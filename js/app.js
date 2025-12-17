@@ -476,6 +476,91 @@ async function getAllRows() {
   return all;
 }
 
+// ✅ 更新云端快照信息显示（显示本地加载的快照号和云端最新快照号）
+async function updateCloudSnapshotInfo() {
+  try {
+    const cloudSnapshotInfo = document.getElementById('cloudSnapshotInfo');
+    const cloudSnapshotLocal = document.getElementById('cloudSnapshotLocal');
+    const cloudSnapshotRemote = document.getElementById('cloudSnapshotRemote');
+    
+    if (!cloudSnapshotInfo || !cloudSnapshotLocal || !cloudSnapshotRemote) {
+      return;
+    }
+    
+    // 从 localStorage 获取本地当前加载的云端快照信息
+    const currentCloudSnapshot = localStorage.getItem('xhs_current_cloud_snapshot');
+    const currentCloudVersion = localStorage.getItem('xhs_current_cloud_version');
+    
+    console.log('🔍 检查本地快照信息:', { currentCloudSnapshot, currentCloudVersion });
+    
+    // 获取云端最新的快照信息
+    let latestCloudSnapshot = '未知';
+    let latestCloudVersion = '未知';
+    
+    if (supabase) {
+      try {
+        const currentUserId = await getCurrentUserId();
+        console.log('🔍 当前用户 ID:', currentUserId);
+        
+        if (currentUserId) {
+          // 查询当前用户最新的快照
+          const { data: latestSnapshot, error } = await supabase
+            .from(SUPABASE_TABLE)
+            .select('key, payload, updated_at')
+            .eq('owner_id', currentUserId)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+          
+          if (error) {
+            console.warn('⚠️ 查询云端快照失败:', error);
+          } else if (latestSnapshot && latestSnapshot.length > 0) {
+            const snapshot = latestSnapshot[0];
+            latestCloudSnapshot = snapshot.key || '未知';
+            latestCloudVersion = snapshot.payload?.snapshot_label || '未知';
+            console.log('✅ 获取云端最新快照:', { key: latestCloudSnapshot, version: latestCloudVersion });
+          } else {
+            console.log('ℹ️ 云端没有快照数据');
+          }
+        } else {
+          console.warn('⚠️ 无法获取当前用户 ID');
+        }
+      } catch (err) {
+        console.warn('⚠️ 获取云端最新快照失败:', err);
+      }
+    } else {
+      console.warn('⚠️ Supabase 未初始化');
+    }
+    
+    // ✅ 修复：分成两行显示
+    // 第一行：本地版本
+    // 第二行：云端版本
+    if (currentCloudSnapshot && currentCloudVersion) {
+      // 本地有快照信息，显示本地版本
+      cloudSnapshotLocal.textContent = `${currentCloudSnapshot} (${currentCloudVersion})`;
+    } else {
+      // 本地没有快照，显示 "-"
+      cloudSnapshotLocal.textContent = '-';
+    }
+    
+    // 云端版本始终显示最新的
+    cloudSnapshotRemote.textContent = `${latestCloudSnapshot} (${latestCloudVersion})`;
+    
+    // ✅ 只要云端有快照信息，就显示（不再要求本地必须有快照）
+    if (latestCloudSnapshot !== '未知' || currentCloudSnapshot) {
+      cloudSnapshotInfo.style.display = 'block';
+      console.log('✅ 云端快照信息已显示:', { 
+        local: { key: currentCloudSnapshot, version: currentCloudVersion },
+        latest: { key: latestCloudSnapshot, version: latestCloudVersion }
+      });
+    } else {
+      cloudSnapshotInfo.style.display = 'none';
+      console.log('ℹ️ 没有快照信息可显示');
+    }
+  } catch (err) {
+    console.error('更新云端快照信息失败:', err);
+  }
+}
+
 // ✅ 更新数据统计栏（总数据数和版本号）
 async function updateDataStatsBar() {
   try {
@@ -524,7 +609,9 @@ async function updateDataStatsBar() {
       // 优先使用 window.APP_VERSION，如果没有则从页面中获取
       const version = window.APP_VERSION || document.getElementById('appVersion')?.textContent?.replace('v', '') || '';
       if (version) {
-        versionEl.textContent = version; // ✅ 不显示"v"前缀
+        versionEl.textContent = `版本 ${version}`; // ✅ 显示"版本"前缀
+      } else {
+        versionEl.textContent = '版本 未知'; // ✅ 如果没有版本号，显示"未知"
       }
       // ✅ 确保版本号元素也有正确的样式
       versionEl.style.cssText = `
@@ -2094,6 +2181,13 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
     renderCatList();
   }
   
+  // ✅ 保存当前加载的云端快照信息到 localStorage
+  localStorage.setItem('xhs_current_cloud_snapshot', key);
+  localStorage.setItem('xhs_current_cloud_version', payload.snapshot_label || '未知');
+  
+  // ✅ 更新云端快照信息显示
+  await updateCloudSnapshotInfo();
+  
   // ✅ 加载后刷新历史列表，显示最新的快照高亮
   await renderCloudHistory();
   
@@ -2117,6 +2211,14 @@ async function renderCloudHistory(maxCount = 1) {
   
   // ✅ 修复：getCurrentUserId() 是 async 函数，需要 await
   const currentUserId = await getCurrentUserId();
+  
+  // ✅ 修复：如果 currentUserId 为 null，显示错误信息
+  if (!currentUserId) {
+    console.error('❌ 无法获取当前用户 ID');
+    panel.innerHTML =
+      `<div style="padding:8px 10px;color:#ff3b30;">加载历史失败: 无法获取用户信息，请重新登录</div>`;
+    return;
+  }
   
   try {
     // ✅ 修复：先查询当前用户的快照，然后取最新的一条
@@ -3291,6 +3393,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   // ✅ 确保数据统计栏已更新
   await updateDataStatsBar();
+  
+  // ✅ 页面加载时立即显示云端快照信息
+  await updateCloudSnapshotInfo();
+  
+  // ✅ 定期更新云端快照信息（每10秒更新一次）
+  setInterval(async () => {
+    await updateCloudSnapshotInfo();
+  }, 10000);
   
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";

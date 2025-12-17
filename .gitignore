@@ -1,0 +1,7 @@
+# macOS 隐藏文件
+._*
+.DS_Store
+
+# Cursor 配置
+.cursor/
+

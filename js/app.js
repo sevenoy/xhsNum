@@ -481,6 +481,49 @@ async function getAllRows() {
 let lastCheckedSnapshotKey = null;
 let isAutoUpdating = false;
 
+// ✅ 格式化快照名称显示：去掉 default，简化用户名和年份
+function formatSnapshotDisplay(snapshotLabel) {
+  if (!snapshotLabel || snapshotLabel === '未知') {
+    return '-';
+  }
+  
+  // 格式：用户名 年月日时分，例如：Olina 202512172057 或 olena 202512172057
+  // 转换为：O 2512172057（去掉 default，用户名只取首字母，年份从 2025 改为 25）
+  
+  // 如果包含 default，去掉（包括括号中的 default）
+  let formatted = snapshotLabel.replace(/default\s*/gi, '').replace(/[()]/g, '').trim();
+  
+  // 提取用户名和日期时间
+  // 格式可能是：Olina 202512172057 或 olena 202512172057
+  const match = formatted.match(/^([a-zA-Z]+)\s+(\d{4})(\d{8})$/);
+  if (match) {
+    const userName = match[1];
+    const year = match[2];
+    const dateTime = match[3];
+    
+    // 用户名只取首字母（大写）
+    const firstLetter = userName.charAt(0).toUpperCase();
+    
+    // 年份从 2025 改为 25
+    const shortYear = year.slice(-2);
+    
+    return `${firstLetter} ${shortYear}${dateTime}`;
+  }
+  
+  // 如果格式不匹配，尝试其他格式
+  // 可能是：Olina 2512172057（已经是短年份）
+  const match2 = formatted.match(/^([a-zA-Z]+)\s+(\d{10})$/);
+  if (match2) {
+    const userName = match2[1];
+    const dateTime = match2[2];
+    const firstLetter = userName.charAt(0).toUpperCase();
+    return `${firstLetter} ${dateTime}`;
+  }
+  
+  // 如果都不匹配，返回原值（去掉 default 和括号）
+  return formatted;
+}
+
 async function updateCloudSnapshotInfo() {
   try {
     const cloudSnapshotInfo = document.getElementById('cloudSnapshotInfo');
@@ -541,19 +584,21 @@ async function updateCloudSnapshotInfo() {
     // 第一行：本地版本
     // 第二行：云端版本
     if (currentCloudSnapshot && currentCloudVersion) {
-      // 本地有快照信息，显示本地版本
-      cloudSnapshotLocal.textContent = `${currentCloudSnapshot} (${currentCloudVersion})`;
+      // 本地有快照信息，显示本地版本（格式化显示）
+      const formattedLocal = formatSnapshotDisplay(currentCloudVersion);
+      cloudSnapshotLocal.textContent = formattedLocal;
     } else {
       // 本地没有快照，显示 "-"
       cloudSnapshotLocal.textContent = '-';
     }
     
-    // 云端版本始终显示最新的
-    cloudSnapshotRemote.textContent = `${latestCloudSnapshot} (${latestCloudVersion})`;
+    // 云端版本始终显示最新的（格式化显示）
+    const formattedRemote = formatSnapshotDisplay(latestCloudVersion);
+    cloudSnapshotRemote.textContent = formattedRemote;
     
     // ✅ 只要云端有快照信息，就显示（不再要求本地必须有快照）
     if (latestCloudSnapshot !== '未知' || currentCloudSnapshot) {
-      cloudSnapshotInfo.style.display = 'block';
+      cloudSnapshotInfo.style.display = 'flex';
       console.log('✅ 云端快照信息已显示:', { 
         local: { key: currentCloudSnapshot, version: currentCloudVersion },
         latest: { key: latestCloudSnapshot, version: latestCloudVersion }
@@ -564,15 +609,26 @@ async function updateCloudSnapshotInfo() {
     }
     
     // ✅ 检测版本差异：如果本地版本和云端版本不同，且云端版本有更新，自动更新本地数据
-    if (latestSnapshotData && latestCloudSnapshot !== '未知' && !isAutoUpdating) {
-      const isVersionDifferent = 
-        (currentCloudSnapshot !== latestCloudSnapshot) || 
-        (currentCloudVersion !== latestCloudVersion);
+    if (latestSnapshotData && latestCloudSnapshot !== '未知' && latestCloudVersion !== '未知' && !isAutoUpdating) {
+      // 比较版本：主要比较 snapshot_label（版本号），因为 key 可能相同但版本不同
+      const isVersionDifferent = currentCloudVersion !== latestCloudVersion;
       
-      // 检查是否已经检查过这个快照（避免重复弹出）
-      const hasCheckedThisSnapshot = lastCheckedSnapshotKey === latestCloudSnapshot;
+      // ✅ 修复：使用版本号（snapshot_label）而不是 key 来判断是否已检查过
+      // 因为同一个 key（如 "default"）可能有多个不同版本
+      const hasCheckedThisVersion = lastCheckedSnapshotKey === latestCloudVersion;
       
-      if (isVersionDifferent && !hasCheckedThisSnapshot) {
+      console.log('🔍 版本检测详情:', {
+        currentCloudSnapshot,
+        currentCloudVersion,
+        latestCloudSnapshot,
+        latestCloudVersion,
+        isVersionDifferent,
+        hasCheckedThisVersion,
+        lastCheckedSnapshotKey,
+        isAutoUpdating
+      });
+      
+      if (isVersionDifferent && !hasCheckedThisVersion) {
         console.log('🔄 检测到云端版本更新:', {
           local: { key: currentCloudSnapshot, version: currentCloudVersion },
           latest: { key: latestCloudSnapshot, version: latestCloudVersion }
@@ -580,12 +636,13 @@ async function updateCloudSnapshotInfo() {
         
         // 标记正在自动更新，避免重复触发
         isAutoUpdating = true;
-        lastCheckedSnapshotKey = latestCloudSnapshot;
+        // ✅ 修复：使用版本号而不是 key 来标记已检查
+        lastCheckedSnapshotKey = latestCloudVersion;
         
         // 弹出对话框提示用户
         const shouldUpdate = confirm(
           '🔄 检测到云端有更新的快照\n\n' +
-          `本地版本：${currentCloudSnapshot || '-'} (${currentCloudVersion || '-'})\n` +
+          `本地版本：${currentCloudSnapshot || 'default'} (${currentCloudVersion || '-'})\n` +
           `云端版本：${latestCloudSnapshot} (${latestCloudVersion})\n\n` +
           '是否立即更新本地数据？\n\n' +
           '⚠️ 注意：更新将覆盖本地数据'
@@ -605,16 +662,29 @@ async function updateCloudSnapshotInfo() {
         } else {
           console.log('ℹ️ 用户取消自动更新');
           // 用户取消时也记录已检查，避免频繁弹出
-          lastCheckedSnapshotKey = latestCloudSnapshot;
+          lastCheckedSnapshotKey = latestCloudVersion;
         }
         
         // 重置自动更新标志
         isAutoUpdating = false;
-      } else if (!isVersionDifferent && currentCloudSnapshot) {
+      } else if (!isVersionDifferent && currentCloudVersion) {
         // 版本相同，重置检查标志（允许检测新的更新）
-        if (lastCheckedSnapshotKey !== latestCloudSnapshot) {
-          lastCheckedSnapshotKey = latestCloudSnapshot;
+        if (lastCheckedSnapshotKey !== latestCloudVersion) {
+          lastCheckedSnapshotKey = latestCloudVersion;
+          console.log('✅ 版本相同，更新检查标志:', latestCloudVersion);
         }
+      } else if (hasCheckedThisVersion) {
+        console.log('ℹ️ 已检查过此版本，跳过:', latestCloudVersion);
+      }
+    } else {
+      if (!latestSnapshotData) {
+        console.log('ℹ️ 没有云端快照数据，跳过版本检测');
+      } else if (latestCloudSnapshot === '未知') {
+        console.log('ℹ️ 云端快照 key 未知，跳过版本检测');
+      } else if (latestCloudVersion === '未知') {
+        console.log('ℹ️ 云端快照版本未知，跳过版本检测');
+      } else if (isAutoUpdating) {
+        console.log('ℹ️ 正在自动更新中，跳过版本检测');
       }
     }
   } catch (err) {
@@ -623,7 +693,33 @@ async function updateCloudSnapshotInfo() {
   }
 }
 
-// ✅ 更新数据统计栏（总数据数和版本号）
+// ✅ 更新管理中心的总数据数和版本号显示
+async function updateAdminStats() {
+  try {
+    const all = await getAllRows();
+    const totalCount = all.length;
+    const adminTotalCountEl = document.getElementById('adminTotalDataCount');
+    const adminVersionEl = document.getElementById('adminStatsVersion');
+    
+    if (adminTotalCountEl) {
+      adminTotalCountEl.textContent = `总数据：${totalCount}条`;
+    }
+    
+    if (adminVersionEl) {
+      // 优先使用 window.APP_VERSION，如果没有则从页面中获取
+      const version = window.APP_VERSION || document.getElementById('appVersion')?.textContent?.replace('v', '') || '';
+      if (version) {
+        adminVersionEl.textContent = `版本 ${version}`;
+      } else {
+        adminVersionEl.textContent = '版本 未知';
+      }
+    }
+  } catch (err) {
+    console.error('更新管理中心统计信息失败:', err);
+  }
+}
+
+// ✅ 更新数据统计栏（总数据数和版本号）- 已移除，保留函数以防其他地方调用
 async function updateDataStatsBar() {
   try {
     const all = await getAllRows();
@@ -631,6 +727,11 @@ async function updateDataStatsBar() {
     const totalCountEl = document.getElementById('totalDataCount');
     const versionEl = document.getElementById('statsVersion');
     const statsBar = document.getElementById('dataStatsBar');
+    
+    // ✅ 如果是在管理中心页面，更新管理中心显示
+    if (window.location.pathname.includes('admin.html')) {
+      await updateAdminStats();
+    }
     
     // ✅ 确保数据统计栏在所有设备上都有正确的样式（内联样式作为兜底）
     if (statsBar) {

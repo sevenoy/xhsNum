@@ -733,27 +733,11 @@ async function updateDataStatsBar() {
       await updateAdminStats();
     }
     
-    // ✅ 确保数据统计栏在所有设备上都有正确的样式（内联样式作为兜底）
+    // ✅ 数据统计栏已隐藏，不再设置显示样式
+    // 保持隐藏状态，但功能继续运行
     if (statsBar) {
-      // 检测是否为移动设备
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile) {
-        statsBar.style.cssText = `
-          font-size: 11px !important;
-          padding: 3px 10px !important;
-          color: #007aff !important;
-          font-weight: normal !important;
-          text-align: center !important;
-          background: #ffffff !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          width: 100% !important;
-          box-sizing: border-box !important;
-          margin: 0 !important;
-          line-height: 1.4 !important;
-        `;
-      }
+      // 确保始终隐藏
+      statsBar.style.display = 'none';
     }
     
     if (totalCountEl) {

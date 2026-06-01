@@ -218,9 +218,48 @@
   </script>
 </head>
 <body>
+  <aside class="app-sidebar" aria-label="主导航">
+    <div class="sidebar-profile">
+      <div class="sidebar-avatar" aria-hidden="true">用</div>
+      <div class="sidebar-profile-text">
+        <div id="sidebarUserName" class="sidebar-user-name">未登录</div>
+        <div class="sidebar-cloud-line">
+          <span class="sidebar-status-dot" aria-hidden="true"></span>
+          <span id="sidebarCloudText">未知</span>
+        </div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" aria-label="功能导航">
+      <button type="button" class="sidebar-nav-item active" data-sidebar-action="home">
+        <span class="sidebar-icon">▦</span>
+        <span>号码管理</span>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="cloud">
+        <span class="sidebar-icon">↻</span>
+        <span>云端同步</span>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="importExport">
+        <span class="sidebar-icon">↕</span>
+        <span>导入导出</span>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="categories">
+        <span class="sidebar-icon">◇</span>
+        <span>分类管理</span>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="view">
+        <span class="sidebar-icon">⚙</span>
+        <span>显示配置</span>
+      </button>
+    </nav>
+    <div class="sidebar-bottom">
+      <button type="button" class="sidebar-add" data-sidebar-action="add">＋ 新增号码</button>
+      <button type="button" class="sidebar-logout" data-sidebar-action="logout">退出登录</button>
+    </div>
+  </aside>
+
   <div class="wrap">
     <!-- 顶部导航 -->
-    <div class="topbar">
+    <div class="topbar app-topbar">
       <div class="top-left">
         <h1 id="appTitle">号码管理</h1>
       </div>
@@ -247,8 +286,8 @@
     </div>
 
     <!-- 工具栏：搜索 + 筛选 + 操作 -->
-    <div class="panel">
-      <div class="toolbar">
+    <div class="panel controls-panel">
+      <div class="toolbar filter-toolbar">
         <div class="search-wrapper">
           <input id="q" placeholder="搜索：任意关键词" style="width: 100%; padding-right: 32px;" />
           <span id="clearSearch" class="clear-search-btn" title="清除搜索">×</span>
@@ -271,7 +310,7 @@
         </select>
       </div>
 
-      <div class="toolbar">
+      <div class="toolbar action-toolbar">
         <button id="btnAdd" class="primary function-btn" data-function="add">新增号码</button>
         <div style="position: relative; display: inline-block;">
           <button id="btnDeleteData" class="ghost function-btn" data-function="deleteData">删除数据</button>
@@ -316,7 +355,7 @@
     </div>
 
     <!-- 数据面板 -->
-    <div class="panel">
+    <div class="panel data-panel">
       <!-- 桌面版表格 -->
       <div class="table-wrap desktop-only">
         <table id="grid">
@@ -350,7 +389,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.1';
+    const APP_VERSION = 'V260601.2';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

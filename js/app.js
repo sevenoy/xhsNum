@@ -2892,6 +2892,8 @@ function bindEvents() {
   // 初始化清除按钮状态
   updateClearButton();
 
+  initSidebarActions();
+
   $("#btnSearchMode").addEventListener("click", async () => {
     setActiveFunction("search");
     state.precise = !state.precise;
@@ -3377,6 +3379,70 @@ function bindEvents() {
       window.location.href = 'snapshot-browser.html';
     });
   }
+}
+
+function initSidebarActions() {
+  const sidebarButtons = document.querySelectorAll('[data-sidebar-action]');
+  if (!sidebarButtons.length) return;
+
+  const forwardClick = (selector) => {
+    const target = document.querySelector(selector);
+    if (target) target.click();
+  };
+
+  const focusCloudActions = () => {
+    const toolbar = document.querySelector('.action-toolbar');
+    const saveBtn = document.querySelector('#btnSaveCloud');
+    toolbar?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    saveBtn?.focus({ preventScroll: true });
+    if (toolbar) {
+      toolbar.classList.add('toolbar-focus-pulse');
+      window.setTimeout(() => toolbar.classList.remove('toolbar-focus-pulse'), 900);
+    }
+  };
+
+  const syncSidebarStatus = () => {
+    const sidebarUser = document.querySelector('#sidebarUserName');
+    const sidebarCloud = document.querySelector('#sidebarCloudText');
+    const currentName = document.querySelector('#currentUserName')?.textContent?.replace(/^👤\s*/, '').trim();
+    const cloudText = document.querySelector('#cloudText')?.textContent?.trim();
+
+    if (sidebarUser) {
+      sidebarUser.textContent = currentName || window.currentUser?.name || localStorage.getItem('xhs_user_name') || '未登录';
+    }
+    if (sidebarCloud) {
+      sidebarCloud.textContent = cloudText || '未知';
+    }
+  };
+
+  sidebarButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const action = button.dataset.sidebarAction;
+      document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
+        item.classList.toggle('active', item === button || (action === 'home' && item.dataset.sidebarAction === 'home'));
+      });
+
+      if (action === 'home') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (action === 'cloud') {
+        focusCloudActions();
+      } else if (action === 'importExport') {
+        forwardClick('#btnImportExport');
+      } else if (action === 'categories') {
+        forwardClick('#btnCategories');
+      } else if (action === 'view') {
+        forwardClick('#btnView');
+      } else if (action === 'add') {
+        forwardClick('#btnAdd');
+      } else if (action === 'logout') {
+        forwardClick('#btnLogout');
+      }
+    });
+  });
+
+  syncSidebarStatus();
+  window.setInterval(syncSidebarStatus, 2000);
 }
 
 /* =========================

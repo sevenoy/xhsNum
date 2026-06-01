@@ -27,6 +27,8 @@
   <!-- 登录检查 -->
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    (async () => {
     
     const SUPABASE_URL = localStorage.getItem("xhs_supabase_url");
     const SUPABASE_ANON_KEY = localStorage.getItem("xhs_supabase_anon_key");
@@ -211,6 +213,7 @@
         }
       }
     });
+    })();
   </script>
 </head>
 <body>
@@ -229,6 +232,7 @@
           <span id="cloudDot"></span>
           <span id="cloudText">未知</span>
         </span>
+        <span id="saveStatus" class="save-status" aria-live="polite"></span>
       </div>
     </div>
 
@@ -337,15 +341,15 @@
   </div>
 
   <!-- 主脚本 -->
-  <script type="module" src="./js/syncBridge.js"></script>
   <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/syncBridge.js"></script>
 
   <!-- Service Worker 注册和自动更新检测 -->
   <script>
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V251217.67';
+    const APP_VERSION = 'V260601.1';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

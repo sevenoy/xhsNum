@@ -195,6 +195,45 @@ div#dataStatsBar {
   color: #111;
 }
 
+.save-status {
+  display: none;
+  align-items: center;
+  max-width: 180px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1264a3;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.save-status.show {
+  display: inline-flex;
+}
+
+.save-status.success {
+  background: #eaf8ef;
+  color: #1f7a3a;
+}
+
+.save-status.warning {
+  background: #fff6e5;
+  color: #9a5b00;
+}
+
+.save-status.error {
+  background: #ffecec;
+  color: #b42318;
+}
+
+.save-status.info {
+  background: #eef6ff;
+  color: #1264a3;
+}
+
 #cloudDot {
   width: 8px;
   height: 8px;
@@ -2154,6 +2193,12 @@ td.col-cat select:focus {
   .cloud-status {
     font-size: 11px;
     padding: 3px 6px;
+  }
+
+  .save-status {
+    max-width: 120px;
+    font-size: 11px;
+    padding: 3px 8px;
   }
 
   .m-phone {

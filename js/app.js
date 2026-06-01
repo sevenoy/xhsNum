@@ -480,6 +480,33 @@ async function getAllRows() {
 // 使用静态变量避免重复弹出对话框
 let lastCheckedSnapshotKey = null;
 let isAutoUpdating = false;
+let lastCloudSnapshotCheckAt = 0;
+let lastCloudSnapshotNoUserLogAt = 0;
+const CLOUD_SNAPSHOT_CHECK_INTERVAL_MS = 60000;
+const CLOUD_SNAPSHOT_NO_USER_LOG_INTERVAL_MS = 60000;
+
+function isCloudSaveBusy() {
+  return window.__xhsCloudSaving === true;
+}
+
+function isCloudSaveCooldownActive() {
+  return Number(window.__xhsCloudSaveCooldownUntil || 0) > Date.now();
+}
+
+function showSaveStatus(message, type = 'info', timeout = 2800) {
+  const el = document.getElementById('saveStatus');
+  if (el) {
+    el.textContent = message;
+    el.className = `save-status show ${type}`;
+    if (timeout > 0) {
+      clearTimeout(showSaveStatus._timer);
+      showSaveStatus._timer = setTimeout(() => {
+        el.classList.remove('show');
+      }, timeout);
+    }
+  }
+  showMobileToast(message, type, timeout);
+}
 
 // ✅ 格式化快照名称显示：去掉 default，简化用户名和年份
 function formatSnapshotDisplay(snapshotLabel) {
@@ -526,6 +553,14 @@ function formatSnapshotDisplay(snapshotLabel) {
 
 async function updateCloudSnapshotInfo() {
   try {
+    const now = Date.now();
+    if (isCloudSaveBusy() || isCloudSaveCooldownActive()) {
+      return;
+    }
+    if (lastCloudSnapshotCheckAt && now - lastCloudSnapshotCheckAt < CLOUD_SNAPSHOT_CHECK_INTERVAL_MS) {
+      return;
+    }
+
     const cloudSnapshotInfo = document.getElementById('cloudSnapshotInfo');
     const cloudSnapshotLocal = document.getElementById('cloudSnapshotLocal');
     const cloudSnapshotRemote = document.getElementById('cloudSnapshotRemote');
@@ -547,31 +582,41 @@ async function updateCloudSnapshotInfo() {
     
     if (supabase) {
       try {
-        const currentUserId = await getCurrentUserId();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.warn('⚠️ 获取 Supabase 会话失败，跳过云端快照检测:', sessionError);
+          return;
+        }
+        const currentUserId = session?.user?.id || null;
+        if (!currentUserId) {
+          if (now - lastCloudSnapshotNoUserLogAt > CLOUD_SNAPSHOT_NO_USER_LOG_INTERVAL_MS) {
+            console.log('ℹ️ 未登录，跳过云端快照检测');
+            lastCloudSnapshotNoUserLogAt = now;
+          }
+          return;
+        }
+
         console.log('🔍 当前用户 ID:', currentUserId);
         
-        if (currentUserId) {
-          // 查询当前用户最新的快照
-          const { data: latestSnapshot, error } = await supabase
-            .from(SUPABASE_TABLE)
-            .select('key, payload, updated_at')
-            .eq('owner_id', currentUserId)
-            .order('updated_at', { ascending: false })
-            .limit(1);
-          
-          if (error) {
-            console.warn('⚠️ 查询云端快照失败:', error);
-          } else if (latestSnapshot && latestSnapshot.length > 0) {
-            const snapshot = latestSnapshot[0];
-            latestCloudSnapshot = snapshot.key || '未知';
-            latestCloudVersion = snapshot.payload?.snapshot_label || '未知';
-            latestSnapshotData = snapshot;
-            console.log('✅ 获取云端最新快照:', { key: latestCloudSnapshot, version: latestCloudVersion });
-          } else {
-            console.log('ℹ️ 云端没有快照数据');
-          }
+        // 查询当前用户最新的快照
+        lastCloudSnapshotCheckAt = now;
+        const { data: latestSnapshot, error } = await supabase
+          .from(SUPABASE_TABLE)
+          .select('key, payload, updated_at')
+          .eq('owner_id', currentUserId)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
+        if (error) {
+          console.warn('⚠️ 查询云端快照失败:', error);
+        } else if (latestSnapshot && latestSnapshot.length > 0) {
+          const snapshot = latestSnapshot[0];
+          latestCloudSnapshot = snapshot.key || '未知';
+          latestCloudVersion = snapshot.payload?.snapshot_label || '未知';
+          latestSnapshotData = snapshot;
+          console.log('✅ 获取云端最新快照:', { key: latestCloudSnapshot, version: latestCloudVersion });
         } else {
-          console.warn('⚠️ 无法获取当前用户 ID');
+          console.log('ℹ️ 云端没有快照数据');
         }
       } catch (err) {
         console.warn('⚠️ 获取云端最新快照失败:', err);
@@ -614,12 +659,21 @@ async function updateCloudSnapshotInfo() {
     
     // ✅ 检测版本差异：如果本地版本和云端版本不同，且云端版本有更新，自动更新本地数据
     if (latestSnapshotData && latestCloudSnapshot !== '未知' && latestCloudVersion !== '未知' && !isAutoUpdating) {
+      if (isCloudSaveBusy() || isCloudSaveCooldownActive()) {
+        console.log('⏭️ 保存中或保存冷却期内，跳过云端版本提示', {
+          isCloudSaveBusy: isCloudSaveBusy(),
+          cooldownUntil: window.__xhsCloudSaveCooldownUntil
+        });
+        return;
+      }
+      
       // 比较版本：主要比较 snapshot_label（版本号），因为 key 可能相同但版本不同
       const isVersionDifferent = currentCloudVersion !== latestCloudVersion;
       
       // ✅ 修复：使用版本号（snapshot_label）而不是 key 来判断是否已检查过
       // 因为同一个 key（如 "default"）可能有多个不同版本
-      const hasCheckedThisVersion = lastCheckedSnapshotKey === latestCloudVersion;
+      const promptKey = `${latestCloudSnapshot}:${latestCloudVersion}:${latestSnapshotData.updated_at || ''}`;
+      const hasCheckedThisVersion = lastCheckedSnapshotKey === promptKey;
       
       console.log('🔍 版本检测详情:', {
         currentCloudSnapshot,
@@ -638,47 +692,21 @@ async function updateCloudSnapshotInfo() {
           latest: { key: latestCloudSnapshot, version: latestCloudVersion }
         });
         
-        // 标记正在自动更新，避免重复触发
-        isAutoUpdating = true;
         // ✅ 修复：使用版本号而不是 key 来标记已检查
-        lastCheckedSnapshotKey = latestCloudVersion;
-        
-        // 弹出对话框提示用户
-        const shouldUpdate = confirm(
-          '🔄 检测到云端有更新的快照\n\n' +
-          `本地版本：${currentCloudSnapshot || 'default'} (${currentCloudVersion || '-'})\n` +
-          `云端版本：${latestCloudSnapshot} (${latestCloudVersion})\n\n` +
-          '是否立即更新本地数据？\n\n' +
-          '⚠️ 注意：更新将覆盖本地数据'
-        );
-        
-        if (shouldUpdate) {
-          try {
-            console.log('✅ 用户确认更新，开始加载云端快照:', latestCloudSnapshot);
-            await cloudLoad(latestCloudSnapshot);
-            console.log('✅ 云端快照已自动更新');
-          } catch (err) {
-            console.error('❌ 自动更新失败:', err);
-            alert(`❌ 自动更新失败：${err.message || err}`);
-            // 更新失败时重置标志，允许下次重试
-            lastCheckedSnapshotKey = null;
-          }
-        } else {
-          console.log('ℹ️ 用户取消自动更新');
-          // 用户取消时也记录已检查，避免频繁弹出
-          lastCheckedSnapshotKey = latestCloudVersion;
-        }
-        
-        // 重置自动更新标志
-        isAutoUpdating = false;
+        lastCheckedSnapshotKey = promptKey;
+        const message = currentCloudSnapshot || currentCloudVersion
+          ? '检测到云端有更新，点击“云端加载”查看'
+          : '检测到云端有数据，点击“云端加载”查看';
+        showSaveStatus(message, 'warning', 6000);
+        console.log('ℹ️ 云端更新已改为非阻塞提示，不自动覆盖本地数据');
       } else if (!isVersionDifferent && currentCloudVersion) {
         // 版本相同，重置检查标志（允许检测新的更新）
-        if (lastCheckedSnapshotKey !== latestCloudVersion) {
-          lastCheckedSnapshotKey = latestCloudVersion;
-          console.log('✅ 版本相同，更新检查标志:', latestCloudVersion);
+        if (lastCheckedSnapshotKey !== promptKey) {
+          lastCheckedSnapshotKey = promptKey;
+          console.log('✅ 版本相同，更新检查标志:', promptKey);
         }
       } else if (hasCheckedThisVersion) {
-        console.log('ℹ️ 已检查过此版本，跳过:', latestCloudVersion);
+        console.log('ℹ️ 已检查过此版本，跳过:', promptKey);
       }
     } else {
       if (!latestSnapshotData) {
@@ -2946,32 +2974,39 @@ function bindEvents() {
     try {
       console.log('🖱️ 点击了"保存云端"按钮');
       console.log('✅ 确认：已移除 prompt() 弹窗，将直接使用自动生成的快照名称');
+      if (window.__xhsCloudSaving === true) {
+        showSaveStatus('正在保存，请稍候', 'info');
+        return;
+      }
       setActiveFunction("saveCloud");
       const btn = $("#btnSaveCloud");
       const original = btn.textContent;
-      btn.disabled = true; btn.textContent = '⏳ 保存中...';
+      btn.disabled = true; btn.textContent = '保存中...';
       
       // ✅ 针对安卓设备：确保获取最新代码（强制清除可能的缓存）
       // 注意：这里只是日志，实际代码中已经没有 prompt() 了
       console.log('🔍 检查代码版本：当前 app.js 应该不包含 prompt() 调用');
       
-      await cloudSave();
-      // 操作日志（忽略失败）
-      try {
-        if (window.supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
-          const uid = session?.user?.id;
-          await supabase.from('operation_logs').insert({
-            action: 'save_cloud',
-            target: 'default',
-            user_id: uid || null,
-            details: '保存默认快照',
-            created_at: new Date().toISOString()
-          });
-        }
-      } catch (_) {}
-      btn.textContent = '✅ 已保存';
-      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 800);
+      const saveFunc = window.cloudSave || cloudSave;
+      const result = await saveFunc();
+      if (result?.status === 'saved') {
+        // 操作日志（忽略失败）
+        try {
+          if (window.supabase) {
+            const { data: { session } } = await supabase.auth.getSession();
+            const uid = session?.user?.id;
+            await supabase.from('operation_logs').insert({
+              action: 'save_cloud',
+              target: 'default',
+              user_id: uid || null,
+              details: '保存默认快照',
+              created_at: new Date().toISOString()
+            });
+          }
+        } catch (_) {}
+      }
+      btn.textContent = original;
+      btn.disabled = false;
     } catch (error) {
       console.error('❌ 按钮点击事件处理失败:', error);
       alert("保存失败：按钮事件处理错误\n\n错误信息：" + (error.message || String(error)) + "\n\n请查看浏览器控制台（F12）获取详细信息");
@@ -3551,10 +3586,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ✅ 页面加载时立即显示云端快照信息
   await updateCloudSnapshotInfo();
   
-  // ✅ 定期更新云端快照信息（每3秒更新一次，更实时地检测版本更新）
+  // ✅ 定期低频更新云端快照信息，避免高频请求和重复提示
   setInterval(async () => {
     await updateCloudSnapshotInfo();
-  }, 3000);
+  }, CLOUD_SNAPSHOT_CHECK_INTERVAL_MS);
   
   const panel = $("#cloudHistoryPanel");
   if (panel) panel.style.display = "none";
@@ -3562,14 +3597,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loadSnapshotKey = localStorage.getItem('xhs_load_snapshot_key');
   if (loadSnapshotKey && supabase) {
     localStorage.removeItem('xhs_load_snapshot_key');
-    const ok = confirm('检测到待加载的云端快照，是否立即加载？\n\n本地数据将被覆盖。');
-    if (ok) {
-      try {
-        await cloudLoad(loadSnapshotKey);
-      } catch (err) {
-        alert(`❌ 加载失败：${err.message}`);
-      }
-    }
+    localStorage.setItem('xhs_pending_load_snapshot_key', loadSnapshotKey);
+    showSaveStatus('检测到云端有更新，点击“云端加载”查看', 'warning', 6000);
+    console.log('ℹ️ 检测到待加载云端快照，已改为非阻塞提示，不自动覆盖本地数据', { loadSnapshotKey });
   }
   
   console.log("✅ 应用初始化完成", { 

@@ -8,6 +8,51 @@ import { SUPABASE_DEFAULT_KEY, SUPABASE_TABLE } from './config.js';
 
 let lastSyncTimestamp = Number(localStorage.getItem('last_sync_time') || '0');
 let isAutoSyncStarted = false;
+let isAutoSyncStarting = false;
+let realtimeChannel = null;
+let lastPromptedVersion = localStorage.getItem('last_prompted_snapshot_name') || '';
+const SAVE_COOLDOWN_MS = 5000;
+
+function nowMs() {
+  return Date.now();
+}
+
+function isCloudSaving() {
+  return window.__xhsCloudSaving === true;
+}
+
+function setCloudSaving(saving) {
+  window.__xhsCloudSaving = saving;
+}
+
+function startSaveCooldown() {
+  window.__xhsCloudSaveCooldownUntil = nowMs() + SAVE_COOLDOWN_MS;
+}
+
+function isSaveCooldownActive() {
+  return Number(window.__xhsCloudSaveCooldownUntil || 0) > nowMs();
+}
+
+function setSaveStatus(message, type = 'info', timeout = 2800) {
+  const el = document.querySelector('#saveStatus');
+  if (el) {
+    el.textContent = message;
+    el.className = `save-status show ${type}`;
+    if (timeout > 0) {
+      clearTimeout(setSaveStatus._timer);
+      setSaveStatus._timer = setTimeout(() => {
+        el.classList.remove('show');
+      }, timeout);
+    }
+  }
+  showToast(message, type, timeout);
+}
+
+function markPromptedVersion(version) {
+  if (!version) return;
+  lastPromptedVersion = version;
+  localStorage.setItem('last_prompted_snapshot_name', version);
+}
 
 // 获取最后已知的快照名称（用于检测快照变化）
 function getLastSnapshotName() {
@@ -18,6 +63,7 @@ function getLastSnapshotName() {
 function saveLastSnapshotName(name) {
   if (name) {
     localStorage.setItem('last_snapshot_name', name);
+    markPromptedVersion(name);
   }
 }
 
@@ -266,12 +312,12 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
     }
     
     // 验证数据是否已加载
-    const verifyRows = await getAllRows();
-    console.log('✅ 验证：本地数据条数', verifyRows.length);
+    const loadedRows = await getAllRows();
+    console.log('✅ 验证：本地数据条数', loadedRows.length);
     
     // 再次验证：检查第一条数据是否已更新
-    if (verifyRows.length > 0 && payload.rows && payload.rows.length > 0) {
-      const firstLocalRow = verifyRows.find(r => r.phone === payload.rows[0].phone);
+    if (loadedRows.length > 0 && payload.rows && payload.rows.length > 0) {
+      const firstLocalRow = loadedRows.find(r => r.phone === payload.rows[0].phone);
       const firstCloudRow = payload.rows[0];
       if (firstLocalRow && firstCloudRow) {
         console.log('🔍 数据验证对比:', {
@@ -304,7 +350,14 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
 
 /* 2. 保存到云端 */
 export async function cloudSave() {
-  if (!supabase) { alert('未配置 Supabase'); return; }
+  if (isCloudSaving()) {
+    setSaveStatus('正在保存，请稍候', 'info');
+    return { status: 'busy' };
+  }
+  if (!supabase) {
+    setSaveStatus('未配置 Supabase', 'error', 4000);
+    return { status: 'not_configured' };
+  }
 
   const btn = document.querySelector('#btnSaveCloud');
   const cleanText = btn ? (btn.dataset.cleanText || btn.textContent || '保存云端') : '保存云端';
@@ -312,8 +365,10 @@ export async function cloudSave() {
   if (btn) { 
     if (!btn.dataset.cleanText) btn.dataset.cleanText = cleanText.replace(' *', '').replace('⏳ ', '');
     btn.disabled = true; 
-    btn.textContent = '⏳ 保存中...'; 
+    btn.textContent = '保存中...'; 
   }
+  setCloudSaving(true);
+  setSaveStatus('云端保存中', 'info', 0);
 
   try {
     const userId = await getCurrentUserId();
@@ -502,11 +557,11 @@ export async function cloudSave() {
             btn.disabled = false;
             btn.textContent = btn.dataset.cleanText || cleanText;
           }
-          alert(`ℹ️ 没有数据改动\n\n当前数据与云端最新快照（${who}保存）完全相同，无需保存。\n\n请修改数据后再保存到云端。`);
+          setSaveStatus('云端无变化', 'info');
           // 更新本地时间戳，避免重复提示
           lastSyncTimestamp = cloudTime;
           localStorage.setItem('last_sync_time', String(cloudTime));
-          return;
+          return { status: 'no_change' };
         } else {
           // 数据内容相同，且时间戳也没更新，说明确实没有改动
           console.log('ℹ️ 数据内容相同，时间戳也没更新');
@@ -514,45 +569,26 @@ export async function cloudSave() {
             btn.disabled = false;
             btn.textContent = btn.dataset.cleanText || cleanText;
           }
-          alert('ℹ️ 没有数据改动\n\n当前数据与最新快照完全相同，无需保存。\n\n请修改数据后再保存到云端。');
-          return;
+          setSaveStatus('云端无变化', 'info');
+          return { status: 'no_change' };
         }
       } else {
         // 数据内容不同，检查是否有冲突（基于服务器时间戳）
         console.log('⚠️ 数据内容不同，检查冲突', { cloudTime, lastSyncTimestamp, cloudTimeNewer: cloudTime > lastSyncTimestamp });
         if (cloudTime > lastSyncTimestamp) {
-          // 云端数据更新（基于服务器时间戳），自动加载最新数据
+          // 云端数据更新（基于服务器时间戳），只提示用户手动处理，避免保存时覆盖本地编辑
           const who = cloudRow.updated_by_name || '其他设备';
-          console.log('⚠️ 检测到云端有更新，自动加载最新数据', { who, cloudTime, lastSyncTimestamp });
+          console.log('⚠️ 检测到云端有更新，已暂停本次保存并等待用户手动处理', { who, cloudTime, lastSyncTimestamp });
           
           if (btn) {
             btn.disabled = false;
             btn.textContent = btn.dataset.cleanText || cleanText;
           }
           
-          // 自动加载最新数据（LWW策略：总是使用最新的服务器时间戳）
-          try {
-            const loadFunc = window.cloudLoad || cloudLoad;
-            console.log('📥 自动加载云端最新数据（LWW策略）...');
-            
-            // 清除本地时间戳，强制加载最新数据
-            lastSyncTimestamp = 0;
-            localStorage.setItem('last_sync_time', '0');
-            
-            await loadFunc(SUPABASE_DEFAULT_KEY, false);
-            
-            console.log('✅ 已自动加载云端最新数据');
-            
-            // 提示用户已更新
-            alert(`✅ 已自动加载云端最新数据\n\n"${who}" 刚刚更新了数据，已自动同步到本地。\n\n请重新修改并保存。`);
-            
-          } catch (loadErr) {
-            console.error('❌ 自动加载最新数据失败:', loadErr);
-            alert('自动加载最新数据失败: ' + (loadErr.message || loadErr));
-          }
-          
-          // 加载后不继续保存，让用户重新操作
-          return;
+          setSaveStatus(`检测到 ${who} 的云端更新，点击“云端加载”查看`, 'warning', 6000);
+
+          // 不继续保存，也不自动加载，避免覆盖本地未确认的数据
+          return { status: 'cloud_newer' };
         } else {
           console.log('✅ 数据有改动，且云端没有更新，可以正常保存');
         }
@@ -596,19 +632,23 @@ export async function cloudSave() {
     });
 
     clearDirty();
-    alert('✅ 保存成功');
+    setSaveStatus('已保存到云端', 'success');
+    return { status: 'saved' };
 
   } catch (err) {
     console.error(err);
-    alert('保存失败: ' + (err.message || err));
+    setSaveStatus('保存失败: ' + (err.message || err), 'error', 5000);
+    return { status: 'error', error: err };
   } finally {
+    setCloudSaving(false);
+    startSaveCooldown();
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.cleanText || cleanText; }
   }
 }
 
 /* 3. 自动同步监听 */
 export async function initAutoSync() {
-  if (isAutoSyncStarted) {
+  if (isAutoSyncStarted || isAutoSyncStarting || window.__xhsRealtimeInitialized) {
     console.log('⏭️ 自动同步已启动，跳过重复初始化');
     return;
   }
@@ -617,14 +657,28 @@ export async function initAutoSync() {
     return;
   }
   
+  isAutoSyncStarting = true;
   const myUid = await getCurrentUserId();
   if (!myUid) {
-    console.warn('⚠️ 用户未登录，无法启动自动同步');
+    isAutoSyncStarting = false;
     return;
   }
 
   isAutoSyncStarted = true;
+  window.__xhsRealtimeInitialized = true;
   console.log('📡 开启极简同步监听...', { userId: myUid });
+
+  if (realtimeChannel || window._syncChannel) {
+    try {
+      const oldChannel = realtimeChannel || window._syncChannel;
+      await supabase.removeChannel(oldChannel);
+      console.log('✅ 已移除旧 Realtime channel');
+    } catch (err) {
+      console.warn('⚠️ 移除旧 Realtime channel 失败:', err);
+    }
+    realtimeChannel = null;
+    window._syncChannel = null;
+  }
 
   const savedTime = localStorage.getItem('last_sync_time');
   if (savedTime) lastSyncTimestamp = parseInt(savedTime);
@@ -695,6 +749,16 @@ export async function initAutoSync() {
         // 生成新的快照名称（用于比较）
         const newSnapshotName = newRow.payload?.snapshot_label || 
           generateSnapshotName(newRow.updated_by_name || '未知用户', newRow.updated_at);
+
+        if (isCloudSaving() || isSaveCooldownActive()) {
+          console.log('⏭️ 保存中或保存冷却期内，忽略 Realtime 提示', {
+            isCloudSaving: isCloudSaving(),
+            cooldownUntil: window.__xhsCloudSaveCooldownUntil,
+            newSnapshotName
+          });
+          markPromptedVersion(newSnapshotName);
+          return;
+        }
         
         console.log('📊 快照名称和时间戳比较:', {
           serverTime,
@@ -722,6 +786,11 @@ export async function initAutoSync() {
           return;
         }
 
+        if (lastPromptedVersion === newSnapshotName) {
+          console.log('⏭️ 该云端版本已提示过，跳过重复提示', { newSnapshotName });
+          return;
+        }
+
         // 快照名称改变或时间戳更新，需要同步
         if (snapshotNameChanged) {
           console.log('🔄 检测到快照名称改变，说明有新快照！', { 
@@ -740,51 +809,22 @@ export async function initAutoSync() {
 
         // 检测到快照名称改变，弹出提示要求用户更新
         const who = newRow.updated_by_name || '其他设备';
+        markPromptedVersion(newSnapshotName);
         
         if (isLocalDirty()) {
-          // 本地有未保存修改，弹出提示要求用户更新
-          console.log('⚠️ 本地有未保存修改，弹出提示', { who, snapshotNameChanged });
-          const ok = confirm(`⚠️ 检测到最新快照已更新\n\n"${who}" 刚刚保存了新快照。\n\n点击【确定】自动加载最新快照（本地未保存的修改将被覆盖）\n\n点击【取消】稍后手动加载`);
-          if (ok) {
-            console.log('📥 用户确认加载最新快照');
-            // 清除本地时间戳，强制加载最新数据
-            lastSyncTimestamp = 0;
-            localStorage.setItem('last_sync_time', '0');
-            // 使用 window.cloudLoad 确保使用桥接的函数
-            const loadFunc = window.cloudLoad || cloudLoad;
-            await loadFunc(SUPABASE_DEFAULT_KEY, false);
-            console.log('✅ 自动刷新完成');
-          } else {
-            console.log('⏭️ 用户取消加载，稍后手动处理');
-            showToast(`🔔 ${who} 更新了快照，请稍后手动加载`);
-          }
+          console.log('⚠️ 本地有未保存修改，使用非阻塞提示', { who, snapshotNameChanged });
+          setSaveStatus(`检测到 ${who} 的云端更新，先保存或手动加载`, 'warning', 6000);
           return;
         }
 
-        // 本地没有未保存修改，弹出提示并自动加载最新数据
-        console.log('🔄 本地无未保存修改，检测到快照更新，弹出提示...', { 
+        // 本地没有未保存修改，只提示用户手动加载，避免后台覆盖当前编辑上下文
+        console.log('🔄 本地无未保存修改，检测到快照更新，使用非阻塞提示', { 
           serverTime, 
           lastSyncTimestamp, 
           updatedBy: newRow.updated_by_name,
           snapshotNameChanged
         });
-        
-        // 弹出提示，告知用户有新快照
-        const ok = confirm(`⚠️ 检测到最新快照已更新\n\n"${who}" 刚刚保存了新快照。\n\n点击【确定】自动加载最新快照\n\n点击【取消】稍后手动加载`);
-        
-        if (ok) {
-          console.log('📥 用户确认加载最新快照');
-          // 清除本地时间戳，强制加载最新数据
-          lastSyncTimestamp = 0;
-          localStorage.setItem('last_sync_time', '0');
-          // 使用 window.cloudLoad 确保使用桥接的函数
-          const loadFunc = window.cloudLoad || cloudLoad;
-          await loadFunc(SUPABASE_DEFAULT_KEY, false);
-          console.log('✅ 自动刷新完成');
-        } else {
-          console.log('⏭️ 用户取消加载，稍后手动处理');
-          showToast(`🔔 ${who} 更新了快照，请稍后手动加载`);
-        }
+        setSaveStatus(`检测到 ${who} 的云端更新，点击“云端加载”查看`, 'warning', 6000);
       }
     )
     .subscribe((status) => {
@@ -797,15 +837,26 @@ export async function initAutoSync() {
     });
   
   // 保存 channel 引用，防止被垃圾回收
+  realtimeChannel = channel;
   window._syncChannel = channel;
+  isAutoSyncStarting = false;
 }
 
-function showToast(msg) {
+function showToast(msg, type = 'info', timeout = 2800) {
+  if (!msg) return;
   const div = document.createElement('div');
   div.id = 'sync-toast';
+  const existing = document.querySelector('#sync-toast');
+  if (existing) existing.remove();
+  const colors = {
+    success: 'rgba(34, 139, 64, 0.95)',
+    warning: 'rgba(255, 149, 0, 0.95)',
+    error: 'rgba(180, 35, 24, 0.95)',
+    info: 'rgba(0, 122, 255, 0.95)'
+  };
   div.style.cssText = `
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(255, 149, 0, 0.95); color: #fff; padding: 10px 24px;
+    background: ${colors[type] || colors.info}; color: #fff; padding: 10px 24px;
     border-radius: 24px; font-size: 14px; z-index: 9999; font-weight: 500;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: fadeIn 0.3s; pointer-events: none;
   `;
@@ -815,7 +866,7 @@ function showToast(msg) {
     div.style.transition = 'opacity 0.5s';
     div.style.opacity = '0';
     setTimeout(() => div.remove(), 500);
-  }, 4000);
+  }, timeout);
 }
 
 // ===== 兼容旧系统：健康检查 & 历史面板 =====
@@ -896,7 +947,7 @@ export async function renderCloudHistory() {
     }
 
     const row = data;
-    const userName = row.updated_by_name || '未知用户';
+    const rowUserName = row.updated_by_name || '未知用户';
     const metaCount = Array.isArray(row.payload?.rows) ? `${row.payload.rows.length} 条` : "";
     
     // 格式化时间
@@ -934,7 +985,7 @@ export async function renderCloudHistory() {
     // 快照名称：优先使用 payload.snapshot_label，否则使用 用户名+日期时间
     // ✅ 修复：确保总是使用用户名+日期时间格式，不使用"默认快照"
     let snapshotName = row.payload?.snapshot_label;
-    const userName = row.updated_by_name || '未知用户';
+    const userName = rowUserName;
     
     // 如果没有 snapshot_label 或为空，或者包含"默认快照"字样，都重新生成
     if (!snapshotName || snapshotName.trim() === '' || snapshotName.includes('默认快照')) {

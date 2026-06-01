@@ -45,10 +45,15 @@ async function initSupabase() {
 
   try {
     console.log('⏳ 开始初始化 Supabase 连接...');
-    const { createClient } = await import(
-      "https://esm.sh/@supabase/supabase-js@2"
-    );
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (window.xhsSupabase) {
+      supabase = window.xhsSupabase;
+    } else {
+      const { createClient } = await import(
+        "https://esm.sh/@supabase/supabase-js@2"
+      );
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      window.xhsSupabase = supabase;
+    }
     
     // ✅ 执行健康检查，确保连接正常
     await cloudHealthCheck();

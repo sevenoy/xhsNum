@@ -8,6 +8,8 @@
       "✨ 增加保存锁和按钮防重复点击，避免连续点击触发重复保存",
       "✨ Realtime 云端更新改为非阻塞提示，避免频繁确认弹窗",
       "✨ 降低云端快照自动检测频率，避免高频请求 Supabase",
+      "✨ 统一首页 Supabase client 单例，减少 GoTrueClient 重复实例 warning",
+      "✨ 同步 site.webmanifest 版本和 start_url 到 V260601.1",
       "🔧 修复 Realtime 重复订阅初始化错误",
       "🔧 刷新时云端更新提示改为非阻塞状态提示，不再弹覆盖确认框",
       "🔧 修复登录检查脚本 Illegal return statement 报错",

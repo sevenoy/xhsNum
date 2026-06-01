@@ -38,7 +38,8 @@
     window.isAdmin = false;
     
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const supabase = window.xhsSupabase || createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      window.xhsSupabase = supabase;
       
       // ✅ 检查 URL 参数，如果有 logout 参数，说明是从登录页跳转过来的，直接跳转回登录页
       const urlParams = new URLSearchParams(window.location.search);

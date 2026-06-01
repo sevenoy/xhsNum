@@ -481,6 +481,143 @@ async function getAllRows() {
   return all;
 }
 
+function markLocalAutoSaved(message = '本地已自动保存，等待保存云端') {
+  const now = Date.now();
+  window.__xhsLocalUnsavedChanges = true;
+  localStorage.setItem('xhs_last_local_change_at', String(now));
+  showSaveStatus(message, 'warning', 2600);
+}
+
+async function saveRowPatchWithAudit(id, patch, options = {}) {
+  const row = await db.rows.get(id);
+  if (!row) return { changed: false, row: null };
+
+  const cleanPatch = {};
+  for (const [field, value] of Object.entries(patch)) {
+    if (row[field] !== value) {
+      cleanPatch[field] = value;
+    }
+  }
+
+  if (!Object.keys(cleanPatch).length) {
+    return { changed: false, row };
+  }
+
+  const currentUserId = await getCurrentUserId() || 'unknown';
+  const currentUserName = getCurrentUserName();
+  const updatedAt = Date.now();
+  const next = {
+    ...row,
+    ...cleanPatch,
+    updated_at: updatedAt,
+    updated_by: currentUserId,
+    updated_by_name: currentUserName
+  };
+
+  await db.rows.put(next);
+  localStorage.setItem('xhs_last_local_change_by', currentUserName);
+  markLocalAutoSaved(options.message || '本地已自动保存，等待保存云端');
+  return { changed: true, row: next, fields: Object.keys(cleanPatch) };
+}
+
+function labelForField(field) {
+  const labels = {
+    xhs_name: '小红书名称',
+    note1: '备注'
+  };
+  return labels[field] || field;
+}
+
+async function openLargeTextEditor({ id, field, value = '', sourceEl = null }) {
+  if (!id || !field) return;
+  const existing = document.querySelector('.large-text-editor-modal');
+  if (existing) existing.remove();
+
+  const label = labelForField(field);
+  const modal = document.createElement('div');
+  modal.className = 'large-text-editor-modal';
+  modal.innerHTML = `
+    <div class="large-text-editor-panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(label)}编辑器">
+      <div class="large-text-editor-head">
+        <div>
+          <div class="large-text-editor-title">${escapeHtml(label)}</div>
+          <div class="large-text-editor-subtitle">编辑后会自动保存到本地，并记录修改人和时间</div>
+        </div>
+        <button type="button" class="large-text-editor-close" aria-label="关闭">×</button>
+      </div>
+      <textarea class="large-text-editor-input" data-field="${escapeHtml(field)}" data-id="${escapeHtml(id)}"></textarea>
+      <div class="large-text-editor-actions">
+        <button type="button" class="ghost large-text-editor-cancel">取消</button>
+        <button type="button" class="primary large-text-editor-save">保存</button>
+      </div>
+    </div>
+  `;
+
+  const input = modal.querySelector('.large-text-editor-input');
+  input.value = value || '';
+
+  const close = () => {
+    modal.remove();
+    if (!sourceEl?.closest?.('#mobileList')) {
+      sourceEl?.focus?.({ preventScroll: true });
+    }
+  };
+
+  const save = async () => {
+    const result = await saveRowPatchWithAudit(id, { [field]: input.value.trim() });
+    if (result.changed) {
+      if (field === 'xhs_name' || field === 'note1') {
+        await renderTable();
+      }
+    }
+    close();
+  };
+
+  const bindModalButton = (selector, handler) => {
+    const button = modal.querySelector(selector);
+    if (!button) return;
+    let handledPointer = false;
+    button.addEventListener('pointerup', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handledPointer = true;
+      handler();
+      window.setTimeout(() => {
+        handledPointer = false;
+      }, 0);
+    });
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (handledPointer) return;
+      handler();
+    });
+  };
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+  bindModalButton('.large-text-editor-close', close);
+  bindModalButton('.large-text-editor-cancel', close);
+  bindModalButton('.large-text-editor-save', save);
+  input.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      save();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  });
+
+  document.body.appendChild(modal);
+  window.setTimeout(() => {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, 0);
+}
+
 // ✅ 更新云端快照信息显示（显示本地加载的快照号和云端最新快照号）
 // 使用静态变量避免重复弹出对话框
 let lastCheckedSnapshotKey = null;
@@ -1040,14 +1177,7 @@ async function updateRow(id, patch) {
     }
   }
   
-  const next = { 
-    ...row, 
-    ...patch, 
-    updated_at: now,
-    updated_by: currentUserId,
-    updated_by_name: currentUserName
-  };
-  await db.rows.put(next);
+  await saveRowPatchWithAudit(id, patch);
   // ✅ 关键：直接重新渲染，不要手动更新UI
   await renderTable();
 }
@@ -1596,16 +1726,7 @@ async function saveMobileCardEdit(id) {
       return;
     }
     
-    // ✅ 获取当前用户 ID（用于记录）
-    const currentUserId = await getCurrentUserId() || 'unknown';
-    const currentUserName = getCurrentUserName();
-    
-    // 保存到数据库
-    updates.updated_at = Date.now();
-    updates.updated_by = currentUserId;
-    updates.updated_by_name = currentUserName;
-    
-    await db.rows.put({ ...row, ...updates });
+    await saveRowPatchWithAudit(id, updates);
     
     // 如果是所属人或微信实名人，刷新筛选器
     if (updates.owner !== row.owner || updates.wx_real !== row.wx_real) {
@@ -2691,6 +2812,21 @@ function bindEvents() {
       });
     }
   }, true); // 使用捕获阶段
+
+  gridBody.addEventListener("click", async (e) => {
+    const td = e.target.closest('td[contenteditable="true"][data-field="xhs_name"], td[contenteditable="true"][data-field="note1"]');
+    if (!td) return;
+    e.preventDefault();
+    const id = td.getAttribute("data-id");
+    const field = td.getAttribute("data-field");
+    const row = await db.rows.get(id);
+    await openLargeTextEditor({
+      id,
+      field,
+      value: row?.[field] || td.textContent.trim(),
+      sourceEl: td
+    });
+  });
   
   // 监听 contenteditable 元素的 blur 事件（事件委托）
   gridBody.addEventListener("blur", async (e) => {
@@ -2708,17 +2844,10 @@ function bindEvents() {
     
     console.log(`📝 blur 事件: field=${field}, value=${val}`);
     
-    // 更新数据库
-    const row = await db.rows.get(id);
-    if (row) {
-      const patch = {};
-      patch[field] = val;
-      patch.updated_at = Date.now();
-      await db.rows.put({ ...row, ...patch });
-    }
+    const result = await saveRowPatchWithAudit(id, { [field]: val });
     
     // 如果是所属人或微信实名人，刷新筛选器
-    if (field === "owner" || field === "wx_real") {
+    if (result.changed && (field === "owner" || field === "wx_real")) {
       await refreshFilters();
     }
     
@@ -2753,20 +2882,8 @@ function bindEvents() {
     const newColor = sel.value;
     console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
     
-    // 更新数据库
-    const row = await db.rows.get(id);
-    console.log("📖 读取的行数据：", row);
-    
-    if (row) {
-      const updated = { 
-        ...row, 
-        row_color: newColor, 
-        updated_at: Date.now() 
-      };
-      console.log("💾 准备更新数据库：", updated);
-      await db.rows.put(updated);
-      console.log("✅ 数据库更新成功");
-    }
+    const result = await saveRowPatchWithAudit(id, { row_color: newColor });
+    console.log("✅ 分类保存结果:", result);
     
     // 重新渲染整个表格
     console.log("🎨 开始重新渲染表格");
@@ -2841,6 +2958,19 @@ function bindEvents() {
   });
   
   // ✅ 监听移动端输入变化（标记为已修改，不自动保存）
+  mobileList.addEventListener("focusin", async (e) => {
+    const input = e.target.closest('.m-textarea[data-field="xhs_name"], .m-textarea[data-field="note1"]');
+    if (!input) return;
+    const id = input.getAttribute('data-id');
+    const field = input.getAttribute('data-field');
+    await openLargeTextEditor({
+      id,
+      field,
+      value: input.value || '',
+      sourceEl: input
+    });
+  });
+
   mobileList.addEventListener("input", (e) => {
     const input = e.target.closest('.m-input, .m-textarea');
     if (!input) return;
@@ -3382,8 +3512,43 @@ function bindEvents() {
 }
 
 function initSidebarActions() {
+  const sidebar = document.querySelector('.app-sidebar');
   const sidebarButtons = document.querySelectorAll('[data-sidebar-action]');
+  const mobileToggle = document.querySelector('.mobile-sidebar-toggle');
   if (!sidebarButtons.length) return;
+
+  const setSidebarExpanded = (expanded) => {
+    document.body.classList.toggle('sidebar-expanded', expanded);
+    mobileToggle?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  };
+
+  const expandSidebar = () => setSidebarExpanded(true);
+  const collapseSidebar = () => setSidebarExpanded(false);
+
+  sidebar?.addEventListener('click', (event) => {
+    if (!document.body.classList.contains('sidebar-expanded')) {
+      event.preventDefault();
+      event.stopPropagation();
+      expandSidebar();
+    }
+  });
+
+  mobileToggle?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSidebarExpanded(!document.body.classList.contains('sidebar-expanded'));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!document.body.classList.contains('sidebar-expanded')) return;
+    if (sidebar?.contains(event.target)) return;
+    if (mobileToggle?.contains(event.target)) return;
+    collapseSidebar();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') collapseSidebar();
+  });
 
   const forwardClick = (selector) => {
     const target = document.querySelector(selector);
@@ -3418,6 +3583,11 @@ function initSidebarActions() {
   sidebarButtons.forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation();
+      if (!document.body.classList.contains('sidebar-expanded')) {
+        event.preventDefault();
+        expandSidebar();
+        return;
+      }
       const action = button.dataset.sidebarAction;
       document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
         item.classList.toggle('active', item === button || (action === 'home' && item.dataset.sidebarAction === 'home'));
@@ -3427,16 +3597,28 @@ function initSidebarActions() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (action === 'cloud') {
         focusCloudActions();
+      } else if (action === 'saveCloud') {
+        forwardClick('#btnSaveCloud');
+      } else if (action === 'loadCloud') {
+        forwardClick('#btnLoadCloud');
       } else if (action === 'importExport') {
         forwardClick('#btnImportExport');
       } else if (action === 'categories') {
         forwardClick('#btnCategories');
       } else if (action === 'view') {
         forwardClick('#btnView');
+      } else if (action === 'admin') {
+        forwardClick('#btnAdmin');
+      } else if (action === 'deleteData') {
+        forwardClick('#btnDeleteData');
       } else if (action === 'add') {
         forwardClick('#btnAdd');
       } else if (action === 'logout') {
         forwardClick('#btnLogout');
+      }
+
+      if (window.innerWidth < 768) {
+        collapseSidebar();
       }
     });
   });

@@ -238,6 +238,14 @@
         <span class="sidebar-icon">↻</span>
         <span>云端同步</span>
       </button>
+      <button type="button" class="sidebar-nav-item sidebar-sub-item" data-sidebar-action="saveCloud">
+        <span class="sidebar-icon">↑</span>
+        <span>保存云端</span>
+      </button>
+      <button type="button" class="sidebar-nav-item sidebar-sub-item" data-sidebar-action="loadCloud">
+        <span class="sidebar-icon">↓</span>
+        <span>云端加载</span>
+      </button>
       <button type="button" class="sidebar-nav-item" data-sidebar-action="importExport">
         <span class="sidebar-icon">↕</span>
         <span>导入导出</span>
@@ -250,6 +258,14 @@
         <span class="sidebar-icon">⚙</span>
         <span>显示配置</span>
       </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="admin">
+        <span class="sidebar-icon">◎</span>
+        <span>管理页面</span>
+      </button>
+      <button type="button" class="sidebar-nav-item sidebar-danger-item" data-sidebar-action="deleteData">
+        <span class="sidebar-icon">!</span>
+        <span>删除数据</span>
+      </button>
     </nav>
     <div class="sidebar-bottom">
       <button type="button" class="sidebar-add" data-sidebar-action="add">＋ 新增号码</button>
@@ -261,6 +277,11 @@
     <!-- 顶部导航 -->
     <div class="topbar app-topbar">
       <div class="top-left">
+        <button type="button" class="mobile-sidebar-toggle" aria-label="打开功能菜单" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
         <h1 id="appTitle">号码管理</h1>
       </div>
       <div class="top-right">

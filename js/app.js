@@ -6,7 +6,9 @@
 
 const VIEW_KEY = "xhs_view_v7";
 const CATS_KEY = "xhs_cats_v7";
+const PLATFORMS_KEY = "xhs_platforms_v1";
 const DB_NAME = "xhs_phone_sheet_v7";
+const PLATFORM_DB_NAME = "xhs_platform_profiles_v1";
 const SUPABASE_TABLE = "xhsphone_snapshot";
 const SUPABASE_DEFAULT_KEY = "default";
 
@@ -87,6 +89,14 @@ const DEFAULT_CATS = Object.freeze([
   { id: "usable", name: "可用", color: "#8e8e93" },
 ]);
 
+const DEFAULT_PLATFORMS = Object.freeze([
+  { id: "xhs", name: "小红书", builtin: true },
+  { id: "douyin", name: "抖音", builtin: true },
+  { id: "tiktok", name: "TikTok", builtin: true },
+  { id: "threads", name: "Threads", builtin: true },
+  { id: "instagram", name: "Instagram", builtin: true },
+]);
+
 // 全局筛选状态
 const state = {
   q: "",
@@ -95,6 +105,7 @@ const state = {
   sortBy: "owner",
   precise: false,
   activeFunction: null,
+  platformProfiles: new Map(),
 };
 
 /* =========================
@@ -106,6 +117,11 @@ db.version(1).stores({
   rows: "id,order,phone,owner,wx_real,wx_name,xhs_name,note1,row_color,updated_at",
 });
 
+const platformDb = new Dexie(PLATFORM_DB_NAME);
+platformDb.version(1).stores({
+  profiles: "[row_id+platform_id],row_id,platform_id,updated_at",
+});
+
 // ✅ 确保数据库连接已打开（针对新添加桌面标签网站的情况）
 // 在页面加载时立即打开数据库，避免后续操作时数据库未就绪
 let dbReadyPromise = db.open().then(() => {
@@ -114,6 +130,14 @@ let dbReadyPromise = db.open().then(() => {
 }).catch((err) => {
   console.error('❌ IndexedDB 数据库连接失败:', err);
   // 即使连接失败，也返回 true，避免阻塞应用
+  return true;
+});
+
+let platformDbReadyPromise = platformDb.open().then(() => {
+  console.log('✅ 平台资料数据库连接已就绪');
+  return true;
+}).catch((err) => {
+  console.error('❌ 平台资料数据库连接失败:', err);
   return true;
 });
 
@@ -234,6 +258,79 @@ function saveCats(cats) {
   console.log('💾 保存分类数据:', { key: CATS_KEY, cats: cats });
   localStorage.setItem(CATS_KEY, JSON.stringify(cats));
   console.log('✅ 分类数据已保存');
+}
+
+function readPlatforms() {
+  try {
+    const raw = localStorage.getItem(PLATFORMS_KEY);
+    if (!raw) {
+      const defaults = DEFAULT_PLATFORMS.map((item) => ({ ...item }));
+      savePlatforms(defaults);
+      return defaults;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) {
+      const defaults = DEFAULT_PLATFORMS.map((item) => ({ ...item }));
+      savePlatforms(defaults);
+      return defaults;
+    }
+    return parsed
+      .filter((item) => item && item.id && item.name)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name),
+        builtin: Boolean(item.builtin)
+      }));
+  } catch (err) {
+    console.error('读取平台配置失败:', err);
+    return DEFAULT_PLATFORMS.map((item) => ({ ...item }));
+  }
+}
+
+function savePlatforms(platforms) {
+  localStorage.setItem(PLATFORMS_KEY, JSON.stringify(platforms));
+}
+
+function platformValueForRow(row, platformId) {
+  if (platformId === 'xhs') return row.xhs_name || '';
+  return state.platformProfiles.get(`${row.id}:${platformId}`)?.value || '';
+}
+
+async function loadPlatformProfilesForRows(rows) {
+  await platformDbReadyPromise;
+  const rowIds = new Set(rows.map((row) => String(row.id)));
+  const profiles = await platformDb.profiles.toArray();
+  state.platformProfiles = new Map();
+  profiles.forEach((profile) => {
+    if (!rowIds.has(String(profile.row_id))) return;
+    state.platformProfiles.set(`${profile.row_id}:${profile.platform_id}`, profile);
+  });
+}
+
+async function savePlatformProfile(rowId, platformId, value) {
+  if (!rowId || !platformId || platformId === 'xhs') return;
+  await platformDbReadyPromise;
+  const trimmed = String(value || '').trim();
+  const key = [String(rowId), String(platformId)];
+  if (!trimmed) {
+    await platformDb.profiles.delete(key);
+    state.platformProfiles.delete(`${rowId}:${platformId}`);
+    markLocalAutoSaved('平台资料已更新，等待保存云端');
+    return;
+  }
+  const currentUserId = await getCurrentUserId() || 'unknown';
+  const currentUserName = getCurrentUserName();
+  const profile = {
+    row_id: String(rowId),
+    platform_id: String(platformId),
+    value: trimmed,
+    updated_at: Date.now(),
+    updated_by: currentUserId,
+    updated_by_name: currentUserName
+  };
+  await platformDb.profiles.put(profile);
+  state.platformProfiles.set(`${rowId}:${platformId}`, profile);
+  markLocalAutoSaved('平台资料已更新，等待保存云端');
 }
 
 function catNameOf(cats, id) {
@@ -1486,6 +1583,211 @@ function tdSelectCat(cls, value, rowId) {
   return `<td class="${cls}"><select data-field="row_color" data-id="${rowId}">${opts}</select></td>`;
 }
 
+function getPlatformPreviewItems(row) {
+  return readPlatforms().map((platform) => {
+    const value = platformValueForRow(row, platform.id);
+    return {
+      type: platform.id,
+      label: platform.name,
+      value,
+      builtin: Boolean(platform.builtin),
+      available: Boolean(String(value || '').trim())
+    };
+  });
+}
+
+function platformPreviewButton(row) {
+  const items = getPlatformPreviewItems(row);
+  const visible = items.slice(0, 3);
+  const extraCount = Math.max(items.length - visible.length, 0);
+  const chips = visible.map((item) => {
+    const stateClass = item.available ? 'is-filled' : 'is-empty';
+    return `<span class="platform-chip ${stateClass}">${escapeHtml(item.label)}</span>`;
+  }).join('');
+  const extra = extraCount ? `<span class="platform-chip is-more">+${extraCount}</span>` : '';
+  return `<td class="col-platforms">
+    <button type="button" class="platform-preview-trigger" data-platform-preview="${escapeHtml(row.id)}" title="查看平台资料预览">
+      ${chips}${extra}
+    </button>
+  </td>`;
+}
+
+function mobilePlatformPreview(row) {
+  const items = getPlatformPreviewItems(row);
+  return `<div class="mobile-platform-section">
+    <div class="mobile-platform-section-head">
+      <span>平台资料</span>
+      <button type="button" class="mobile-platform-open" data-platform-preview="${escapeHtml(row.id)}">查看预览</button>
+    </div>
+    <div class="mobile-platform-grid">
+      ${items.map((item) => `
+        <div class="mobile-platform-item ${item.available ? 'is-filled' : 'is-empty'}">
+          <span class="mobile-platform-label">${escapeHtml(item.label)}</span>
+          <input
+            class="mobile-platform-input"
+            data-platform-input="${escapeHtml(item.type)}"
+            data-id="${escapeHtml(row.id)}"
+            value="${escapeHtml(item.value || '')}"
+            placeholder="${item.type === 'xhs' ? '使用小红书名称字段' : '输入账号 / 名称'}"
+            ${item.type === 'xhs' ? 'readonly' : ''}
+          />
+        </div>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function openPlatformPreview(rowId) {
+  const existing = document.querySelector('.platform-preview-modal');
+  if (existing) existing.remove();
+
+  getAllRows().then((rows) => {
+    const row = rows.find((item) => String(item.id) === String(rowId));
+    if (!row) return;
+    const items = getPlatformPreviewItems(row);
+    const modal = document.createElement('div');
+    modal.className = 'platform-preview-modal';
+    modal.innerHTML = `
+      <div class="platform-preview-panel" role="dialog" aria-modal="true" aria-label="平台资料预览">
+        <div class="platform-preview-head">
+          <div>
+            <div class="platform-preview-title">${escapeHtml(row.phone || '平台资料')}</div>
+            <div class="platform-preview-subtitle">${escapeHtml(row.xhs_name || row.wx_name || '平台资料可编辑，保存到独立本地数据库')}</div>
+          </div>
+          <button type="button" class="platform-preview-close" aria-label="关闭">×</button>
+        </div>
+        <div class="platform-preview-list">
+          ${items.map((item) => `
+            <div class="platform-preview-row ${item.available ? 'is-filled' : 'is-empty'}">
+              <span class="platform-preview-label">${escapeHtml(item.label)}</span>
+              <input
+                class="platform-preview-input"
+                data-platform-input="${escapeHtml(item.type)}"
+                data-id="${escapeHtml(row.id)}"
+                value="${escapeHtml(item.value || '')}"
+                placeholder="${item.type === 'xhs' ? '使用小红书名称字段' : '输入账号 / 名称'}"
+                ${item.type === 'xhs' ? 'readonly' : ''}
+              />
+            </div>
+          `).join('')}
+        </div>
+        <div class="platform-preview-actions">
+          <button type="button" class="ghost platform-preview-close-secondary">取消</button>
+          <button type="button" class="primary platform-preview-save">保存平台资料</button>
+        </div>
+        <div class="platform-preview-note">
+          平台资料保存到独立本地数据库；小红书仍使用现有“小红书名称”字段。
+        </div>
+      </div>
+    `;
+
+    const close = () => modal.remove();
+    const save = async () => {
+      const inputs = Array.from(modal.querySelectorAll('.platform-preview-input:not([readonly])'));
+      for (const input of inputs) {
+        await savePlatformProfile(input.getAttribute('data-id'), input.getAttribute('data-platform-input'), input.value);
+      }
+      await renderTable();
+      close();
+    };
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) close();
+    });
+    modal.querySelector('.platform-preview-close')?.addEventListener('click', close);
+    modal.querySelector('.platform-preview-close-secondary')?.addEventListener('click', close);
+    modal.querySelector('.platform-preview-save')?.addEventListener('click', save);
+    document.body.appendChild(modal);
+  }).catch((error) => {
+    console.error('打开平台资料预览失败:', error);
+  });
+}
+
+function openPlatformManager() {
+  const existing = document.querySelector('.platform-manager-modal');
+  if (existing) existing.remove();
+
+  let platforms = readPlatforms();
+  const modal = document.createElement('div');
+  modal.className = 'platform-manager-modal';
+
+  const renderManager = () => {
+    modal.innerHTML = `
+      <div class="platform-manager-panel" role="dialog" aria-modal="true" aria-label="平台名称管理">
+        <div class="platform-manager-head">
+          <div>
+            <div class="platform-manager-title">平台名称管理</div>
+            <div class="platform-manager-subtitle">第一阶段只管理平台名称显示，不新增资料字段。</div>
+          </div>
+          <button type="button" class="platform-manager-close" aria-label="关闭">×</button>
+        </div>
+        <div class="platform-manager-add">
+          <input id="platformNameInput" placeholder="新增平台名称，例如 Facebook" />
+          <button type="button" class="primary" data-platform-add>新增</button>
+        </div>
+        <div class="platform-manager-list">
+          ${platforms.map((platform) => `
+            <div class="platform-manager-row" data-platform-id="${escapeHtml(platform.id)}">
+              <input value="${escapeHtml(platform.name)}" data-platform-name="${escapeHtml(platform.id)}" />
+              <button type="button" class="ghost" data-platform-rename="${escapeHtml(platform.id)}">重命名</button>
+              <button type="button" class="ghost platform-manager-delete" data-platform-delete="${escapeHtml(platform.id)}" ${platform.id === 'xhs' ? 'disabled title="小红书为现有字段，不建议删除"' : ''}>删除</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="platform-manager-note">
+          平台名称保存在本机设置；平台账号资料保存在独立本地数据库。暂未接入 Supabase 云端独立表。
+        </div>
+      </div>
+    `;
+  };
+
+  const persistAndRefresh = async () => {
+    savePlatforms(platforms);
+    await renderTable();
+  };
+
+  renderManager();
+  modal.addEventListener('click', async (event) => {
+    if (event.target === modal || event.target.closest('.platform-manager-close')) {
+      modal.remove();
+      return;
+    }
+
+    const addBtn = event.target.closest('[data-platform-add]');
+    if (addBtn) {
+      const input = modal.querySelector('#platformNameInput');
+      const name = input?.value?.trim();
+      if (!name) return;
+      platforms = platforms.concat([{ id: `custom_${Date.now()}`, name, builtin: false }]);
+      await persistAndRefresh();
+      renderManager();
+      return;
+    }
+
+    const renameBtn = event.target.closest('[data-platform-rename]');
+    if (renameBtn) {
+      const id = renameBtn.getAttribute('data-platform-rename');
+      const input = modal.querySelector(`[data-platform-name="${CSS.escape(id)}"]`);
+      const name = input?.value?.trim();
+      if (!name) return;
+      platforms = platforms.map((platform) => platform.id === id ? { ...platform, name } : platform);
+      await persistAndRefresh();
+      renderManager();
+      return;
+    }
+
+    const deleteBtn = event.target.closest('[data-platform-delete]');
+    if (deleteBtn && !deleteBtn.disabled) {
+      const id = deleteBtn.getAttribute('data-platform-delete');
+      platforms = platforms.filter((platform) => platform.id !== id);
+      await persistAndRefresh();
+      renderManager();
+    }
+  });
+
+  document.body.appendChild(modal);
+  modal.querySelector('#platformNameInput')?.focus();
+}
+
 function tdActions(rowId) {
   return `<td class="col-act">
     <div class="actions-container">
@@ -1515,6 +1817,7 @@ function makeRowTr(r) {
     <td class="col-xhs" contenteditable="true" data-field="xhs_name" data-id="${r.id}" 
         style="${bg ? `background:${bg};` : ""} text-align:left;" 
         title="${escapeHtml(r.xhs_name || "")}">${escapeHtml(xhsDisplay)}</td>
+    ${platformPreviewButton(r)}
     ${tdEditable("col-note", r.note1, "note1", r.id)}
     ${tdSelectCat("col-cat", r.row_color, r.id)}
     ${tdActions(r.id)}
@@ -1528,6 +1831,7 @@ async function renderTable() {
   const all = await getAllRows();
   console.log(`📊 总共 ${all.length} 行数据`);
   const rows = applyFilters(all);
+  await loadPlatformProfilesForRows(rows);
   console.log(`📊 过滤后 ${rows.length} 行数据`);
   // ✅ 调试：显示前几条数据的所属人，验证排序是否正确
   if (rows.length > 0 && state.sortBy === "owner") {
@@ -1535,7 +1839,7 @@ async function renderTable() {
   }
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#888;padding:14px 0;">暂无数据，点击"新增一行"开始录入</td></tr>`;
   } else {
     console.log("🔧 开始生成 HTML");
     tbody.innerHTML = rows.map((r) => makeRowTr(r)).join("");
@@ -1598,6 +1902,7 @@ function renderMobileList(rows) {
           ${mobileDetailInput("微信实名人", r.wx_real, "wx_real", r.id)}
           ${mobileDetailInput("对应微信名", r.wx_name, "wx_name", r.id)}
           ${mobileDetailTextarea("小红书名称", r.xhs_name, "xhs_name", r.id)}
+          ${mobilePlatformPreview(r)}
           ${mobileDetailTextarea("备注", r.note1, "note1", r.id)}
           ${mobileCat(r.row_color, r.id)}
           <div class="m-edit-actions" style="display:flex;justify-content:space-between;gap:8px;padding:12px 0 6px;border-top:1px solid #f0f0f0;margin-top:10px;">
@@ -2893,6 +3198,14 @@ function bindEvents() {
   
   // 监听操作按钮的 click 事件（事件委托）
   gridBody.addEventListener("click", async (e) => {
+    const platformTrigger = e.target.closest('[data-platform-preview]');
+    if (platformTrigger) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPlatformPreview(platformTrigger.getAttribute('data-platform-preview'));
+      return;
+    }
+
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;
     
@@ -2915,6 +3228,14 @@ function bindEvents() {
   
   // 监听移动端卡片头部的点击（展开/折叠）
   mobileList.addEventListener("click", async (e) => {
+    const platformTrigger = e.target.closest('[data-platform-preview]');
+    if (platformTrigger) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPlatformPreview(platformTrigger.getAttribute('data-platform-preview'));
+      return;
+    }
+
     const header = e.target.closest(".m-row-header");
     if (header) {
       const card = header.closest(".m-row");
@@ -2972,7 +3293,7 @@ function bindEvents() {
   });
 
   mobileList.addEventListener("input", (e) => {
-    const input = e.target.closest('.m-input, .m-textarea');
+    const input = e.target.closest('.m-input, .m-textarea, .mobile-platform-input');
     if (!input) return;
     
     const card = input.closest('.m-row');
@@ -2990,6 +3311,13 @@ function bindEvents() {
     if (card) {
       card.classList.add('modified');
     }
+  });
+
+  mobileList.addEventListener("change", async (e) => {
+    const input = e.target.closest('.mobile-platform-input:not([readonly])');
+    if (!input) return;
+    await savePlatformProfile(input.getAttribute('data-id'), input.getAttribute('data-platform-input'), input.value);
+    await renderTable();
   });
   
   // 清除搜索图标
@@ -3605,6 +3933,8 @@ function initSidebarActions() {
         forwardClick('#btnImportExport');
       } else if (action === 'categories') {
         forwardClick('#btnCategories');
+      } else if (action === 'platforms') {
+        openPlatformManager();
       } else if (action === 'view') {
         forwardClick('#btnView');
       } else if (action === 'admin') {

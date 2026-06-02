@@ -11,7 +11,8 @@ const DEFAULT_AI_SETTINGS = Object.freeze({
 
 const STOP_WORDS = [
   '搜索', '找出', '所有', '帮我', '整理', '电话号', '电话号码', '号码',
-  '用过的', '相关', '里面', '包含', '一下', '给我', '的'
+  '用过的', '相关', '里面', '包含', '一下', '给我', '的', '有', '带有',
+  '含有', '字样', '资料', '数据', '记录'
 ];
 
 const SYNONYMS = {
@@ -31,6 +32,7 @@ let lastQueryState = {
   query: '',
   keywords: [],
   type: 'search',
+  intent: null,
   rows: [],
   results: [],
   renderedText: ''
@@ -114,12 +116,34 @@ function classifyQuery(query) {
   return 'search';
 }
 
+function detectPlatformIntent(query) {
+  const q = normalizeText(query);
+  const platformGroups = [
+    { id: 'douyin', label: '抖音', terms: ['抖音', 'douyin'] },
+    { id: 'tiktok', label: 'TikTok', terms: ['tiktok', 'tik tok'] },
+    { id: 'threads', label: 'Threads', terms: ['threads'] },
+    { id: 'instagram', label: 'Instagram', terms: ['instagram', 'ins', 'ig'] },
+    { id: 'xhs', label: '小红书', terms: ['小红书', 'xhs', 'rednote'] }
+  ];
+  const wantsPhone = /手机|手机号|电话|号码|phone/.test(q);
+  const wantsExistingValue = /有|存在|填写|填了|不为空|非空|有字符|有内容|账号|资料|选项/.test(q);
+  const matched = platformGroups.find((platform) => platform.terms.some((term) => q.includes(normalizeText(term))));
+  if (!matched) return null;
+  if (!wantsPhone && !wantsExistingValue) return null;
+  return {
+    type: 'platformValuePresent',
+    platformId: matched.id,
+    platformLabel: matched.label,
+    wantsPhone
+  };
+}
+
 function expandSynonyms(tokens) {
   const expanded = new Set(tokens);
   const lowered = tokens.map(normalizeText);
   Object.values(SYNONYMS).forEach((group) => {
     const normalizedGroup = group.map(normalizeText);
-    if (normalizedGroup.some((term) => lowered.includes(term))) {
+    if (normalizedGroup.some((term) => lowered.includes(term) || lowered.some((token) => token.includes(term)))) {
       group.forEach((term) => expanded.add(term));
     }
   });
@@ -127,19 +151,32 @@ function expandSynonyms(tokens) {
 }
 
 function extractKeywords(query) {
-  let cleaned = String(query || '');
+  const original = String(query || '');
+  const normalizedOriginal = normalizeText(original);
+  const detectedTerms = [];
+  Object.values(SYNONYMS).forEach((group) => {
+    group.forEach((term) => {
+      const normalizedTerm = normalizeText(term);
+      if (normalizedTerm && normalizedOriginal.includes(normalizedTerm)) {
+        detectedTerms.push(term);
+      }
+    });
+  });
+
+  let cleaned = original;
   STOP_WORDS.forEach((word) => {
     cleaned = cleaned.replaceAll(word, ' ');
   });
   cleaned = cleaned.replace(/[，。！？、,.!?|/\\()[\]{}:：;；"“”'‘’]+/g, ' ');
   let tokens = cleaned.split(/\s+/).map((item) => item.trim()).filter(Boolean);
-  if (!tokens.length && query.trim()) tokens = [query.trim()];
+  tokens = tokens.concat(detectedTerms);
+  if (!tokens.length && original.trim()) tokens = [original.trim()];
   return expandSynonyms(tokens);
 }
 
 function fieldSpecs(row) {
   const platformText = Object.values(row.platformProfiles || {})
-    .map((item) => `${item.name || ''} ${item.value || ''}`)
+    .map((item) => item.value || '')
     .join(' ');
   return [
     ['电话号码', row.phone],
@@ -151,6 +188,31 @@ function fieldSpecs(row) {
     ['备注', row.note1],
     ['平台资料', platformText]
   ];
+}
+
+function platformEntry(row, platformId) {
+  const profiles = row.platformProfiles || {};
+  if (profiles[platformId]) return profiles[platformId];
+  const target = normalizeText(platformId);
+  return Object.values(profiles).find((item) => {
+    const name = normalizeText(item?.name);
+    return name === target || name.includes(target);
+  }) || null;
+}
+
+function platformValue(row, platformId) {
+  const entry = platformEntry(row, platformId);
+  return String(entry?.value || '').trim();
+}
+
+function findPlatformValueMatches(rows, intent) {
+  return rows
+    .filter((row) => platformValue(row, intent.platformId))
+    .map((row) => ({
+      row,
+      reasons: [`${intent.platformLabel}资料有内容：${platformValue(row, intent.platformId)}`],
+      answerValue: platformValue(row, intent.platformId)
+    }));
 }
 
 function matchRow(row, keywords) {
@@ -253,6 +315,63 @@ function buildMarkdown(results) {
   ].join('\n');
 }
 
+function buildAssistantAnswer(state) {
+  if (!state.results.length) {
+    return '我没有在本地号码数据里找到符合条件的记录。';
+  }
+  if (state.intent?.type === 'platformValuePresent') {
+    const phones = state.results.map((item) => item.row.phone).filter(Boolean);
+    const lines = state.results.map((item, index) => {
+      const row = item.row;
+      return `${index + 1}. ${row.phone || '-'}，所属人：${row.owner || '-'}，${state.intent.platformLabel}：${item.answerValue || '-'}`;
+    });
+    return [
+      `我理解你的问题是：找出“${state.intent.platformLabel}”资料里已经填写内容的手机号。`,
+      `本地匹配到 ${state.results.length} 条。`,
+      '',
+      ...lines,
+      '',
+      `手机号清单：${phones.join('、') || '-'}`
+    ].join('\n');
+  }
+  if (state.type === 'ownerStats') {
+    return [
+      '我按所属人统计了当前本地号码数据：',
+      '',
+      ...state.results.map((group) => `- ${group.label}：${group.count} 条，${group.phones.join('、') || '无手机号'}`)
+    ].join('\n');
+  }
+  if (state.type === 'categoryStats') {
+    return [
+      '我按分类统计了当前本地号码数据：',
+      '',
+      ...state.results.map((group) => `- ${group.label}：${group.count} 条，${group.phones.join('、') || '无手机号'}`)
+    ].join('\n');
+  }
+  if (state.type === 'duplicates') {
+    return state.results.length
+      ? ['我找到了这些重复电话号码：', '', ...state.results.map((group) => `- ${group.phone}：出现 ${group.count} 次`)].join('\n')
+      : '我没有发现重复电话号码。';
+  }
+  return [
+    `我在本地数据里找到 ${state.results.length} 条相关记录：`,
+    '',
+    ...state.results.slice(0, 20).map((item, index) => {
+      const row = item.row;
+      return `${index + 1}. ${row.phone || '-'}，所属人：${row.owner || '-'}，小红书：${row.xhs_name || '-'}，原因：${item.reasons.join('；')}`;
+    })
+  ].join('\n');
+}
+
+function renderAssistantMessage(state) {
+  const summary = $('#aiSummary');
+  summary.hidden = false;
+  summary.innerHTML = `
+    <h3>AI 助手回答</h3>
+    <pre>${escapeHtml(buildAssistantAnswer(state))}</pre>
+  `;
+}
+
 function renderSearchResults(results, keywords) {
   const root = $('#aiResults');
   if (!results.length) {
@@ -335,16 +454,27 @@ async function runLocalQuery() {
   const rows = await getRowsForAi();
   const type = classifyQuery(query);
   const keywords = extractKeywords(query);
+  const intent = detectPlatformIntent(query);
   $('#aiSummary').hidden = true;
   $('#aiSummary').innerHTML = '';
 
-  lastQueryState = { query, keywords, type, rows, results: [], renderedText: '' };
+  lastQueryState = { query, keywords, type, intent, rows, results: [], renderedText: '' };
+
+  if (intent?.type === 'platformValuePresent') {
+    const results = findPlatformValueMatches(rows, intent);
+    lastQueryState.results = results;
+    renderSearchResults(results, [intent.platformLabel, '资料有内容']);
+    updateCount(results.length);
+    renderAssistantMessage(lastQueryState);
+    return lastQueryState;
+  }
 
   if (type === 'ownerStats') {
     const groups = ownerStats(rows);
     lastQueryState.results = groups;
     renderStatsResults(groups, type);
     updateCount(groups.length);
+    renderAssistantMessage(lastQueryState);
     return lastQueryState;
   }
   if (type === 'categoryStats') {
@@ -352,6 +482,7 @@ async function runLocalQuery() {
     lastQueryState.results = groups;
     renderStatsResults(groups, type);
     updateCount(groups.length);
+    renderAssistantMessage(lastQueryState);
     return lastQueryState;
   }
   if (type === 'duplicates') {
@@ -359,6 +490,7 @@ async function runLocalQuery() {
     lastQueryState.results = groups;
     renderDuplicateResults(groups);
     updateCount(groups.length);
+    renderAssistantMessage(lastQueryState);
     return lastQueryState;
   }
 
@@ -366,6 +498,7 @@ async function runLocalQuery() {
   lastQueryState.results = results;
   renderSearchResults(results, keywords);
   updateCount(results.length);
+  renderAssistantMessage(lastQueryState);
   return lastQueryState;
 }
 
@@ -423,13 +556,16 @@ function buildSummaryPrompt(state) {
   const payload = state.type === 'search'
     ? state.results.slice(0, MAX_AI_SUMMARY_ROWS).map(({ row, reasons }) => ({ row, reasons }))
     : state.results.slice(0, MAX_AI_SUMMARY_ROWS);
+  const intentText = state.intent?.type === 'platformValuePresent'
+    ? `用户意图：找出 ${state.intent.platformLabel} 资料字段已经填写内容的手机号。不要把平台名称本身当成匹配条件，只有该平台字段 value 非空才算匹配。`
+    : `用户意图：${state.type}`;
   return [
     `用户问题：${state.query || '整理当前匹配结果'}`,
-    `匹配类型：${state.type}`,
+    intentText,
     `匹配数量：${state.results.length}`,
     `以下是最多 ${MAX_AI_SUMMARY_ROWS} 条匹配结果 JSON：`,
     JSON.stringify(payload, null, 2),
-    '请按所属人、分类、备注风险点、电话号码清单总结。不要编造，不要建议删除或修改数据。'
+    '请像对话助手一样直接回答用户问题，先说明你理解的筛选条件，再给出号码清单和必要说明。不要编造，不要建议删除或修改数据。'
   ].join('\n');
 }
 
@@ -537,7 +673,7 @@ function bindAiAssistant() {
   $('#btnAiClear')?.addEventListener('click', () => {
     $('#aiUserInput').value = '';
     $('#aiResults').className = 'ai-results-empty';
-    $('#aiResults').textContent = '输入问题后点击“本地查询”。';
+    $('#aiResults').textContent = '输入问题后点击“理解并回答”。';
     $('#aiSummary').hidden = true;
     updateCount(0);
     $('#aiKeywordSummary').textContent = '关键词：-';

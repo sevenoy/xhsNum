@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
 
-  <link rel="stylesheet" href="./css/style.css?v=251217" />
+  <link rel="stylesheet" href="./css/style.css?v=V260601.4" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -424,17 +424,17 @@
           <div class="ai-card-head">
             <div>
               <h3>查询问题</h3>
-              <p>例如：搜索抖音、按所属人统计、找出重复电话。</p>
+              <p>例如：整理所有抖音手机号、按所属人统计、找出重复电话。</p>
             </div>
           </div>
           <textarea id="aiUserInput" rows="4" placeholder="输入问题，例如：整理备注里有注销的号码"></textarea>
           <div class="ai-actions">
-            <button type="button" class="primary" id="btnAiSearch">本地查询</button>
-            <button type="button" class="ghost" id="btnAiSummarize">AI 总结</button>
+            <button type="button" class="primary" id="btnAiSearch">理解并回答</button>
+            <button type="button" class="ghost" id="btnAiSummarize">AI 深度总结</button>
             <button type="button" class="ghost" id="btnAiClear">清空</button>
           </div>
           <div class="ai-examples" aria-label="示例问题">
-            <button type="button" data-ai-example="搜索抖音">搜索抖音</button>
+            <button type="button" data-ai-example="整理所有抖音手机号">整理所有抖音手机号</button>
             <button type="button" data-ai-example="找出注销号码">找出注销号码</button>
             <button type="button" data-ai-example="珠海分类号码">珠海分类号码</button>
             <button type="button" data-ai-example="按所属人统计">按所属人统计</button>
@@ -499,7 +499,7 @@
             <button type="button" class="ghost" id="btnAiCopyFull">复制完整结果</button>
           </div>
         </div>
-        <div id="aiResults" class="ai-results-empty">输入问题后点击“本地查询”。</div>
+        <div id="aiResults" class="ai-results-empty">输入问题后点击“理解并回答”。</div>
         <div id="aiSummary" class="ai-summary-panel" hidden></div>
       </section>
     </section>
@@ -515,7 +515,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.3';
+    const APP_VERSION = 'V260601.4';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

@@ -1,0 +1,567 @@
+const AI_SETTINGS_KEY = 'xhs_ai_settings';
+const MAX_AI_SUMMARY_ROWS = 50;
+
+const DEFAULT_AI_SETTINGS = Object.freeze({
+  provider: 'deepseek',
+  baseUrl: 'https://api.deepseek.com',
+  apiKey: '',
+  model: 'deepseek-chat',
+  enableAiSummary: true
+});
+
+const STOP_WORDS = [
+  '搜索', '找出', '所有', '帮我', '整理', '电话号', '电话号码', '号码',
+  '用过的', '相关', '里面', '包含', '一下', '给我', '的'
+];
+
+const SYNONYMS = {
+  douyin: ['抖音', 'douyin', 'tiktok', '短视频', '直播', '投流'],
+  xhs: ['小红书', 'xhs', 'rednote', 'red'],
+  wechat: ['微信', 'wechat', 'wx'],
+  disabled: ['注销', '废号', '停用', '不可用', '失效', '作废'],
+  enterprise: ['企业号', '企业', '公司', '营业厅'],
+  photo: ['摄影', '拍摄', '摄影师', '拍照'],
+  zhuhai: ['珠海', 'zhuhai'],
+  hongkong: ['香港', 'hk', 'hong kong'],
+  live: ['直播', 'live'],
+  ads: ['投流', '广告', '投放']
+};
+
+let lastQueryState = {
+  query: '',
+  keywords: [],
+  type: 'search',
+  rows: [],
+  results: [],
+  renderedText: ''
+};
+
+function $(selector) {
+  return document.querySelector(selector);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function phoneDigits(value) {
+  return String(value || '').replace(/\D+/g, '');
+}
+
+function readAiSettings() {
+  try {
+    const raw = localStorage.getItem(AI_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_AI_SETTINGS };
+    return { ...DEFAULT_AI_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_AI_SETTINGS };
+  }
+}
+
+function saveAiSettings(settings) {
+  localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function setStatus(message, type = 'info') {
+  const status = $('#aiSettingsStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `ai-status-pill ${type}`;
+}
+
+function showInlineStatus(message, type = 'info') {
+  if (window.showSaveStatus) {
+    window.showSaveStatus(message, type, 2200);
+    return;
+  }
+  setStatus(message, type);
+}
+
+function hydrateSettingsForm() {
+  const settings = readAiSettings();
+  $('#aiProvider').value = settings.provider;
+  $('#aiBaseUrl').value = settings.baseUrl;
+  $('#aiApiKey').value = settings.apiKey;
+  $('#aiModel').value = settings.model;
+  $('#aiEnableSummary').checked = Boolean(settings.enableAiSummary);
+  setStatus(localStorage.getItem(AI_SETTINGS_KEY) ? '已保存' : '未保存');
+}
+
+function collectSettingsForm() {
+  return {
+    provider: $('#aiProvider').value || DEFAULT_AI_SETTINGS.provider,
+    baseUrl: ($('#aiBaseUrl').value || '').trim().replace(/\/+$/, ''),
+    apiKey: $('#aiApiKey').value || '',
+    model: ($('#aiModel').value || '').trim(),
+    enableAiSummary: $('#aiEnableSummary').checked
+  };
+}
+
+function classifyQuery(query) {
+  const q = normalizeText(query);
+  if (/重复|重复电话|重复手机号|重复号码/.test(q)) return 'duplicates';
+  if (/所属人统计|每个人|按所属人|owner/.test(q)) return 'ownerStats';
+  if (/分类统计|每个分类|按分类|分类有多少/.test(q)) return 'categoryStats';
+  return 'search';
+}
+
+function expandSynonyms(tokens) {
+  const expanded = new Set(tokens);
+  const lowered = tokens.map(normalizeText);
+  Object.values(SYNONYMS).forEach((group) => {
+    const normalizedGroup = group.map(normalizeText);
+    if (normalizedGroup.some((term) => lowered.includes(term))) {
+      group.forEach((term) => expanded.add(term));
+    }
+  });
+  return Array.from(expanded).filter(Boolean);
+}
+
+function extractKeywords(query) {
+  let cleaned = String(query || '');
+  STOP_WORDS.forEach((word) => {
+    cleaned = cleaned.replaceAll(word, ' ');
+  });
+  cleaned = cleaned.replace(/[，。！？、,.!?|/\\()[\]{}:：;；"“”'‘’]+/g, ' ');
+  let tokens = cleaned.split(/\s+/).map((item) => item.trim()).filter(Boolean);
+  if (!tokens.length && query.trim()) tokens = [query.trim()];
+  return expandSynonyms(tokens);
+}
+
+function fieldSpecs(row) {
+  const platformText = Object.values(row.platformProfiles || {})
+    .map((item) => `${item.name || ''} ${item.value || ''}`)
+    .join(' ');
+  return [
+    ['电话号码', row.phone],
+    ['所属人', row.owner],
+    ['微信实名人', row.wx_real],
+    ['对应微信名', row.wx_name],
+    ['小红书名称', row.xhs_name],
+    ['分类', row.categoryName],
+    ['备注', row.note1],
+    ['平台资料', platformText]
+  ];
+}
+
+function matchRow(row, keywords) {
+  const reasons = [];
+  const normalizedKeywords = keywords.map(normalizeText).filter(Boolean);
+  const digitKeywords = keywords.map(phoneDigits).filter(Boolean);
+
+  fieldSpecs(row).forEach(([label, value]) => {
+    const normalizedValue = normalizeText(value);
+    const digitValue = label === '电话号码' ? phoneDigits(value) : '';
+    normalizedKeywords.forEach((keyword) => {
+      if (normalizedValue && normalizedValue.includes(keyword)) {
+        reasons.push(`${label}匹配：${keyword}`);
+      }
+    });
+    digitKeywords.forEach((keyword) => {
+      if (digitValue && digitValue.includes(keyword)) {
+        reasons.push(`电话号码匹配：${keyword}`);
+      }
+    });
+  });
+
+  return Array.from(new Set(reasons));
+}
+
+function reasonRank(reasons) {
+  const text = reasons.join(' ');
+  if (text.includes('电话号码匹配')) return 1;
+  if (text.includes('分类匹配')) return 2;
+  if (text.includes('备注匹配')) return 3;
+  if (text.includes('小红书名称匹配') || text.includes('对应微信名匹配') || text.includes('微信实名人匹配')) return 4;
+  if (text.includes('所属人匹配')) return 5;
+  return 6;
+}
+
+async function getRowsForAi() {
+  if (typeof window.getXhsRowsForAi !== 'function') {
+    throw new Error('AI 只读数据接口未就绪');
+  }
+  const rows = await window.getXhsRowsForAi();
+  return Array.isArray(rows) ? rows : [];
+}
+
+function findMatches(rows, keywords) {
+  return rows
+    .map((row) => ({ row, reasons: matchRow(row, keywords) }))
+    .filter((item) => item.reasons.length)
+    .sort((a, b) => reasonRank(a.reasons) - reasonRank(b.reasons));
+}
+
+function ownerStats(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const owner = row.owner || '未填写';
+    if (!map.has(owner)) map.set(owner, []);
+    map.get(owner).push(row);
+  });
+  return Array.from(map.entries())
+    .map(([label, group]) => ({ label, count: group.length, phones: group.map((row) => row.phone).filter(Boolean), rows: group }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh'));
+}
+
+function categoryStats(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const category = row.categoryName || '未分类';
+    if (!map.has(category)) map.set(category, []);
+    map.get(category).push(row);
+  });
+  return Array.from(map.entries())
+    .map(([label, group]) => ({ label, count: group.length, phones: group.map((row) => row.phone).filter(Boolean), rows: group }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh'));
+}
+
+function duplicatePhones(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const digits = phoneDigits(row.phone);
+    if (!digits) return;
+    if (!map.has(digits)) map.set(digits, []);
+    map.get(digits).push(row);
+  });
+  return Array.from(map.entries())
+    .filter(([, group]) => group.length > 1)
+    .map(([phone, group]) => ({ phone, count: group.length, rows: group }))
+    .sort((a, b) => b.count - a.count || a.phone.localeCompare(b.phone));
+}
+
+function rowToResultText(item) {
+  const row = item.row || item;
+  const reasons = item.reasons ? item.reasons.join('；') : '';
+  return `| ${row.phone || ''} | ${row.owner || ''} | ${row.wx_real || ''} | ${row.wx_name || ''} | ${row.xhs_name || ''} | ${row.categoryName || ''} | ${(row.note1 || '').replace(/\n/g, ' ')} | ${reasons} |`;
+}
+
+function buildMarkdown(results) {
+  return [
+    '| 电话号码 | 所属人 | 微信实名人 | 对应微信名 | 小红书名称 | 分类 | 备注 | 匹配原因 |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...results.map(rowToResultText)
+  ].join('\n');
+}
+
+function renderSearchResults(results, keywords) {
+  const root = $('#aiResults');
+  if (!results.length) {
+    root.className = 'ai-results-empty';
+    root.textContent = '没有找到匹配结果。';
+    return;
+  }
+  root.className = 'ai-results-list';
+  root.innerHTML = results.map(({ row, reasons }) => `
+    <article class="ai-result-item">
+      <div class="ai-result-main">
+        <strong>${escapeHtml(row.phone || '-')}</strong>
+        <span>${escapeHtml(row.xhs_name || row.wx_name || '未填写名称')}</span>
+      </div>
+      <div class="ai-result-fields">
+        <span>所属人：${escapeHtml(row.owner || '-')}</span>
+        <span>微信实名人：${escapeHtml(row.wx_real || '-')}</span>
+        <span>对应微信名：${escapeHtml(row.wx_name || '-')}</span>
+        <span>分类：${escapeHtml(row.categoryName || '未分类')}</span>
+      </div>
+      ${row.note1 ? `<p class="ai-result-note">${escapeHtml(row.note1)}</p>` : ''}
+      <div class="ai-result-reasons">${reasons.map((reason) => `<span>${escapeHtml(reason)}</span>`).join('')}</div>
+    </article>
+  `).join('');
+  lastQueryState.renderedText = buildMarkdown(results);
+  $('#aiKeywordSummary').textContent = `关键词：${keywords.join(' / ') || '-'}`;
+}
+
+function renderStatsResults(groups, type) {
+  const root = $('#aiResults');
+  if (!groups.length) {
+    root.className = 'ai-results-empty';
+    root.textContent = '没有可统计的数据。';
+    return;
+  }
+  root.className = 'ai-results-list';
+  root.innerHTML = groups.map((group) => `
+    <article class="ai-result-item ai-stat-item">
+      <div class="ai-result-main">
+        <strong>${escapeHtml(group.label || group.phone)}</strong>
+        <span>${group.count} 条</span>
+      </div>
+      <p class="ai-result-note">${escapeHtml(group.phones.join('、') || group.rows.map((row) => row.phone).join('、'))}</p>
+    </article>
+  `).join('');
+  const title = type === 'ownerStats' ? '所属人统计' : '分类统计';
+  lastQueryState.renderedText = groups.map((group) => `- ${group.label}: ${group.count} 条\n  ${group.phones.join(', ')}`).join('\n');
+  $('#aiKeywordSummary').textContent = `关键词：${title}`;
+}
+
+function renderDuplicateResults(groups) {
+  const root = $('#aiResults');
+  if (!groups.length) {
+    root.className = 'ai-results-empty';
+    root.textContent = '没有发现重复电话号码。';
+    return;
+  }
+  root.className = 'ai-results-list';
+  root.innerHTML = groups.map((group) => `
+    <article class="ai-result-item ai-stat-item">
+      <div class="ai-result-main">
+        <strong>${escapeHtml(group.phone)}</strong>
+        <span>出现 ${group.count} 次</span>
+      </div>
+      <div class="ai-result-fields">
+        ${group.rows.map((row) => `<span>${escapeHtml(row.owner || '-')} / ${escapeHtml(row.xhs_name || row.wx_name || '-')}</span>`).join('')}
+      </div>
+    </article>
+  `).join('');
+  lastQueryState.renderedText = groups.map((group) => `- ${group.phone}: ${group.count} 次`).join('\n');
+  $('#aiKeywordSummary').textContent = '关键词：重复电话';
+}
+
+function updateCount(count) {
+  $('#aiMatchCount').textContent = `共匹配 ${count} 条`;
+}
+
+async function runLocalQuery() {
+  const query = $('#aiUserInput').value.trim();
+  const rows = await getRowsForAi();
+  const type = classifyQuery(query);
+  const keywords = extractKeywords(query);
+  $('#aiSummary').hidden = true;
+  $('#aiSummary').innerHTML = '';
+
+  lastQueryState = { query, keywords, type, rows, results: [], renderedText: '' };
+
+  if (type === 'ownerStats') {
+    const groups = ownerStats(rows);
+    lastQueryState.results = groups;
+    renderStatsResults(groups, type);
+    updateCount(groups.length);
+    return lastQueryState;
+  }
+  if (type === 'categoryStats') {
+    const groups = categoryStats(rows);
+    lastQueryState.results = groups;
+    renderStatsResults(groups, type);
+    updateCount(groups.length);
+    return lastQueryState;
+  }
+  if (type === 'duplicates') {
+    const groups = duplicatePhones(rows);
+    lastQueryState.results = groups;
+    renderDuplicateResults(groups);
+    updateCount(groups.length);
+    return lastQueryState;
+  }
+
+  const results = findMatches(rows, keywords);
+  lastQueryState.results = results;
+  renderSearchResults(results, keywords);
+  updateCount(results.length);
+  return lastQueryState;
+}
+
+async function copyText(text, successMessage) {
+  if (!text) {
+    showInlineStatus('没有可复制的内容', 'warning');
+    return;
+  }
+  await navigator.clipboard.writeText(text);
+  showInlineStatus(successMessage, 'success');
+}
+
+function phonesFromState() {
+  if (lastQueryState.type === 'search') {
+    return lastQueryState.results.map((item) => item.row.phone).filter(Boolean);
+  }
+  if (lastQueryState.type === 'duplicates') {
+    return lastQueryState.results.flatMap((group) => group.rows.map((row) => row.phone)).filter(Boolean);
+  }
+  return lastQueryState.results.flatMap((group) => group.phones || []).filter(Boolean);
+}
+
+async function testConnection() {
+  const settings = collectSettingsForm();
+  if (!settings.baseUrl || !settings.apiKey || !settings.model) {
+    setStatus('缺少配置', 'warning');
+    return;
+  }
+  setStatus('测试中...');
+  try {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${settings.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [{ role: 'user', content: 'Reply OK only.' }],
+        temperature: 0
+      }),
+      signal: controller.signal
+    });
+    window.clearTimeout(timer);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    setStatus('连接成功', 'success');
+  } catch (error) {
+    setStatus(`连接失败：${error.message || error}`, 'error');
+  }
+}
+
+function buildSummaryPrompt(state) {
+  const payload = state.type === 'search'
+    ? state.results.slice(0, MAX_AI_SUMMARY_ROWS).map(({ row, reasons }) => ({ row, reasons }))
+    : state.results.slice(0, MAX_AI_SUMMARY_ROWS);
+  return [
+    `用户问题：${state.query || '整理当前匹配结果'}`,
+    `匹配类型：${state.type}`,
+    `匹配数量：${state.results.length}`,
+    `以下是最多 ${MAX_AI_SUMMARY_ROWS} 条匹配结果 JSON：`,
+    JSON.stringify(payload, null, 2),
+    '请按所属人、分类、备注风险点、电话号码清单总结。不要编造，不要建议删除或修改数据。'
+  ].join('\n');
+}
+
+async function summarizeResults() {
+  const settings = readAiSettings();
+  if (!settings.enableAiSummary) {
+    setStatus('AI 总结未启用', 'warning');
+    return;
+  }
+  if (!settings.baseUrl || !settings.apiKey || !settings.model) {
+    setStatus('请先配置 API', 'warning');
+    return;
+  }
+  const state = await runLocalQuery();
+  if (!state.results.length) {
+    setStatus('无匹配结果', 'warning');
+    return;
+  }
+  const summary = $('#aiSummary');
+  summary.hidden = false;
+  summary.textContent = `将发送 ${Math.min(state.results.length, MAX_AI_SUMMARY_ROWS)} 条匹配结果给 AI 总结...`;
+  try {
+    const response = await fetch(`${settings.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${settings.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: '你是号码数据整理助手。只能基于用户提供的数据总结，不要编造，不要建议删除或修改数据。'
+          },
+          { role: 'user', content: buildSummaryPrompt(state) }
+        ],
+        temperature: 0.2
+      })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('返回格式异常');
+    summary.innerHTML = `<h3>AI 总结</h3><pre>${escapeHtml(content)}</pre>`;
+  } catch (error) {
+    summary.textContent = `AI 总结失败：${error.message || error}`;
+    setStatus('总结失败', 'error');
+  }
+}
+
+function setNumbersVisible(visible) {
+  ['.controls-panel', '#panelCategories', '.data-panel'].forEach((selector) => {
+    const el = $(selector);
+    if (!el) return;
+    if (selector === '#panelCategories') {
+      el.style.setProperty('display', 'none', 'important');
+      return;
+    }
+    if (visible) {
+      el.hidden = false;
+      el.style.removeProperty('display');
+    } else {
+      el.hidden = true;
+      el.style.setProperty('display', 'none', 'important');
+    }
+  });
+}
+
+function showAiAssistantPanel() {
+  setNumbersVisible(false);
+  const panel = $('#aiAssistantPanel');
+  if (panel) panel.hidden = false;
+  document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.sidebarAction === 'aiAssistant');
+  });
+  panel?.scrollIntoView({ block: 'start' });
+}
+
+function showNumbersPanel() {
+  setNumbersVisible(true);
+  const panel = $('#aiAssistantPanel');
+  if (panel) panel.hidden = true;
+  document.querySelectorAll('.sidebar-nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.sidebarAction === 'home');
+  });
+}
+
+function bindAiAssistant() {
+  if (!$('#aiAssistantPanel')) return;
+  hydrateSettingsForm();
+
+  $('#btnAiSaveSettings')?.addEventListener('click', () => {
+    saveAiSettings(collectSettingsForm());
+    setStatus('已保存', 'success');
+  });
+  $('#btnAiTestConnection')?.addEventListener('click', testConnection);
+  $('#btnAiSearch')?.addEventListener('click', () => {
+    runLocalQuery().catch((error) => {
+      $('#aiResults').className = 'ai-results-empty';
+      $('#aiResults').textContent = `查询失败：${error.message || error}`;
+    });
+  });
+  $('#btnAiSummarize')?.addEventListener('click', summarizeResults);
+  $('#btnAiClear')?.addEventListener('click', () => {
+    $('#aiUserInput').value = '';
+    $('#aiResults').className = 'ai-results-empty';
+    $('#aiResults').textContent = '输入问题后点击“本地查询”。';
+    $('#aiSummary').hidden = true;
+    updateCount(0);
+    $('#aiKeywordSummary').textContent = '关键词：-';
+    lastQueryState = { query: '', keywords: [], type: 'search', rows: [], results: [], renderedText: '' };
+  });
+  $('#btnAiBackToNumbers')?.addEventListener('click', showNumbersPanel);
+  $('#btnAiCopyPhones')?.addEventListener('click', () => copyText(phonesFromState().join('\n'), '电话号码已复制'));
+  $('#btnAiCopyFull')?.addEventListener('click', () => copyText(lastQueryState.renderedText, '完整结果已复制'));
+  document.querySelectorAll('[data-ai-example]').forEach((button) => {
+    button.addEventListener('click', () => {
+      $('#aiUserInput').value = button.dataset.aiExample || '';
+      runLocalQuery().catch((error) => {
+        $('#aiResults').className = 'ai-results-empty';
+        $('#aiResults').textContent = `查询失败：${error.message || error}`;
+      });
+    });
+  });
+}
+
+window.showXhsAiAssistant = showAiAssistantPanel;
+window.showXhsNumbersPanel = showNumbersPanel;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bindAiAssistant);
+} else {
+  bindAiAssistant();
+}

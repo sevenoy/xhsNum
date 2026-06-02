@@ -333,6 +333,34 @@ async function savePlatformProfile(rowId, platformId, value) {
   markLocalAutoSaved('平台资料已更新，等待保存云端');
 }
 
+window.getXhsRowsForAi = async function getXhsRowsForAi() {
+  const rows = await getAllRows();
+  const cats = readCats();
+  await loadPlatformProfilesForRows(rows);
+  const platforms = readPlatforms();
+  return rows.map((row) => {
+    const platformProfiles = {};
+    platforms.forEach((platform) => {
+      platformProfiles[platform.id] = {
+        name: platform.name,
+        value: platformValueForRow(row, platform.id)
+      };
+    });
+    return {
+      id: row.id,
+      phone: row.phone || '',
+      owner: row.owner || '',
+      wx_real: row.wx_real || '',
+      wx_name: row.wx_name || '',
+      xhs_name: row.xhs_name || '',
+      note1: row.note1 || '',
+      row_color: row.row_color || '',
+      categoryName: catNameOf(cats, row.row_color),
+      platformProfiles
+    };
+  });
+};
+
 function catNameOf(cats, id) {
   const found = cats.find((c) => c.id === id);
   return found ? found.name : "";
@@ -3883,6 +3911,14 @@ function initSidebarActions() {
     if (target) target.click();
   };
 
+  const showAiAssistantPanel = () => {
+    window.showXhsAiAssistant?.();
+  };
+
+  const showNumbersPanel = () => {
+    window.showXhsNumbersPanel?.();
+  };
+
   const focusCloudActions = () => {
     const toolbar = document.querySelector('.action-toolbar');
     const saveBtn = document.querySelector('#btnSaveCloud');
@@ -3922,26 +3958,39 @@ function initSidebarActions() {
       });
 
       if (action === 'home') {
+        showNumbersPanel();
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (action === 'cloud') {
+        showNumbersPanel();
         focusCloudActions();
       } else if (action === 'saveCloud') {
+        showNumbersPanel();
         forwardClick('#btnSaveCloud');
       } else if (action === 'loadCloud') {
+        showNumbersPanel();
         forwardClick('#btnLoadCloud');
       } else if (action === 'importExport') {
+        showNumbersPanel();
         forwardClick('#btnImportExport');
       } else if (action === 'categories') {
+        showNumbersPanel();
         forwardClick('#btnCategories');
       } else if (action === 'platforms') {
+        showNumbersPanel();
         openPlatformManager();
+      } else if (action === 'aiAssistant') {
+        showAiAssistantPanel();
       } else if (action === 'view') {
+        showNumbersPanel();
         forwardClick('#btnView');
       } else if (action === 'admin') {
+        showNumbersPanel();
         forwardClick('#btnAdmin');
       } else if (action === 'deleteData') {
+        showNumbersPanel();
         forwardClick('#btnDeleteData');
       } else if (action === 'add') {
+        showNumbersPanel();
         forwardClick('#btnAdd');
       } else if (action === 'logout') {
         forwardClick('#btnLogout');

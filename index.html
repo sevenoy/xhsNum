@@ -258,6 +258,10 @@
         <span class="sidebar-icon">#</span>
         <span>平台管理</span>
       </button>
+      <button type="button" class="sidebar-nav-item" data-sidebar-action="aiAssistant">
+        <span class="sidebar-icon">AI</span>
+        <span>AI 助手</span>
+      </button>
       <button type="button" class="sidebar-nav-item" data-sidebar-action="view">
         <span class="sidebar-icon">⚙</span>
         <span>显示配置</span>
@@ -404,10 +408,106 @@
       <!-- 手机版折叠列表 -->
       <div id="mobileList" class="mobile-only"></div>
     </div>
+
+    <section id="aiAssistantPanel" class="panel ai-assistant-panel" hidden>
+      <div class="ai-hero">
+        <div>
+          <p class="ai-eyebrow">本地只读工具</p>
+          <h2>AI 助手</h2>
+          <p>用自然语言查询、整理和总结号码数据。默认只在本地匹配，不上传完整数据。</p>
+        </div>
+        <button type="button" class="ghost" id="btnAiBackToNumbers">返回号码管理</button>
+      </div>
+
+      <div class="ai-grid">
+        <section class="ai-card ai-query-card" aria-label="AI 查询">
+          <div class="ai-card-head">
+            <div>
+              <h3>查询问题</h3>
+              <p>例如：搜索抖音、按所属人统计、找出重复电话。</p>
+            </div>
+          </div>
+          <textarea id="aiUserInput" rows="4" placeholder="输入问题，例如：整理备注里有注销的号码"></textarea>
+          <div class="ai-actions">
+            <button type="button" class="primary" id="btnAiSearch">本地查询</button>
+            <button type="button" class="ghost" id="btnAiSummarize">AI 总结</button>
+            <button type="button" class="ghost" id="btnAiClear">清空</button>
+          </div>
+          <div class="ai-examples" aria-label="示例问题">
+            <button type="button" data-ai-example="搜索抖音">搜索抖音</button>
+            <button type="button" data-ai-example="找出注销号码">找出注销号码</button>
+            <button type="button" data-ai-example="珠海分类号码">珠海分类号码</button>
+            <button type="button" data-ai-example="按所属人统计">按所属人统计</button>
+            <button type="button" data-ai-example="找出重复电话">找出重复电话</button>
+            <button type="button" data-ai-example="整理企业号">整理企业号</button>
+            <button type="button" data-ai-example="搜索摄影 投流 直播">搜索摄影 / 投流 / 直播</button>
+          </div>
+        </section>
+
+        <section class="ai-card ai-settings-card" aria-label="AI API 设置">
+          <div class="ai-card-head">
+            <div>
+              <h3>AI API 设置</h3>
+              <p>API Key 仅保存在当前浏览器 localStorage。</p>
+            </div>
+            <span id="aiSettingsStatus" class="ai-status-pill">未保存</span>
+          </div>
+          <div class="ai-settings-grid">
+            <label>
+              <span>Provider</span>
+              <select id="aiProvider">
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai-compatible">OpenAI Compatible</option>
+                <option value="openai">OpenAI</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input id="aiBaseUrl" type="url" placeholder="https://api.deepseek.com" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input id="aiApiKey" type="password" autocomplete="off" placeholder="仅保存在本机浏览器" />
+            </label>
+            <label>
+              <span>Model</span>
+              <input id="aiModel" placeholder="deepseek-chat" />
+            </label>
+          </div>
+          <label class="ai-checkbox">
+            <input id="aiEnableSummary" type="checkbox" />
+            <span>启用 AI 总结匹配结果</span>
+          </label>
+          <div class="ai-actions">
+            <button type="button" class="primary" id="btnAiSaveSettings">保存设置</button>
+            <button type="button" class="ghost" id="btnAiTestConnection">测试连接</button>
+          </div>
+          <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。</p>
+        </section>
+      </div>
+
+      <section class="ai-card ai-results-card" aria-label="AI 查询结果">
+        <div class="ai-result-toolbar">
+          <div>
+            <strong id="aiMatchCount">共匹配 0 条</strong>
+            <span id="aiKeywordSummary">关键词：-</span>
+            <span>数据来源：本地已加载数据</span>
+          </div>
+          <div class="ai-result-actions">
+            <button type="button" class="ghost" id="btnAiCopyPhones">复制电话号码</button>
+            <button type="button" class="ghost" id="btnAiCopyFull">复制完整结果</button>
+          </div>
+        </div>
+        <div id="aiResults" class="ai-results-empty">输入问题后点击“本地查询”。</div>
+        <div id="aiSummary" class="ai-summary-panel" hidden></div>
+      </section>
+    </section>
   </div>
 
   <!-- 主脚本 -->
   <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/ai-assistant.js"></script>
   <script type="module" src="./js/syncBridge.js"></script>
 
   <!-- Service Worker 注册和自动更新检测 -->
@@ -415,7 +515,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.2';
+    const APP_VERSION = 'V260601.3';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

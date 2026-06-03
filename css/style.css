@@ -7165,6 +7165,39 @@ body.subpage-shell .settings-item input[type="range"] {
   flex: 0 1 auto !important;
 }
 
+#aiAssistantPanel .ai-summary-panel {
+  margin-top: 12px !important;
+  padding: 12px 14px !important;
+  border-color: rgba(32, 139, 238, 0.18) !important;
+  border-radius: 14px !important;
+  background: rgba(240, 248, 255, 0.72) !important;
+  color: #263241 !important;
+}
+
+#aiAssistantPanel .ai-summary-panel h3 {
+  margin: 0 0 8px !important;
+  color: #15324a !important;
+  font-size: 16px !important;
+  font-weight: 850 !important;
+  line-height: 1.25 !important;
+}
+
+#aiAssistantPanel .ai-summary-panel pre {
+  margin: 0 !important;
+  color: #405062 !important;
+  font-family: var(--font-main) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.55 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+#aiAssistantPanel .ai-summary-panel pre::selection {
+  background: rgba(32, 139, 238, 0.2) !important;
+  color: #15324a !important;
+}
+
 @media (max-width: 767px) {
   #aiAssistantPanel .ai-hero > div:first-child {
     align-items: flex-start !important;
@@ -7199,5 +7232,10 @@ body.subpage-shell .settings-item input[type="range"] {
   #aiAssistantPanel .ai-query-side .ai-actions {
     display: flex !important;
     flex-wrap: wrap !important;
+  }
+
+  #aiAssistantPanel .ai-summary-panel pre {
+    font-size: 12.5px !important;
+    line-height: 1.5 !important;
   }
 }

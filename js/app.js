@@ -4328,12 +4328,58 @@ function initSidebarActions() {
     if (target) target.click();
   };
 
+  const openImportExportDialog = () => {
+    document.querySelector('.import-export-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.className = 'import-export-modal';
+    modal.innerHTML = `
+      <div class="import-export-panel" role="dialog" aria-modal="true" aria-label="导入导出">
+        <div class="import-export-head">
+          <div>
+            <div class="import-export-title">导入导出</div>
+            <div class="import-export-subtitle">选择导入数据或导出当前号码表。</div>
+          </div>
+          <button type="button" class="import-export-close" aria-label="关闭">×</button>
+        </div>
+        <div class="import-export-actions">
+          <button type="button" class="primary" data-import-export-action="import">导入数据</button>
+          <button type="button" class="ghost" data-import-export-action="export">导出数据</button>
+        </div>
+      </div>
+    `;
+    const close = () => modal.remove();
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal || event.target.closest('.import-export-close')) {
+        close();
+        return;
+      }
+      const actionButton = event.target.closest('[data-import-export-action]');
+      if (!actionButton) return;
+      const action = actionButton.dataset.importExportAction;
+      close();
+      if (action === 'import') {
+        forwardClick('#menuImport');
+      } else if (action === 'export') {
+        forwardClick('#menuExport');
+      }
+    });
+    document.body.appendChild(modal);
+  };
+
   const showAiAssistantPanel = () => {
     window.showXhsAiAssistant?.();
   };
 
   const showNumbersPanel = () => {
     window.showXhsNumbersPanel?.();
+  };
+
+  const avatarInitial = (name) => {
+    const clean = String(name || '').replace(/^👤\s*/, '').trim();
+    if (!clean || clean === '未登录' || clean === '匿名用户') return '?';
+    const latin = clean.match(/[A-Za-z]/);
+    if (latin) return latin[0].toUpperCase();
+    return Array.from(clean)[0] || '?';
   };
 
   const focusCloudActions = () => {
@@ -4348,13 +4394,18 @@ function initSidebarActions() {
   };
 
   const syncSidebarStatus = () => {
+    const sidebarAvatar = document.querySelector('.sidebar-avatar');
     const sidebarUser = document.querySelector('#sidebarUserName');
     const sidebarCloud = document.querySelector('#sidebarCloudText');
     const currentName = document.querySelector('#currentUserName')?.textContent?.replace(/^👤\s*/, '').trim();
     const cloudText = document.querySelector('#cloudText')?.textContent?.trim();
+    const displayName = currentName || window.currentUser?.name || localStorage.getItem('xhs_user_name') || '未登录';
 
     if (sidebarUser) {
-      sidebarUser.textContent = currentName || window.currentUser?.name || localStorage.getItem('xhs_user_name') || '未登录';
+      sidebarUser.textContent = displayName;
+    }
+    if (sidebarAvatar) {
+      sidebarAvatar.textContent = avatarInitial(displayName);
     }
     if (sidebarCloud) {
       sidebarCloud.textContent = cloudText || '未知';
@@ -4388,7 +4439,7 @@ function initSidebarActions() {
         forwardClick('#btnLoadCloud');
       } else if (action === 'importExport') {
         showNumbersPanel();
-        forwardClick('#btnImportExport');
+        openImportExportDialog();
       } else if (action === 'categories') {
         showNumbersPanel();
         forwardClick('#btnCategories');

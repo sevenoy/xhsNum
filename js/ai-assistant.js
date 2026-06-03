@@ -100,17 +100,47 @@ function saveAiSettings(settings, options = {}) {
   return normalized;
 }
 
+function aiSettingsConfigured(settings = readAiSettings()) {
+  return Boolean(settings.baseUrl && settings.apiKey && settings.model);
+}
+
+function providerLabel(provider) {
+  const select = $('#aiProvider');
+  const option = select ? Array.from(select.options).find((item) => item.value === provider) : null;
+  return option?.textContent || provider || '未设置';
+}
+
+function updateSettingsSummary(settings = readAiSettings()) {
+  const summaryText = $('#aiSettingsSummaryText');
+  if (!summaryText) return;
+  const keyState = settings.apiKey ? 'Key 已配置' : 'Key 未配置';
+  summaryText.textContent = `${providerLabel(settings.provider)} / ${settings.model || '未设置模型'} / ${keyState}`;
+}
+
+function setSettingsCollapsed(collapsed) {
+  const card = document.querySelector('.ai-settings-card');
+  const body = $('#aiSettingsBody');
+  const summary = $('#aiSettingsSummary');
+  if (!card || !body || !summary) return;
+  card.classList.toggle('is-collapsed', Boolean(collapsed));
+  body.hidden = Boolean(collapsed);
+  summary.hidden = !collapsed;
+  updateSettingsSummary();
+}
+
 async function saveAiSettingsToCloud() {
   const settings = saveAiSettings(collectSettingsForm());
   setStatus('保存中...');
   if (typeof window.cloudSave !== 'function') {
     setStatus('已保存本机', 'warning');
+    setSettingsCollapsed(aiSettingsConfigured(settings));
     showInlineStatus('AI 设置已保存到本机，云端同步未就绪', 'warning');
     return settings;
   }
   const result = await window.cloudSave({ source: 'manual', reason: 'ai-settings-save' });
   if (result?.status === 'saved' || result?.status === 'no_change') {
     setStatus('已保存', 'success');
+    setSettingsCollapsed(aiSettingsConfigured(settings));
     showInlineStatus('AI 设置已保存并同步云端', 'success');
   } else if (result?.status === 'cloud_newer') {
     setStatus('待同步', 'warning');
@@ -144,6 +174,7 @@ function hydrateSettingsForm() {
   $('#aiApiKey').value = settings.apiKey;
   $('#aiModel').value = settings.model;
   $('#aiEnableSummary').checked = Boolean(settings.enableAiSummary);
+  updateSettingsSummary(settings);
   setStatus(localStorage.getItem(AI_SETTINGS_KEY) ? '已保存' : '未保存');
 }
 
@@ -166,6 +197,7 @@ window.getXhsAiSettingsSnapshot = function getXhsAiSettingsSnapshot() {
 window.applyXhsAiSettingsSnapshot = function applyXhsAiSettingsSnapshot(settings) {
   if (!settings || typeof settings !== 'object') return;
   saveAiSettings(settings, { updateForm: true });
+  setSettingsCollapsed(aiSettingsConfigured(settings));
   setStatus('已同步', 'success');
 };
 
@@ -833,7 +865,11 @@ function showNumbersPanel() {
 function bindAiAssistant() {
   if (!$('#aiAssistantPanel')) return;
   hydrateSettingsForm();
+  setSettingsCollapsed(localStorage.getItem(AI_SETTINGS_KEY) && aiSettingsConfigured());
 
+  $('#btnAiEditSettings')?.addEventListener('click', () => {
+    setSettingsCollapsed(false);
+  });
   $('#btnAiSaveSettings')?.addEventListener('click', async () => {
     const button = $('#btnAiSaveSettings');
     if (button) button.disabled = true;

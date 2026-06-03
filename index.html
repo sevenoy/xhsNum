@@ -220,7 +220,7 @@
 <body>
   <aside class="app-sidebar" aria-label="主导航">
     <div class="sidebar-profile">
-      <div class="sidebar-avatar" aria-hidden="true">用</div>
+      <div class="sidebar-avatar" aria-hidden="true">O</div>
       <div class="sidebar-profile-text">
         <div id="sidebarUserName" class="sidebar-user-name">未登录</div>
         <div class="sidebar-cloud-line">
@@ -453,6 +453,11 @@
             </div>
             <span id="aiSettingsStatus" class="ai-status-pill">未保存</span>
           </div>
+          <div class="ai-settings-summary" id="aiSettingsSummary" hidden>
+            <span id="aiSettingsSummaryText">AI 设置已保存</span>
+            <button type="button" class="ghost" id="btnAiEditSettings">编辑设置</button>
+          </div>
+          <div class="ai-settings-body" id="aiSettingsBody">
           <div class="ai-settings-grid">
             <label>
               <span>Provider</span>
@@ -485,6 +490,7 @@
             <button type="button" class="ghost" id="btnAiTestConnection">测试连接</button>
           </div>
           <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。API Key 会随当前账号云端快照同步。</p>
+          </div>
         </section>
       </div>
 

@@ -291,6 +291,62 @@ function savePlatforms(platforms) {
   localStorage.setItem(PLATFORMS_KEY, JSON.stringify(platforms));
 }
 
+async function getPlatformProfilesSnapshot() {
+  await platformDbReadyPromise;
+  const profiles = await platformDb.profiles.toArray();
+  return profiles.map((profile) => ({
+    row_id: String(profile.row_id || ''),
+    platform_id: String(profile.platform_id || ''),
+    value: String(profile.value || ''),
+    updated_at: profile.updated_at || 0,
+    updated_by: profile.updated_by || '',
+    updated_by_name: profile.updated_by_name || ''
+  })).filter((profile) => profile.row_id && profile.platform_id && profile.value);
+}
+
+async function applyPlatformProfilesSnapshot(profiles = []) {
+  await platformDbReadyPromise;
+  const cleanProfiles = Array.isArray(profiles)
+    ? profiles.map((profile) => ({
+        row_id: String(profile.row_id || ''),
+        platform_id: String(profile.platform_id || ''),
+        value: String(profile.value || '').trim(),
+        updated_at: profile.updated_at || Date.now(),
+        updated_by: profile.updated_by || '',
+        updated_by_name: profile.updated_by_name || ''
+      })).filter((profile) => profile.row_id && profile.platform_id && profile.value)
+    : [];
+
+  await platformDb.transaction('rw', platformDb.profiles, async () => {
+    await platformDb.profiles.clear();
+    if (cleanProfiles.length) {
+      await platformDb.profiles.bulkPut(cleanProfiles);
+    }
+  });
+  state.platformProfiles = new Map();
+  cleanProfiles.forEach((profile) => {
+    state.platformProfiles.set(`${profile.row_id}:${profile.platform_id}`, profile);
+  });
+}
+
+window.getXhsPlatformSnapshot = async function getXhsPlatformSnapshot() {
+  return {
+    platforms: readPlatforms(),
+    platformProfiles: await getPlatformProfilesSnapshot()
+  };
+};
+
+window.applyXhsPlatformSnapshot = async function applyXhsPlatformSnapshot(snapshot = {}) {
+  if (Array.isArray(snapshot.platforms) && snapshot.platforms.length) {
+    savePlatforms(snapshot.platforms);
+  }
+  if (Object.prototype.hasOwnProperty.call(snapshot, 'platformProfiles') && Array.isArray(snapshot.platformProfiles)) {
+    await applyPlatformProfilesSnapshot(snapshot.platformProfiles || []);
+  } else {
+    console.log('ℹ️ 旧快照不包含平台资料，保留本地平台资料');
+  }
+};
+
 function platformValueForRow(row, platformId) {
   if (platformId === 'xhs') return row.xhs_name || '';
   return state.platformProfiles.get(`${row.id}:${platformId}`)?.value || '';
@@ -312,11 +368,15 @@ async function savePlatformProfile(rowId, platformId, value) {
   await platformDbReadyPromise;
   const trimmed = String(value || '').trim();
   const key = [String(rowId), String(platformId)];
+  const current = state.platformProfiles.get(`${rowId}:${platformId}`) || await platformDb.profiles.get(key);
   if (!trimmed) {
+    if (!current) return { changed: false };
     await platformDb.profiles.delete(key);
     state.platformProfiles.delete(`${rowId}:${platformId}`);
-    markLocalAutoSaved('平台资料已更新，等待保存云端');
-    return;
+    return { changed: true, action: 'delete' };
+  }
+  if (current && String(current.value || '').trim() === trimmed) {
+    return { changed: false };
   }
   const currentUserId = await getCurrentUserId() || 'unknown';
   const currentUserName = getCurrentUserName();
@@ -330,7 +390,35 @@ async function savePlatformProfile(rowId, platformId, value) {
   };
   await platformDb.profiles.put(profile);
   state.platformProfiles.set(`${rowId}:${platformId}`, profile);
-  markLocalAutoSaved('平台资料已更新，等待保存云端');
+  return { changed: true, action: 'put' };
+}
+
+async function savePlatformProfilesFromInputs(rowId, inputs, options = {}) {
+  const notify = options.notify !== false;
+  const editableInputs = Array.from(inputs || []).filter((input) => !input.readOnly && !input.disabled);
+  let changed = false;
+  for (const input of editableInputs) {
+    const result = await savePlatformProfile(
+      rowId || input.getAttribute('data-id'),
+      input.getAttribute('data-platform-input'),
+      input.value
+    );
+    if (result?.changed) changed = true;
+  }
+  if (changed && notify) {
+    notifyLocalRowsSaved('platform-profile-save');
+    showSaveStatus('平台资料已保存，等待云端同步', 'warning', 2600);
+  } else if (notify) {
+    showSaveStatus('平台资料无变化', 'info', 2200);
+  }
+  return { changed };
+}
+
+function markPlatformDraft(input) {
+  const section = input.closest('.mobile-platform-section') || input.closest('.platform-preview-panel');
+  section?.classList.add('platform-dirty');
+  const note = section?.querySelector('[data-platform-draft-status]');
+  if (note) note.textContent = '平台资料未保存';
 }
 
 window.getXhsRowsForAi = async function getXhsRowsForAi() {
@@ -608,9 +696,124 @@ async function getAllRows() {
 
 function markLocalAutoSaved(message = '本地已自动保存，等待保存云端') {
   const now = Date.now();
+  window.__xhsLocalDirty = true;
   window.__xhsLocalUnsavedChanges = true;
   localStorage.setItem('xhs_last_local_change_at', String(now));
   showSaveStatus(message, 'warning', 2600);
+}
+
+function notifyLocalRowsSaved(reason) {
+  if (window.__xhsApplyingRemote === true) return;
+  if (typeof window.afterLocalRowsSaved === 'function') {
+    window.afterLocalRowsSaved(reason);
+    return;
+  }
+  window.__xhsLocalDirty = true;
+  window.__xhsLocalUnsavedChanges = true;
+  window.__xhsPendingLocalAutoSyncReason = reason;
+  localStorage.setItem('xhs_last_local_change_at', String(Date.now()));
+  showSaveStatus('本地已保存，等待云端同步', 'warning', 2600);
+}
+
+function isDataEditElement(el) {
+  if (!el || el.nodeType !== 1) return false;
+  if (el.closest('#mobileList')) return false;
+  if (el.closest('.mobile-platform-section, .platform-preview-modal, .platform-manager-modal')) return false;
+  if (el.matches('.mobile-platform-input, .platform-preview-input, [data-platform-input]')) return false;
+  if (el.closest('#aiAssistantPanel')) return false;
+  if (el.matches('#q, #filterOwner, #filterWxReal, #sortBy, #csvFile')) return false;
+  if (el.matches('#aiUserInput, #aiBaseUrl, #aiApiKey, #aiModel, #aiProvider, #aiEnableSummary')) return false;
+  return Boolean(
+    el.closest('#gridBody td[contenteditable="true"][data-field]') ||
+    el.closest('#gridBody select[data-field]') ||
+    el.closest('#mobileList .m-input[data-field]') ||
+    el.closest('#mobileList .m-textarea[data-field]') ||
+    el.closest('#mobileList select[data-field]') ||
+    el.closest('.large-text-editor-input[data-id][data-field]') ||
+    el.closest('[data-id][data-field].xhs-data-edit')
+  );
+}
+
+function dataEditValue(el) {
+  if (!el) return '';
+  const target = el.closest?.('td[contenteditable="true"][data-field]') || el;
+  if (target.matches?.('td[contenteditable="true"][data-field]')) {
+    let value = target.textContent.trim();
+    if (target.getAttribute('data-field') === 'phone') {
+      value = value.replace(/最近新增/g, '').trim();
+    }
+    return value;
+  }
+  if ('value' in target) return String(target.value ?? '').trim();
+  return String(target.textContent || '').trim();
+}
+
+function markDataEditFocus(el) {
+  if (!isDataEditElement(el)) return;
+  window.__xhsEditingDataField = true;
+  window.__xhsActiveDataEditElement = el;
+  window.__xhsActiveDataEditOldValue = dataEditValue(el);
+}
+
+function markDataEditBlur(el) {
+  if (!isDataEditElement(el)) return;
+  const oldValue = window.__xhsActiveDataEditOldValue;
+  const newValue = dataEditValue(el);
+  window.__xhsEditingDataField = false;
+  window.__xhsActiveDataEditElement = null;
+  window.__xhsActiveDataEditOldValue = '';
+  window.setTimeout(() => {
+    if (window.__xhsEditingDataField !== true && oldValue === newValue) {
+      window.applyPendingRemoteUpdateIfSafe?.('data-field-blur-no-change');
+    }
+  }, 0);
+}
+
+window.isXhsDataEditElement = isDataEditElement;
+
+function hasRowsAutoSyncDirty() {
+  const lastLocalChangeAt = Number(localStorage.getItem('xhs_last_local_change_at') || '0');
+  const lastSyncTime = Number(localStorage.getItem('last_sync_time') || '0');
+  return window.__xhsLocalDirty === true ||
+    window.__xhsLocalUnsavedChanges === true ||
+    (lastLocalChangeAt > 0 && lastLocalChangeAt > lastSyncTime);
+}
+
+async function bootstrapCloudRowsIfSafe() {
+  if (!supabase) return;
+  if (!window.currentUser) return;
+  if (window.__xhsEditingDataField === true) return;
+
+  const loadFunc = window.cloudLoad || cloudLoad;
+  const autoSaveFunc = window.runAutoCloudSave || null;
+  if (hasRowsAutoSyncDirty()) {
+    if (typeof autoSaveFunc === 'function') {
+      showSaveStatus('检测到本地未同步修改，正在先保存云端', 'warning', 0);
+      await autoSaveFunc('startup-local-dirty');
+    } else {
+      window.__xhsPendingLocalAutoSyncReason = 'startup-local-dirty';
+      showSaveStatus('检测到本地未同步修改，请先保存云端', 'warning', 4200);
+    }
+    return;
+  }
+
+  if (typeof loadFunc !== 'function') return;
+
+  try {
+    showSaveStatus('正在同步云端最新数据', 'info', 0);
+    const result = await loadFunc({
+      source: 'startup-auto',
+      key: SUPABASE_DEFAULT_KEY,
+      silent: true,
+      force: true
+    });
+    if (result?.status === 'loaded' || result?.status === 'skipped_not_newer') {
+      showSaveStatus('已同步云端最新数据', 'success', 2600);
+    }
+  } catch (err) {
+    console.warn('启动同步云端数据失败:', err);
+    showSaveStatus('云端自动同步失败，可点击云端加载', 'warning', 4200);
+  }
 }
 
 async function saveRowPatchWithAudit(id, patch, options = {}) {
@@ -642,6 +845,7 @@ async function saveRowPatchWithAudit(id, patch, options = {}) {
   await db.rows.put(next);
   localStorage.setItem('xhs_last_local_change_by', currentUserName);
   markLocalAutoSaved(options.message || '本地已自动保存，等待保存云端');
+  notifyLocalRowsSaved(options.autoSyncReason || 'field-blur-save');
   return { changed: true, row: next, fields: Object.keys(cleanPatch) };
 }
 
@@ -689,12 +893,31 @@ async function openLargeTextEditor({ id, field, value = '', sourceEl = null }) {
   };
 
   const save = async () => {
-    const result = await saveRowPatchWithAudit(id, { [field]: input.value.trim() });
-    if (result.changed) {
-      if (field === 'xhs_name' || field === 'note1') {
-        await renderTable();
-      }
+    const isMobileDraft = Boolean(sourceEl?.closest?.('#mobileList'));
+    if (isMobileDraft) {
+      sourceEl.value = input.value.trim();
+      sourceEl.closest('.m-row')?.classList.add('modified');
+      input.dataset.saved = 'true';
+      close();
+      return;
     }
+    if (input.dataset.saved === 'true') {
+      await window.applyPendingRemoteUpdateIfSafe?.('large-editor-save');
+      close();
+      return;
+    }
+    let result = { changed: false };
+    window.__xhsPendingLocalFieldSave = true;
+    try {
+      result = await saveRowPatchWithAudit(id, { [field]: input.value.trim() });
+      input.dataset.saved = 'true';
+    } finally {
+      window.__xhsPendingLocalFieldSave = false;
+    }
+    if (result.changed && (field === 'xhs_name' || field === 'note1')) {
+      await renderTable();
+    }
+    await window.applyPendingRemoteUpdateIfSafe?.('large-editor-save');
     close();
   };
 
@@ -734,6 +957,22 @@ async function openLargeTextEditor({ id, field, value = '', sourceEl = null }) {
       event.preventDefault();
       close();
     }
+  });
+  input.addEventListener('blur', async () => {
+    if (sourceEl?.closest?.('#mobileList')) return;
+    if (input.dataset.saved === 'true') return;
+    let result = { changed: false };
+    window.__xhsPendingLocalFieldSave = true;
+    try {
+      result = await saveRowPatchWithAudit(id, { [field]: input.value.trim() });
+      input.dataset.saved = 'true';
+    } finally {
+      window.__xhsPendingLocalFieldSave = false;
+    }
+    if (result.changed && (field === 'xhs_name' || field === 'note1')) {
+      await renderTable();
+    }
+    await window.applyPendingRemoteUpdateIfSafe?.('large-editor-blur');
   });
 
   document.body.appendChild(modal);
@@ -1246,6 +1485,7 @@ async function showAddNumberModal() {
     };
     
     await db.rows.add(row);
+    notifyLocalRowsSaved('add');
     await refreshFilters();
     
     // ✅ 保存后根据所属人排序
@@ -1309,6 +1549,7 @@ async function updateRow(id, patch) {
 
 async function deleteRowById(id) {
   await db.rows.delete(id);
+  notifyLocalRowsSaved('delete');
   await refreshFilters();
   await renderTable();
 }
@@ -1328,6 +1569,7 @@ async function moveRow(id, dir) {
     await db.rows.update(a.id, { order: bo, updated_at: Date.now() });
     await db.rows.update(b.id, { order: ao, updated_at: Date.now() });
   });
+  notifyLocalRowsSaved('reorder');
   await renderTable();
 }
 
@@ -1662,6 +1904,9 @@ function mobilePlatformPreview(row) {
         </div>
       `).join('')}
     </div>
+    <div class="mobile-platform-actions">
+      <span class="mobile-platform-status" data-platform-draft-status>平台资料会随保存修改一起保存</span>
+    </div>
   </div>`;
 }
 
@@ -1703,7 +1948,7 @@ function openPlatformPreview(rowId) {
           <button type="button" class="ghost platform-preview-close-secondary">取消</button>
           <button type="button" class="primary platform-preview-save">保存平台资料</button>
         </div>
-        <div class="platform-preview-note">
+        <div class="platform-preview-note" data-platform-draft-status>
           平台资料保存到独立本地数据库；小红书仍使用现有“小红书名称”字段。
         </div>
       </div>
@@ -1712,9 +1957,7 @@ function openPlatformPreview(rowId) {
     const close = () => modal.remove();
     const save = async () => {
       const inputs = Array.from(modal.querySelectorAll('.platform-preview-input:not([readonly])'));
-      for (const input of inputs) {
-        await savePlatformProfile(input.getAttribute('data-id'), input.getAttribute('data-platform-input'), input.value);
-      }
+      await savePlatformProfilesFromInputs(row.id, inputs);
       await renderTable();
       close();
     };
@@ -1724,6 +1967,9 @@ function openPlatformPreview(rowId) {
     modal.querySelector('.platform-preview-close')?.addEventListener('click', close);
     modal.querySelector('.platform-preview-close-secondary')?.addEventListener('click', close);
     modal.querySelector('.platform-preview-save')?.addEventListener('click', save);
+    modal.querySelectorAll('.platform-preview-input:not([readonly])').forEach((input) => {
+      input.addEventListener('input', () => markPlatformDraft(input));
+    });
     document.body.appendChild(modal);
   }).catch((error) => {
     console.error('打开平台资料预览失败:', error);
@@ -1770,6 +2016,7 @@ function openPlatformManager() {
 
   const persistAndRefresh = async () => {
     savePlatforms(platforms);
+    notifyLocalRowsSaved('platform-settings-change');
     await renderTable();
   };
 
@@ -1885,6 +2132,9 @@ async function renderTable() {
   // ✅ 更新数据统计栏
   await updateDataStatsBar();
 }
+
+window.renderTable = renderTable;
+window.refreshFilters = refreshFilters;
 
 function renderMobileList(rows) {
   const container = $("#mobileList");
@@ -2052,14 +2302,34 @@ async function saveMobileCardEdit(id) {
         break;
       }
     }
+
+    const platformInputs = card.querySelectorAll('.mobile-platform-input:not([readonly])');
+    const platformResult = await savePlatformProfilesFromInputs(id, platformInputs, { notify: false });
+    const platformChanged = Boolean(platformResult.changed);
     
-    if (!hasChanges) {
+    if (!hasChanges && !platformChanged) {
       showMobileToast('ℹ️ 没有修改');
       card.classList.remove('open');
+      card.classList.remove('modified');
+      card.classList.remove('platform-modified');
       return;
     }
     
-    await saveRowPatchWithAudit(id, updates);
+    if (hasChanges) {
+      const currentUserId = await getCurrentUserId() || 'unknown';
+      const currentUserName = getCurrentUserName();
+      const next = {
+        ...row,
+        ...updates,
+        updated_at: Date.now(),
+        updated_by: currentUserId,
+        updated_by_name: currentUserName
+      };
+      await db.rows.put(next);
+      localStorage.setItem('xhs_last_local_change_by', currentUserName);
+    }
+    notifyLocalRowsSaved('mobile-save');
+    showSaveStatus('本地已保存，等待云端同步', 'warning', 2600);
     
     // 如果是所属人或微信实名人，刷新筛选器
     if (updates.owner !== row.owner || updates.wx_real !== row.wx_real) {
@@ -2069,6 +2339,8 @@ async function saveMobileCardEdit(id) {
     // 重新渲染
     await renderTable();
     
+    card.classList.remove('modified');
+    card.classList.remove('platform-modified');
     showMobileToast('✅ 保存成功');
     
   } catch (err) {
@@ -2083,7 +2355,7 @@ async function cancelMobileCardEdit(id) {
   if (!card) return;
   
   // 检查是否有修改
-  if (card.classList.contains('modified')) {
+  if (card.classList.contains('modified') || card.classList.contains('platform-modified')) {
     if (!confirm('有未保存的修改，确定要取消吗？')) {
       return;
     }
@@ -2092,6 +2364,7 @@ async function cancelMobileCardEdit(id) {
   // 关闭卡片
   card.classList.remove('open');
   card.classList.remove('modified');
+  card.classList.remove('platform-modified');
   
   // 重新渲染以恢复原始数据
   await renderTable();
@@ -2244,6 +2517,9 @@ async function cloudSave() {
     const rows = await getAllRows();
     const cats = readCats();
     const view = readView();
+    const platformSnapshot = typeof window.getXhsPlatformSnapshot === 'function'
+      ? await window.getXhsPlatformSnapshot()
+      : { platforms: [], platformProfiles: [] };
     
     // ✅ 调试：输出本地 view 数据，检查是否包含元数据字段
     const viewKeys = Object.keys(view || {});
@@ -2329,6 +2605,10 @@ async function cloudSave() {
       const latestRows = latestSnapshot.payload.rows || [];
       const latestCats = latestSnapshot.payload.cats || [];
       const latestView = latestSnapshot.payload.view || {};
+      const latestPlatforms = latestSnapshot.payload.platforms || [];
+      const latestPlatformProfiles = Array.isArray(latestSnapshot.payload.platformProfiles)
+        ? latestSnapshot.payload.platformProfiles
+        : null;
       
       // ✅ 调试：输出原始数据信息和元数据信息（用于对比）
       console.log('🔍 原始数据对比:', {
@@ -2511,24 +2791,77 @@ async function cloudSave() {
       } else {
         console.log('✅ View 数据完全相同');
       }
+
+      const normalizePlatforms = (platformsData) => {
+        if (!Array.isArray(platformsData)) return [];
+        return platformsData
+          .map(platform => ({
+            id: String(platform.id || '').trim(),
+            name: String(platform.name || '').trim(),
+            builtin: Boolean(platform.builtin)
+          }))
+          .filter(platform => platform.id && platform.name)
+          .sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      };
+
+      const normalizePlatformProfiles = (profilesData) => {
+        if (!Array.isArray(profilesData)) return [];
+        return profilesData
+          .map(profile => ({
+            row_id: String(profile.row_id || '').trim(),
+            platform_id: String(profile.platform_id || '').trim(),
+            value: String(profile.value || '').trim()
+          }))
+          .filter(profile => profile.row_id && profile.platform_id && profile.value)
+          .sort((a, b) => {
+            const rowCompare = (a.row_id || '').localeCompare(b.row_id || '');
+            if (rowCompare !== 0) return rowCompare;
+            return (a.platform_id || '').localeCompare(b.platform_id || '');
+          });
+      };
+
+      const currentPlatformsData = normalizePlatforms(platformSnapshot.platforms || []);
+      const latestPlatformsData = normalizePlatforms(latestPlatforms);
+      const platformsEqual = JSON.stringify(currentPlatformsData) === JSON.stringify(latestPlatformsData);
+      const currentPlatformProfilesData = normalizePlatformProfiles(platformSnapshot.platformProfiles || []);
+      const latestPlatformProfilesData = normalizePlatformProfiles(latestPlatformProfiles || []);
+      const platformProfilesEqual = latestPlatformProfiles === null
+        ? currentPlatformProfilesData.length === 0
+        : JSON.stringify(currentPlatformProfilesData) === JSON.stringify(latestPlatformProfilesData);
+
+      if (!platformsEqual || !platformProfilesEqual) {
+        console.log('📊 平台资料不同:', {
+          platformsEqual,
+          platformProfilesEqual,
+          latestSnapshotHasPlatformProfiles: latestPlatformProfiles !== null,
+          currentPlatformProfilesCount: currentPlatformProfilesData.length,
+          latestPlatformProfilesCount: latestPlatformProfilesData.length
+        });
+      } else {
+        console.log('✅ 平台资料完全相同');
+      }
       
       // 如果所有数据都相同，提示用户并直接返回
       console.log('🔍 数据比较结果:', {
         rowsEqual,
         catsEqual,
         viewEqual,
+        platformsEqual,
+        platformProfilesEqual,
         rowsCount: currentRowsData.length,
         latestRowsCount: latestRowsData.length,
-        allEqual: rowsEqual && catsEqual && viewEqual
+        allEqual: rowsEqual && catsEqual && viewEqual && platformsEqual && platformProfilesEqual
       });
       
       // ✅ 关键检查：如果所有数据都相同，必须阻止保存
-      const allDataEqual = rowsEqual && catsEqual && viewEqual;
+      const allDataEqual = rowsEqual && catsEqual && viewEqual && platformsEqual && platformProfilesEqual;
       
       console.log('🔍 最终数据比较结果:', {
         rowsEqual,
         catsEqual,
         viewEqual,
+        platformsEqual,
+        platformProfilesEqual,
         allDataEqual,
         currentRowsCount: currentRowsData.length,
         latestRowsCount: latestRowsData.length,
@@ -2542,6 +2875,8 @@ async function cloudSave() {
           rowsEqual,
           catsEqual,
           viewEqual,
+          platformsEqual,
+          platformProfilesEqual,
           currentRowsCount: currentRowsData.length,
           latestRowsCount: latestRowsData.length,
           currentRowsSample: JSON.stringify(currentRowsData.slice(0, 1)),
@@ -2563,6 +2898,8 @@ async function cloudSave() {
         rowsChanged: !rowsEqual,
         catsChanged: !catsEqual,
         viewChanged: !viewEqual,
+        platformsChanged: !platformsEqual,
+        platformProfilesChanged: !platformProfilesEqual,
         // ✅ 明确说明：快照名称不同不影响数据比较
         note: '数据比较只比较 rows、cats、view 的实际内容，不包括快照名称（snapshot_label）等元数据',
         latestSnapshotLabel: latestSnapshot?.payload?.snapshot_label,
@@ -2636,6 +2973,14 @@ async function cloudSave() {
       rows,
       cats,
       view,
+      platforms: platformSnapshot.platforms || [],
+      platformProfiles: platformSnapshot.platformProfiles || [],
+      __meta: {
+        schemaVersion: 2,
+        appVersion: window.APP_VERSION || '',
+        source: 'legacy-app-cloud-save',
+        savedAt: Date.now()
+      }
     };
 
     const ownerId = snapshotOwnerId || authUid;
@@ -2810,6 +3155,12 @@ async function cloudLoad(key = SUPABASE_DEFAULT_KEY) {
   saveCats(cats);
   console.log('💾 分类数据已保存:', cats);
   saveView({ ...DEFAULT_VIEW, ...view });
+  if (typeof window.applyXhsPlatformSnapshot === 'function') {
+    await window.applyXhsPlatformSnapshot({
+      platforms: payload.platforms,
+      platformProfiles: payload.platformProfiles
+    });
+  }
 
   await refreshFilters();
   applyView(readView());
@@ -3066,9 +3417,13 @@ function renderCatList() {
       const cats = readCats();
       const idx = cats.findIndex((x) => x.id === id);
       if (idx >= 0) {
-        cats[idx] = { ...cats[idx], name: v || cats[idx].name };
-        saveCats(cats);
-        renderTable();
+        const nextName = v || cats[idx].name;
+        if (cats[idx].name !== nextName) {
+          cats[idx] = { ...cats[idx], name: nextName };
+          saveCats(cats);
+          notifyLocalRowsSaved('category-settings-change');
+          renderTable();
+        }
       }
     });
     el.addEventListener("keydown", (e) => {
@@ -3079,7 +3434,7 @@ function renderCatList() {
     });
   });
 
-  list.querySelectorAll("[data-act]").forEach((btn) => {
+  list.querySelectorAll("button[data-act]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const row = btn.closest(".cat-row");
       const id = row.getAttribute("data-id");
@@ -3097,6 +3452,7 @@ function renderCatList() {
         cats.splice(idx, 1);
       }
       saveCats(cats);
+      notifyLocalRowsSaved('category-settings-change');
       renderCatList();
       renderTable();
     });
@@ -3111,8 +3467,10 @@ function renderCatList() {
         const cats = readCats();
         const idx = cats.findIndex((x) => x.id === id);
         if (idx < 0) return;
+        if (cats[idx].color === el.value) return;
         cats[idx] = { ...cats[idx], color: el.value };
         saveCats(cats);
+        notifyLocalRowsSaved('category-settings-change');
         // 更新颜色预览
         const preview = row.querySelector('.cat-color-preview');
         if (preview) {
@@ -3130,6 +3488,18 @@ function renderCatList() {
 function bindEvents() {
   // ✅✅✅ 关键：使用事件委托在 tbody 上监听，避免重复绑定
   const gridBody = $("#gridBody");
+
+  document.addEventListener('focusin', (e) => {
+    if (isDataEditElement(e.target)) {
+      markDataEditFocus(e.target);
+    }
+  });
+
+  document.addEventListener('focusout', (e) => {
+    if (isDataEditElement(e.target)) {
+      markDataEditBlur(e.target);
+    }
+  });
   
   // 监听 contenteditable 元素的 focus 事件（事件委托）
   gridBody.addEventListener("focus", (e) => {
@@ -3177,7 +3547,7 @@ function bindEvents() {
     
     console.log(`📝 blur 事件: field=${field}, value=${val}`);
     
-    const result = await saveRowPatchWithAudit(id, { [field]: val });
+    const result = await saveRowPatchWithAudit(id, { [field]: val }, { autoSyncReason: 'field-blur-save' });
     
     // 如果是所属人或微信实名人，刷新筛选器
     if (result.changed && (field === "owner" || field === "wx_real")) {
@@ -3215,7 +3585,7 @@ function bindEvents() {
     const newColor = sel.value;
     console.log(`✅ 分类改变: ID=${id}, 新分类=${newColor}`);
     
-    const result = await saveRowPatchWithAudit(id, { row_color: newColor });
+    const result = await saveRowPatchWithAudit(id, { row_color: newColor }, { autoSyncReason: 'category-change' });
     console.log("✅ 分类保存结果:", result);
     
     // 重新渲染整个表格
@@ -3269,11 +3639,12 @@ function bindEvents() {
       const card = header.closest(".m-row");
       if (card) {
         // 如果卡片有未保存的修改，提示用户
-        if (card.classList.contains('open') && card.classList.contains('modified')) {
+        if (card.classList.contains('open') && (card.classList.contains('modified') || card.classList.contains('platform-modified'))) {
           if (!confirm('有未保存的修改，确定要关闭吗？')) {
             return;
           }
           card.classList.remove('modified');
+          card.classList.remove('platform-modified');
           await renderTable();
         }
         card.classList.toggle("open");
@@ -3324,10 +3695,30 @@ function bindEvents() {
     const input = e.target.closest('.m-input, .m-textarea, .mobile-platform-input');
     if (!input) return;
     
+    if (input.matches('.mobile-platform-input')) {
+      const card = input.closest('.m-row');
+      card?.classList.add('platform-modified');
+      markPlatformDraft(input);
+      return;
+    }
+
     const card = input.closest('.m-row');
     if (card) {
       card.classList.add('modified');
     }
+  });
+
+  mobileList.addEventListener("focusout", (e) => {
+    const input = e.target.closest('.m-input[data-field], .m-textarea[data-field]');
+    if (!input || input.matches('.m-textarea[data-field="xhs_name"], .m-textarea[data-field="note1"]')) return;
+    const field = input.getAttribute('data-field');
+    if (!field) return;
+    const value = input.value.trim();
+    if (field === 'phone' && value && !/^[\d\s\-()]+$/.test(value)) {
+      alert('❌ 电话号格式不正确\n\n只能包含数字、空格、短横线和括号');
+      return;
+    }
+    input.closest('.m-row')?.classList.add('modified');
   });
   
   // 监听移动端分类选择器的 change 事件（标记为已修改，不自动保存）
@@ -3341,11 +3732,12 @@ function bindEvents() {
     }
   });
 
-  mobileList.addEventListener("change", async (e) => {
+  mobileList.addEventListener("change", (e) => {
     const input = e.target.closest('.mobile-platform-input:not([readonly])');
     if (!input) return;
-    await savePlatformProfile(input.getAttribute('data-id'), input.getAttribute('data-platform-input'), input.value);
-    await renderTable();
+    const card = input.closest('.m-row');
+    card?.classList.add('platform-modified');
+    markPlatformDraft(input);
   });
   
   // 清除搜索图标
@@ -3438,6 +3830,7 @@ function bindEvents() {
       updated_at: Date.now(),
     }));
     await db.rows.bulkAdd(rows);
+    notifyLocalRowsSaved('import');
     await refreshFilters();
     await renderTable();
     alert("导入成功！");
@@ -3481,7 +3874,7 @@ function bindEvents() {
       console.log('🔍 检查代码版本：当前 app.js 应该不包含 prompt() 调用');
       
       const saveFunc = window.cloudSave || cloudSave;
-      const result = await saveFunc();
+      const result = await saveFunc({ source: "manual" });
       if (result?.status === 'saved') {
         // 操作日志（忽略失败）
         try {
@@ -3513,31 +3906,16 @@ function bindEvents() {
     const btn = $("#btnLoadCloud");
     const original = btn.textContent;
     const panel = $("#cloudHistoryPanel");
-    
-    // 如果面板已打开，则关闭面板
-    if (panel && panel.style.display !== "none") {
-      panel.style.display = "none";
-      return;
-    }
-    
-    // 显示快照选择面板
+
+    // 直接强制加载默认快照，避免只展开历史面板但没有真正更新本地数据。
     try {
       btn.disabled = true; 
       btn.textContent = '⏳ 加载中...';
-      
-      // 显示历史面板，让用户选择快照
-      if (panel) {
-        panel.style.display = "block";
-        // 使用桥接的 renderCloudHistory 函数
-        const renderFunc = window.renderCloudHistory || renderCloudHistory;
-        await renderFunc();
-        console.log('✅ 历史面板已显示');
-      } else {
-        // 如果没有面板，直接加载默认快照
-        const loadFunc = window.cloudLoad || cloudLoad;
-        await loadFunc(SUPABASE_DEFAULT_KEY, false);
-      }
-      
+
+      const loadFunc = window.cloudLoad || cloudLoad;
+      const result = await loadFunc({ source: "manual", key: SUPABASE_DEFAULT_KEY, silent: false, force: true });
+      if (panel) panel.style.display = "none";
+      console.log('✅ 已强制加载云端默认快照', result);
     } catch (err) {
       console.error('加载云端数据失败:', err);
       alert('加载失败: ' + (err.message || err));
@@ -3572,6 +3950,7 @@ function bindEvents() {
       try {
         btn.disabled = true; btn.textContent = '⏳ 清空中...';
         await db.rows.clear();
+        notifyLocalRowsSaved('clear-all-confirmed');
         await refreshFilters();
         await renderTable();
         btn.textContent = '✅ 已清空';
@@ -3614,6 +3993,7 @@ function bindEvents() {
         btn.disabled = true; btn.textContent = '⏳ 删除中...';
         const ids = emptyRows.map(r => r.id);
         await db.rows.bulkDelete(ids);
+        notifyLocalRowsSaved('bulk-delete-empty');
         await refreshFilters();
         await renderTable();
         btn.textContent = '✅ 已删除';
@@ -3638,6 +4018,7 @@ function bindEvents() {
     const cats = readCats();
     cats.push({ id: uid(), name, color });
     saveCats(cats);
+    notifyLocalRowsSaved('category-settings-change');
     $("#catName").value = "";
     renderCatList();
     renderTable();
@@ -4211,6 +4592,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await refreshFilters();
   console.log('🔍 渲染前最终确认排序方式:', state.sortBy);
   await renderTable();
+  await bootstrapCloudRowsIfSafe();
   
   // ✅ 确保数据统计栏已更新
   await updateDataStatsBar();

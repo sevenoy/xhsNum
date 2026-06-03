@@ -2036,6 +2036,12 @@ td.col-cat select:focus {
   background: #f7fbff;
 }
 
+.mobile-platform-section.platform-dirty,
+.m-row.platform-modified .mobile-platform-section {
+  border-color: rgba(255, 159, 10, 0.42);
+  background: #fffaf0;
+}
+
 .mobile-platform-section-head {
   display: flex;
   align-items: center;
@@ -2113,6 +2119,31 @@ td.col-cat select:focus {
 
 .mobile-platform-item.is-empty .mobile-platform-input::placeholder {
   color: #8a94a3;
+}
+
+.mobile-platform-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mobile-platform-status {
+  min-width: 0;
+  color: #7a4d00;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mobile-platform-save {
+  width: auto !important;
+  min-width: 104px !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  border-color: rgba(32, 139, 238, 0.32) !important;
+  color: var(--pearl-primary) !important;
 }
 
 .platform-preview-modal {
@@ -2218,6 +2249,10 @@ td.col-cat select:focus {
 
 .platform-preview-input[readonly] {
   background: rgba(255, 255, 255, 0.72) !important;
+}
+
+.platform-preview-panel.platform-dirty {
+  border-color: rgba(255, 159, 10, 0.38);
 }
 
 .platform-preview-row.is-empty .platform-preview-input::placeholder {
@@ -5066,6 +5101,74 @@ td.col-cat select:focus {
 
 /* Compact mobile controls: keep all functions while minimizing vertical space. */
 @media (max-width: 767px) {
+  #mobileList .m-detail-row {
+    grid-template-columns: 30% minmax(0, 1fr) !important;
+    gap: 8px !important;
+    min-height: 38px !important;
+    padding: 5px 0 !important;
+  }
+
+  #mobileList .m-detail-label {
+    font-size: 11px !important;
+  }
+
+  #mobileList .m-input,
+  #mobileList .m-detail-value select {
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 7px 10px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+  }
+
+  #mobileList .m-textarea {
+    min-height: 72px !important;
+    height: 72px !important;
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+    font-size: 14px !important;
+  }
+
+  #mobileList .mobile-platform-section {
+    margin: 8px 0 !important;
+    padding: 10px !important;
+    border-radius: 14px !important;
+  }
+
+  #mobileList .mobile-platform-section-head {
+    margin-bottom: 8px !important;
+  }
+
+  #mobileList .mobile-platform-grid {
+    gap: 7px !important;
+  }
+
+  #mobileList .mobile-platform-item {
+    padding: 7px 8px !important;
+    border-radius: 12px !important;
+  }
+
+  #mobileList .mobile-platform-input {
+    min-height: 36px !important;
+    height: 36px !important;
+    margin-top: 4px !important;
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+  }
+
+  #mobileList .mobile-platform-actions {
+    margin-top: 8px !important;
+  }
+
+  #mobileList .m-edit-actions {
+    margin-top: 8px !important;
+    padding: 9px 0 4px !important;
+  }
+
+  #mobileList .m-edit-actions button {
+    min-height: 38px !important;
+  }
+
   .controls-panel {
     margin: 8px 0 10px !important;
     padding: 10px !important;

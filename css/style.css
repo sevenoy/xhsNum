@@ -6922,3 +6922,106 @@ body.subpage-shell .settings-item input[type="range"] {
     margin-top: 2px !important;
   }
 }
+
+/* Adaptive sidebar rhythm: proportional spacing that still fits all actions on common desktop heights. */
+@media (min-width: 1024px) {
+  :root {
+    --desktop-sidebar-pad-x: clamp(10px, 0.85vw, 16px);
+    --desktop-sidebar-pad-y: clamp(14px, 2.1vh, 24px);
+    --desktop-sidebar-avatar: clamp(42px, 5.4vh, 54px);
+    --desktop-sidebar-row: clamp(40px, 4.9vh, 50px);
+    --desktop-sidebar-radius: clamp(14px, 1.4vw, 18px);
+    --desktop-sidebar-gap: clamp(6px, 1.05vh, 10px);
+    --desktop-sidebar-sub-gap: clamp(8px, 1.2vh, 12px);
+    --desktop-sidebar-font: clamp(13px, 1.25vw, 15px);
+  }
+
+  body.sidebar-expanded .app-sidebar {
+    padding: var(--desktop-sidebar-pad-y) var(--desktop-sidebar-pad-x) !important;
+  }
+
+  body.sidebar-expanded .app-sidebar .sidebar-profile {
+    padding: 0 0 clamp(12px, 1.8vh, 20px) !important;
+    margin-bottom: clamp(12px, 1.8vh, 18px) !important;
+  }
+
+  body.sidebar-expanded .app-sidebar .sidebar-avatar {
+    width: var(--desktop-sidebar-avatar) !important;
+    height: var(--desktop-sidebar-avatar) !important;
+    flex-basis: var(--desktop-sidebar-avatar) !important;
+    font-size: clamp(16px, 2vh, 20px) !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav {
+    gap: 0 !important;
+    padding: 0 0 clamp(8px, 1.4vh, 14px) !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item {
+    margin: 0 0 var(--desktop-sidebar-gap) !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-sub-item {
+    margin-bottom: var(--desktop-sidebar-sub-gap) !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item.active + .sidebar-nav-item,
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item:hover + .sidebar-nav-item {
+    margin-top: 0 !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav-item,
+  body.sidebar-expanded .sidebar-add,
+  body.sidebar-expanded .sidebar-logout {
+    min-height: var(--desktop-sidebar-row) !important;
+    padding: 0 clamp(14px, 1.4vw, 20px) !important;
+    border-radius: var(--desktop-sidebar-radius) !important;
+    gap: clamp(10px, 1vw, 13px) !important;
+    font-size: var(--desktop-sidebar-font) !important;
+    font-weight: 800 !important;
+  }
+
+  body.sidebar-expanded .sidebar-sub-item {
+    padding-left: clamp(34px, 3.2vw, 46px) !important;
+  }
+
+  body.sidebar-expanded .sidebar-icon {
+    width: clamp(20px, 1.7vw, 23px) !important;
+    flex-basis: clamp(20px, 1.7vw, 23px) !important;
+    font-size: clamp(16px, 1.6vw, 19px) !important;
+  }
+
+  body.sidebar-expanded .sidebar-bottom {
+    gap: clamp(8px, 1.2vh, 12px) !important;
+    padding-top: clamp(12px, 1.8vh, 18px) !important;
+  }
+
+  body.sidebar-expanded .sidebar-add {
+    min-height: clamp(44px, 5vh, 52px) !important;
+  }
+
+  body:not(.sidebar-expanded) .app-sidebar {
+    padding: clamp(14px, 2vh, 20px) 8px !important;
+  }
+
+  body:not(.sidebar-expanded) .sidebar-profile {
+    padding-bottom: clamp(12px, 1.8vh, 18px) !important;
+  }
+
+  body:not(.sidebar-expanded) .sidebar-nav {
+    gap: clamp(6px, 1vh, 10px) !important;
+  }
+
+  body:not(.sidebar-expanded) .sidebar-nav-item,
+  body:not(.sidebar-expanded) .sidebar-bottom::before {
+    width: clamp(44px, 5vh, 50px) !important;
+    min-width: clamp(44px, 5vh, 50px) !important;
+    height: clamp(44px, 5vh, 50px) !important;
+    min-height: clamp(44px, 5vh, 50px) !important;
+    border-radius: clamp(14px, 1.4vw, 16px) !important;
+  }
+}

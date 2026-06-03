@@ -7033,6 +7033,28 @@ body.subpage-shell .settings-item input[type="range"] {
   padding: 10px 14px !important;
 }
 
+#aiAssistantPanel .ai-hero > div:first-child {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+#aiAssistantPanel .ai-hero .ai-eyebrow,
+#aiAssistantPanel .ai-hero h2,
+#aiAssistantPanel .ai-hero p {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+}
+
+#aiAssistantPanel .ai-hero > div:first-child > p:last-child {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
 #aiAssistantPanel > .ai-settings-card .ai-card-head {
   align-items: center !important;
   margin-bottom: 0 !important;
@@ -7090,6 +7112,18 @@ body.subpage-shell .settings-item input[type="range"] {
 }
 
 @media (max-width: 767px) {
+  #aiAssistantPanel .ai-hero > div:first-child {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  #aiAssistantPanel .ai-hero .ai-eyebrow,
+  #aiAssistantPanel .ai-hero h2,
+  #aiAssistantPanel .ai-hero p {
+    white-space: normal !important;
+  }
+
   #aiAssistantPanel > .ai-settings-card.is-collapsed {
     grid-template-columns: 1fr !important;
   }

@@ -2,12 +2,12 @@
   "name": "xhsphone",
   "short_name": "xhsphone",
   "description": "小红书账号管理系统",
-  "start_url": "./index.html?v=V260601.11",
+  "start_url": "./index.html?v=V260601.12",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1990FF",
   "orientation": "portrait",
-  "version": "V260601.11",
+  "version": "V260601.12",
   "icons": [
     {
       "src": "./icon/icon-192.png",

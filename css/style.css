@@ -7121,6 +7121,50 @@ body.subpage-shell .settings-item input[type="range"] {
   width: 100% !important;
 }
 
+#aiAssistantPanel .ai-query-compose {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 34%) !important;
+  align-items: stretch !important;
+  gap: 14px !important;
+}
+
+#aiAssistantPanel .ai-query-side {
+  display: flex !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+}
+
+#aiAssistantPanel .ai-query-side .ai-actions,
+#aiAssistantPanel .ai-query-side .ai-examples {
+  margin-top: 0 !important;
+}
+
+#aiAssistantPanel .ai-query-side .ai-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+#aiAssistantPanel .ai-query-side .ai-actions button {
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 0 10px !important;
+}
+
+#aiAssistantPanel .ai-query-side .ai-examples {
+  display: flex !important;
+  align-content: flex-start !important;
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+#aiAssistantPanel .ai-query-side .ai-examples button {
+  flex: 0 1 auto !important;
+}
+
 @media (max-width: 767px) {
   #aiAssistantPanel .ai-hero > div:first-child {
     align-items: flex-start !important;
@@ -7146,5 +7190,14 @@ body.subpage-shell .settings-item input[type="range"] {
     align-items: flex-start !important;
     flex-direction: column !important;
     gap: 2px !important;
+  }
+
+  #aiAssistantPanel .ai-query-compose {
+    grid-template-columns: 1fr !important;
+  }
+
+  #aiAssistantPanel .ai-query-side .ai-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
   }
 }

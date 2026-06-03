@@ -6815,3 +6815,23 @@ body.subpage-shell .settings-item input[type="range"] {
     padding-top: 14px !important;
   }
 }
+
+/* Keep the centered title and version on one horizontal line. */
+@media (min-width: 768px) {
+  .app-topbar .top-left {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-direction: row !important;
+    gap: 20px !important;
+    width: auto !important;
+    max-width: min(420px, calc(100% - 360px)) !important;
+    white-space: nowrap !important;
+  }
+
+  .app-topbar #appTitle,
+  .app-topbar #appVersion {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+  }
+}

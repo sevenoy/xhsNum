@@ -7467,16 +7467,16 @@ body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-profi
   gap: 0 !important;
 }
 
-/* Narrow desktop/tablet sidebar: avoid the oversized desktop rhythm at the 768-900px breakpoint. */
-@media (min-width: 768px) and (max-width: 900px) {
+/* Narrow desktop/tablet sidebar: avoid the oversized desktop rhythm around 768-1180px. */
+@media (min-width: 768px) and (max-width: 1180px) {
   :root {
-    --sidebar-expanded-width: 172px;
-    --sidebar-collapsed-width: 60px;
+    --sidebar-expanded-width: clamp(172px, 17.5vw, 196px);
+    --sidebar-collapsed-width: clamp(60px, 6vw, 68px);
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar {
     width: var(--sidebar-expanded-width) !important;
-    padding: 14px 8px 16px !important;
+    padding: clamp(14px, 1.8vh, 18px) 8px clamp(14px, 1.9vh, 18px) !important;
     overflow: hidden auto !important;
   }
 
@@ -7488,7 +7488,7 @@ body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-profi
 
   body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar {
     width: var(--sidebar-collapsed-width) !important;
-    padding: 14px 8px 16px !important;
+    padding: clamp(14px, 1.8vh, 18px) 8px clamp(14px, 1.9vh, 18px) !important;
   }
 
   body:not(.sidebar-expanded):not(.admin-with-sidebar) .wrap {
@@ -7499,43 +7499,51 @@ body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-profi
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-profile {
     gap: 8px !important;
-    padding: 0 0 14px !important;
-    margin-bottom: 12px !important;
+    padding: 0 0 clamp(12px, 1.5vh, 15px) !important;
+    margin-bottom: clamp(10px, 1.4vh, 13px) !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-avatar {
-    width: 38px !important;
-    height: 38px !important;
-    flex-basis: 38px !important;
-    font-size: 15px !important;
+    width: clamp(36px, 4.2vh, 42px) !important;
+    height: clamp(36px, 4.2vh, 42px) !important;
+    flex-basis: clamp(36px, 4.2vh, 42px) !important;
+    font-size: clamp(14px, 1.5vh, 16px) !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-app-version {
     min-height: 18px !important;
     padding: 0 6px !important;
     font-size: 10.5px !important;
+    font-weight: 800 !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-nav {
     --sidebar-icon-col: 20px;
     --sidebar-text-gap: 8px;
     --sidebar-item-pad-x: 10px;
-    gap: 6px !important;
-    padding: 0 0 10px !important;
+    gap: clamp(5px, 0.75vh, 7px) !important;
+    padding: 0 0 clamp(8px, 1.2vh, 11px) !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-nav-item,
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-add,
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-logout {
-    min-height: 38px !important;
+    min-height: clamp(36px, 4.2vh, 40px) !important;
     border-radius: 13px !important;
-    font-size: 12.5px !important;
-    font-weight: 760 !important;
+    font-size: clamp(12px, 1.18vw, 13.5px) !important;
+    font-weight: 700 !important;
     line-height: 1.1 !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-icon {
-    font-size: 15px !important;
+    font-size: clamp(14px, 1.45vw, 16px) !important;
+  }
+
+  body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-nav-item.active,
+  body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-nav-item:hover {
+    border-color: rgba(32, 139, 238, 0.22) !important;
+    background: linear-gradient(135deg, rgba(169, 210, 255, 0.82), rgba(120, 184, 243, 0.78)) !important;
+    box-shadow: 0 5px 14px rgba(32, 139, 238, 0.13) !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-danger-item {
@@ -7543,14 +7551,15 @@ body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-profi
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-bottom {
-    gap: 8px !important;
-    padding-top: 12px !important;
+    gap: clamp(7px, 1vh, 9px) !important;
+    padding-top: clamp(10px, 1.4vh, 13px) !important;
   }
 
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-add,
   body.sidebar-expanded:not(.admin-with-sidebar) .app-sidebar .sidebar-logout {
-    min-height: 40px !important;
+    min-height: clamp(38px, 4.4vh, 42px) !important;
     padding: 0 10px !important;
-    font-size: 12.5px !important;
+    font-size: clamp(12px, 1.16vw, 13px) !important;
+    white-space: nowrap !important;
   }
 }

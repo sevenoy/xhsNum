@@ -6898,3 +6898,27 @@ body.subpage-shell .settings-item input[type="range"] {
     color: var(--pearl-primary) !important;
   }
 }
+
+/* Force visible spacing between desktop sidebar rows, including adjacent active pills. */
+@media (min-width: 1024px) {
+  body.sidebar-expanded .sidebar-nav {
+    gap: 0 !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item {
+    margin: 0 0 14px !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-sub-item {
+    margin-bottom: 18px !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item.active + .sidebar-nav-item,
+  body.sidebar-expanded .sidebar-nav > .sidebar-nav-item:hover + .sidebar-nav-item {
+    margin-top: 2px !important;
+  }
+}

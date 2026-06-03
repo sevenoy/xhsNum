@@ -7025,3 +7025,82 @@ body.subpage-shell .settings-item input[type="range"] {
     border-radius: clamp(14px, 1.4vw, 16px) !important;
   }
 }
+
+/* AI settings now sits as a compact strip directly under the AI assistant header. */
+#aiAssistantPanel > .ai-settings-card {
+  display: grid !important;
+  gap: 0 !important;
+  padding: 10px 14px !important;
+}
+
+#aiAssistantPanel > .ai-settings-card .ai-card-head {
+  align-items: center !important;
+  margin-bottom: 0 !important;
+}
+
+#aiAssistantPanel > .ai-settings-card .ai-card-head > div {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+}
+
+#aiAssistantPanel > .ai-settings-card .ai-card-head h3 {
+  flex: 0 0 auto !important;
+  font-size: 16px !important;
+}
+
+#aiAssistantPanel > .ai-settings-card .ai-card-head p {
+  margin: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#aiAssistantPanel > .ai-settings-card.is-collapsed {
+  grid-template-columns: minmax(0, auto) minmax(260px, 1fr) !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 14px !important;
+}
+
+#aiAssistantPanel > .ai-settings-card.is-collapsed .ai-card-head {
+  min-width: 0 !important;
+}
+
+#aiAssistantPanel > .ai-settings-card.is-collapsed .ai-card-head p {
+  display: none !important;
+}
+
+#aiAssistantPanel > .ai-settings-card.is-collapsed .ai-settings-summary {
+  min-height: 34px !important;
+  padding: 6px 8px !important;
+}
+
+#aiAssistantPanel > .ai-settings-card:not(.is-collapsed) .ai-settings-body {
+  margin-top: 12px !important;
+}
+
+#aiAssistantPanel .ai-grid {
+  grid-template-columns: 1fr !important;
+}
+
+#aiAssistantPanel .ai-query-card {
+  width: 100% !important;
+}
+
+@media (max-width: 767px) {
+  #aiAssistantPanel > .ai-settings-card.is-collapsed {
+    grid-template-columns: 1fr !important;
+  }
+
+  #aiAssistantPanel > .ai-settings-card .ai-card-head {
+    align-items: flex-start !important;
+  }
+
+  #aiAssistantPanel > .ai-settings-card .ai-card-head > div {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+}

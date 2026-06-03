@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
 
-  <link rel="stylesheet" href="./css/style.css?v=V260601.10" />
+  <link rel="stylesheet" href="./css/style.css?v=V260601.11" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -291,7 +291,7 @@
           <span></span>
         </button>
         <h1 id="appTitle">号码管理</h1>
-        <span id="appVersion" class="app-version-pill">V260601.10</span>
+        <span id="appVersion" class="app-version-pill">V260601.11</span>
       </div>
       <div class="top-right">
         <span id="onlineStatus" style="display:none; margin-right: 10px; color: #34c759; font-size: 13px;"></span>
@@ -420,6 +420,54 @@
         <button type="button" class="ghost" id="btnAiBackToNumbers">返回号码管理</button>
       </div>
 
+      <section class="ai-card ai-settings-card" aria-label="AI API 设置">
+        <div class="ai-card-head">
+          <div>
+            <h3>AI API 设置</h3>
+            <p>保存设置后同步到当前账号的多端设备。</p>
+          </div>
+          <span id="aiSettingsStatus" class="ai-status-pill">未保存</span>
+        </div>
+        <div class="ai-settings-summary" id="aiSettingsSummary" hidden>
+          <span id="aiSettingsSummaryText">AI 设置已保存</span>
+          <button type="button" class="ghost" id="btnAiEditSettings">编辑设置</button>
+        </div>
+        <div class="ai-settings-body" id="aiSettingsBody">
+        <div class="ai-settings-grid">
+          <label>
+            <span>Provider</span>
+            <select id="aiProvider">
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai-compatible">OpenAI Compatible</option>
+              <option value="openai">OpenAI</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input id="aiBaseUrl" type="url" placeholder="https://api.deepseek.com" />
+          </label>
+          <label>
+            <span>API Key</span>
+            <input id="aiApiKey" type="password" autocomplete="off" placeholder="保存后同账号多端同步" />
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="aiModel" placeholder="deepseek-chat" />
+          </label>
+        </div>
+        <label class="ai-checkbox">
+          <input id="aiEnableSummary" type="checkbox" />
+          <span>启用 AI 总结匹配结果</span>
+        </label>
+        <div class="ai-actions">
+          <button type="button" class="primary" id="btnAiSaveSettings">保存设置</button>
+          <button type="button" class="ghost" id="btnAiTestConnection">测试连接</button>
+        </div>
+        <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。API Key 会随当前账号云端快照同步。</p>
+        </div>
+      </section>
+
       <div class="ai-grid">
         <section class="ai-card ai-query-card" aria-label="AI 查询">
           <div class="ai-card-head">
@@ -442,54 +490,6 @@
             <button type="button" data-ai-example="找出重复电话">找出重复电话</button>
             <button type="button" data-ai-example="整理企业号">整理企业号</button>
             <button type="button" data-ai-example="搜索摄影 投流 直播">搜索摄影 / 投流 / 直播</button>
-          </div>
-        </section>
-
-        <section class="ai-card ai-settings-card" aria-label="AI API 设置">
-          <div class="ai-card-head">
-            <div>
-              <h3>AI API 设置</h3>
-              <p>保存设置后同步到当前账号的多端设备。</p>
-            </div>
-            <span id="aiSettingsStatus" class="ai-status-pill">未保存</span>
-          </div>
-          <div class="ai-settings-summary" id="aiSettingsSummary" hidden>
-            <span id="aiSettingsSummaryText">AI 设置已保存</span>
-            <button type="button" class="ghost" id="btnAiEditSettings">编辑设置</button>
-          </div>
-          <div class="ai-settings-body" id="aiSettingsBody">
-          <div class="ai-settings-grid">
-            <label>
-              <span>Provider</span>
-              <select id="aiProvider">
-                <option value="deepseek">DeepSeek</option>
-                <option value="openai-compatible">OpenAI Compatible</option>
-                <option value="openai">OpenAI</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label>
-              <span>Base URL</span>
-              <input id="aiBaseUrl" type="url" placeholder="https://api.deepseek.com" />
-            </label>
-            <label>
-              <span>API Key</span>
-              <input id="aiApiKey" type="password" autocomplete="off" placeholder="保存后同账号多端同步" />
-            </label>
-            <label>
-              <span>Model</span>
-              <input id="aiModel" placeholder="deepseek-chat" />
-            </label>
-          </div>
-          <label class="ai-checkbox">
-            <input id="aiEnableSummary" type="checkbox" />
-            <span>启用 AI 总结匹配结果</span>
-          </label>
-          <div class="ai-actions">
-            <button type="button" class="primary" id="btnAiSaveSettings">保存设置</button>
-            <button type="button" class="ghost" id="btnAiTestConnection">测试连接</button>
-          </div>
-          <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。API Key 会随当前账号云端快照同步。</p>
           </div>
         </section>
       </div>
@@ -522,7 +522,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.10';
+    const APP_VERSION = 'V260601.11';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

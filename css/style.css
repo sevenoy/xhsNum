@@ -6835,3 +6835,66 @@ body.subpage-shell .settings-item input[type="range"] {
     margin: 0 !important;
   }
 }
+
+/* Match the expanded desktop sidebar spacing to the mobile drawer rhythm. */
+@media (min-width: 1024px) {
+  body.sidebar-expanded .app-sidebar {
+    padding: 28px 16px 28px !important;
+  }
+
+  body.sidebar-expanded .app-sidebar .sidebar-profile {
+    padding: 0 0 28px !important;
+    margin-bottom: 20px !important;
+    border-bottom: 1px solid rgba(192, 199, 213, 0.56) !important;
+  }
+
+  body.sidebar-expanded .app-sidebar .sidebar-avatar {
+    width: 54px !important;
+    height: 54px !important;
+    flex-basis: 54px !important;
+    font-size: 20px !important;
+    box-shadow: 0 14px 30px rgba(0, 93, 167, 0.14) !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav {
+    gap: 12px !important;
+    padding: 0 0 18px !important;
+  }
+
+  body.sidebar-expanded .sidebar-nav-item,
+  body.sidebar-expanded .sidebar-add,
+  body.sidebar-expanded .sidebar-logout {
+    min-height: 54px !important;
+    padding: 0 22px !important;
+    border-radius: 20px !important;
+    gap: 14px !important;
+    font-size: 16px !important;
+    font-weight: 820 !important;
+  }
+
+  body.sidebar-expanded .sidebar-sub-item {
+    padding-left: 52px !important;
+  }
+
+  body.sidebar-expanded .sidebar-icon {
+    width: 24px !important;
+    flex: 0 0 24px !important;
+    font-size: 20px !important;
+  }
+
+  body.sidebar-expanded .sidebar-bottom {
+    gap: 16px !important;
+    padding-top: 22px !important;
+    border-top: 1px solid rgba(192, 199, 213, 0.56) !important;
+  }
+
+  body.sidebar-expanded .sidebar-add {
+    min-height: 58px !important;
+    justify-content: center !important;
+  }
+
+  body.sidebar-expanded .sidebar-logout {
+    justify-content: center !important;
+    color: var(--pearl-primary) !important;
+  }
+}

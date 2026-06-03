@@ -102,7 +102,7 @@ const state = {
   q: "",
   owner: "all",
   wxReal: "all",
-  sortBy: "order",
+  sortBy: "owner",
   precise: false,
   activeFunction: null,
   platformProfiles: new Map(),
@@ -1646,7 +1646,7 @@ async function refreshFilters() {
   const ownerVal = ownerSel.value;
   const realVal = realSel.value;
 
-  const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
+  const priority = ["Olina", "嘉"];
   const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
   
   const sortNames = (nameMap) => {
@@ -1740,10 +1740,10 @@ function applyFilters(rows) {
   let out = rows.slice();
   const norm = (s) => String(s || "").trim().toLowerCase();
   
-  // ✅ 确保排序方式有效，如果无效则默认使用手动排序，避免按所属人把 Olina 固定排到最前
+  // ✅ 确保排序方式有效，如果无效则默认使用所属人排序
   if (!state.sortBy || (state.sortBy !== "owner" && state.sortBy !== "wx_real" && state.sortBy !== "phone" && state.sortBy !== "xhs_name" && state.sortBy !== "row_color" && state.sortBy !== "order")) {
-    console.warn('⚠️ 无效的排序方式，使用默认值 "order"', state.sortBy);
-    state.sortBy = "order";
+    console.warn('⚠️ 无效的排序方式，使用默认值 "owner"', state.sortBy);
+    state.sortBy = "owner";
   }
   
   // ✅ 筛选时使用小写比较，实现大小写不区分
@@ -1779,7 +1779,7 @@ function applyFilters(rows) {
   switch (state.sortBy) {
     case "owner": {
       console.log("🔍 执行按所属人排序，数据量:", out.length);
-      const priority = ["Olina", "嘉", "良", "齐", "齐注销", "宫"];
+      const priority = ["Olina", "嘉"];
       const norm = (s) => String(s || "").trim().toLowerCase();
       const priIndex = new Map(priority.map((name, idx) => [norm(name), idx]));
       const counts = new Map();
@@ -4658,15 +4658,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   applyView(readView());
   
-  // ✅ 启动默认使用手动排序，避免不同设备默认看到 Olina 分组排在最前
+  // ✅ 启动默认使用所属人排序：Olina、嘉固定在最前，其余按数量从多到少
   const sortSelect = $("#sortBy");
   if (sortSelect) {
-    state.sortBy = "order";
-    sortSelect.value = "order";
-    console.log('✅ 初始化排序设置: 手动排序 (order)');
+    state.sortBy = "owner";
+    sortSelect.value = "owner";
+    console.log('✅ 初始化排序设置: 所属人排序 (owner)');
   } else {
-    state.sortBy = "order";
-    console.log('✅ 初始化排序设置: 手动排序 (order) - 下拉框不存在');
+    state.sortBy = "owner";
+    console.log('✅ 初始化排序设置: 所属人排序 (owner) - 下拉框不存在');
   }
   
   bindEvents();

@@ -7442,3 +7442,27 @@ body.subpage-shell .admin-wrap > .nav button {
     font-size: 13px !important;
   }
 }
+
+/* Collapsed main sidebar: the version badge must not take space in the slim rail. */
+body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar #sidebarAppVersion,
+body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-app-version {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  position: absolute !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+body:not(.sidebar-expanded):not(.admin-with-sidebar) .app-sidebar .sidebar-profile {
+  justify-content: center !important;
+  gap: 0 !important;
+}

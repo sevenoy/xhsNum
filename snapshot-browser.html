@@ -47,10 +47,10 @@
       cursor: pointer !important;
     }
     .tabs {
-      display: flex;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(6px, 1vw, 10px);
       margin-bottom: 16px;
-      flex-wrap: wrap;
     }
     .tab {
       padding: 8px 16px;
@@ -59,8 +59,11 @@
       background: #f5f5f7;
       border: none;
       font-weight: 500;
-      font-size: 14px;
+      font-size: clamp(12px, 1.4vw, 14px);
       transition: all 0.2s ease;
+      text-align: center;
+      min-width: 0;
+      white-space: nowrap;
     }
     .tab:hover {
       background: #e5e5ea;
@@ -69,21 +72,26 @@
       background: #1990FF;
       color: white;
     }
-    .search-box {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
+    body.subpage-shell > .search-box {
+      display: flex !important;
+      align-items: center !important;
+      gap: clamp(6px, 1vw, 10px) !important;
+      margin-bottom: 16px !important;
+      flex-wrap: nowrap !important;
     }
-    .search-box input {
-      flex: 1;
-      min-width: 200px;
+    body.subpage-shell > .search-box input {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      width: auto !important;
       padding: 8px 12px;
       border: 1px solid #e5e5ea;
       border-radius: 8px;
       font-size: 14px;
     }
-    .search-box select {
+    body.subpage-shell > .search-box select {
+      flex: 0 0 clamp(140px, 18vw, 220px) !important;
+      min-width: 0 !important;
+      width: clamp(140px, 18vw, 220px) !important;
       padding: 8px 12px;
       border: 1px solid #e5e5ea;
       border-radius: 8px;
@@ -93,7 +101,7 @@
     }
     .snapshot-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 16px;
     }
     .snapshot-card {
@@ -225,15 +233,19 @@
         padding: 6px 12px;
         font-size: 13px;
       }
-      .search-box {
-        gap: 6px;
-        margin-bottom: 12px;
+      body.subpage-shell > .search-box {
+        gap: 6px !important;
+        margin-bottom: 12px !important;
       }
-      .search-box input {
+      body.subpage-shell > .search-box input {
         font-size: 16px;
       }
+      body.subpage-shell > .search-box select {
+        flex-basis: clamp(120px, 20vw, 180px) !important;
+        width: clamp(120px, 20vw, 180px) !important;
+      }
       .snapshot-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
       .snapshot-card {
@@ -279,21 +291,19 @@
       .stat-label {
         font-size: 11px;
       }
-      .tabs {
-        gap: 4px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 4px;
-        margin-bottom: 10px;
-      }
       .tab {
         padding: 6px 12px;
         font-size: 12px;
-        flex-shrink: 0;
       }
-      .search-box {
-        gap: 4px;
-        margin-bottom: 10px;
+      body.subpage-shell > .search-box {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        margin-bottom: 10px !important;
+      }
+      body.subpage-shell > .search-box input,
+      body.subpage-shell > .search-box select {
+        width: 100% !important;
+        flex: 1 1 100% !important;
       }
       .snapshot-card {
         padding: 12px;
@@ -316,6 +326,26 @@
         min-width: 60px;
       }
     }
+    @media (min-width: 1200px) {
+      .snapshot-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 900px) and (max-width: 1199px) {
+      .snapshot-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 621px) and (max-width: 899px) {
+      .snapshot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 620px) {
+      .snapshot-grid {
+        grid-template-columns: 1fr;
+      }
+    }
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -330,30 +360,38 @@
       padding: 60px 20px;
       color: #1990FF;
     }
-    .stats-bar {
-      display: flex;
-      gap: 16px;
-      padding: 12px 16px;
-      background: #f9f9fb;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
+    body.subpage-shell > .stats-bar#statsBar {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: clamp(6px, 1vw, 12px) !important;
+      padding: clamp(8px, 1vw, 12px) clamp(10px, 1.4vw, 16px) !important;
+      align-items: stretch !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
     }
-    .stat-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1 1 auto;
-      min-width: 0;
+    body.subpage-shell > .stats-bar#statsBar .stat-item {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: clamp(2px, 0.8vw, 6px) !important;
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      text-align: center !important;
     }
-    .stat-number {
-      font-size: 20px;
-      font-weight: 600;
-      color: #1990FF;
+    body.subpage-shell > .stats-bar#statsBar .stat-number {
+      font-size: clamp(15px, 2vw, 20px) !important;
+      font-weight: 700 !important;
+      color: #1990FF !important;
+      line-height: 1 !important;
     }
-    .stat-label {
-      font-size: 14px;
-      color: #666;
+    body.subpage-shell > .stats-bar#statsBar .stat-label {
+      font-size: clamp(10px, 1.2vw, 14px) !important;
+      color: #666 !important;
+      line-height: 1.2 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
     .preview-modal {
       position: fixed;
@@ -456,6 +494,159 @@
     }
   </style>
   <link rel="stylesheet" href="./css/style.css?v=V260601.2-subpages">
+  <style>
+    /* Final snapshot-browser search bar override: keep input and sort on one row. */
+    body.subpage-shell > .search-box {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: clamp(6px, 1vw, 10px) !important;
+      margin-bottom: 16px !important;
+      flex-wrap: nowrap !important;
+    }
+
+    body.subpage-shell > .search-box input {
+      flex: 1 1 auto !important;
+      min-width: 0 !important;
+      width: auto !important;
+      grid-column: auto !important;
+    }
+
+    body.subpage-shell > .search-box select {
+      flex: 0 0 clamp(120px, 18vw, 220px) !important;
+      min-width: 0 !important;
+      width: clamp(120px, 18vw, 220px) !important;
+      text-align: center !important;
+      grid-column: auto !important;
+    }
+
+    @media (max-width: 767px) {
+      body.subpage-shell > .search-box {
+        gap: 6px !important;
+        margin-bottom: 12px !important;
+      }
+
+      body.subpage-shell > .search-box select {
+        flex-basis: clamp(110px, 20vw, 180px) !important;
+        width: clamp(110px, 20vw, 180px) !important;
+      }
+    }
+
+    @media (max-width: 520px) {
+      body.subpage-shell > .search-box {
+        gap: 6px !important;
+      }
+
+      body.subpage-shell > .search-box input {
+        min-width: 0 !important;
+      }
+
+      body.subpage-shell > .search-box select {
+        flex-basis: clamp(100px, 28vw, 160px) !important;
+        width: clamp(100px, 28vw, 160px) !important;
+      }
+    }
+
+    /* Final snapshot-browser grid override: 2-4 cards per row by viewport width. */
+    #snapshotGrid.snapshot-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: clamp(8px, 1vw, 12px) !important;
+      align-items: start !important;
+    }
+
+    #snapshotGrid.snapshot-grid > .snapshot-card {
+      min-width: 0 !important;
+      padding: clamp(10px, 1.4vw, 16px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    #snapshotGrid .snapshot-header {
+      margin-bottom: 8px !important;
+      gap: 8px !important;
+    }
+
+    #snapshotGrid .snapshot-title {
+      min-width: 0 !important;
+      font-size: clamp(13px, 1.35vw, 16px) !important;
+      line-height: 1.25 !important;
+    }
+
+    #snapshotGrid .snapshot-badge {
+      margin-left: 6px !important;
+      padding: 3px 8px !important;
+      font-size: 10px !important;
+    }
+
+    #snapshotGrid .snapshot-meta {
+      font-size: clamp(11px, 1.05vw, 13px) !important;
+      line-height: 1.45 !important;
+    }
+
+    #snapshotGrid .snapshot-meta-item {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      gap: 8px !important;
+      align-items: center !important;
+    }
+
+    #snapshotGrid .snapshot-actions {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+      margin-top: 12px !important;
+      padding-top: 12px !important;
+      flex-wrap: nowrap !important;
+    }
+
+    #snapshotGrid .btn-small {
+      width: 100% !important;
+      min-width: 0 !important;
+      padding: 6px 8px !important;
+      font-size: 11px !important;
+      line-height: 1.2 !important;
+    }
+
+    @media (min-width: 900px) {
+      #snapshotGrid.snapshot-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      }
+    }
+
+    @media (min-width: 1200px) {
+      #snapshotGrid.snapshot-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      }
+    }
+
+    @media (max-width: 520px) {
+      #snapshotGrid.snapshot-grid {
+        gap: 8px !important;
+      }
+
+      #snapshotGrid.snapshot-grid > .snapshot-card {
+        padding: 10px !important;
+      }
+
+      #snapshotGrid .snapshot-title {
+        font-size: 12px !important;
+      }
+
+      #snapshotGrid .snapshot-meta {
+        font-size: 10px !important;
+      }
+
+      #snapshotGrid .snapshot-actions {
+        gap: 4px !important;
+      }
+
+      #snapshotGrid .btn-small {
+        padding: 5px 6px !important;
+        font-size: 10px !important;
+      }
+    }
+  </style>
 </head>
 <body class="subpage-shell">
   <!-- 统计栏 -->

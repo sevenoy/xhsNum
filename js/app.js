@@ -102,7 +102,7 @@ const state = {
   q: "",
   owner: "all",
   wxReal: "all",
-  sortBy: "owner",
+  sortBy: "order",
   precise: false,
   activeFunction: null,
   platformProfiles: new Map(),
@@ -1740,10 +1740,10 @@ function applyFilters(rows) {
   let out = rows.slice();
   const norm = (s) => String(s || "").trim().toLowerCase();
   
-  // ✅ 确保排序方式有效，如果无效则默认使用 "owner"
+  // ✅ 确保排序方式有效，如果无效则默认使用手动排序，避免按所属人把 Olina 固定排到最前
   if (!state.sortBy || (state.sortBy !== "owner" && state.sortBy !== "wx_real" && state.sortBy !== "phone" && state.sortBy !== "xhs_name" && state.sortBy !== "row_color" && state.sortBy !== "order")) {
-    console.warn('⚠️ 无效的排序方式，使用默认值 "owner"', state.sortBy);
-    state.sortBy = "owner";
+    console.warn('⚠️ 无效的排序方式，使用默认值 "order"', state.sortBy);
+    state.sortBy = "order";
   }
   
   // ✅ 筛选时使用小写比较，实现大小写不区分
@@ -3779,6 +3779,21 @@ function bindEvents() {
   // 清除搜索图标
   const clearSearchBtn = document.getElementById("clearSearch");
   const searchInput = $("#q");
+  let searchTouched = false;
+
+  const resetInitialSearch = () => {
+    if (!searchInput || searchTouched || document.activeElement === searchInput) return;
+    searchInput.value = "";
+    state.q = "";
+    updateClearButton();
+  };
+
+  if (searchInput) {
+    searchInput.value = "";
+    state.q = "";
+    requestAnimationFrame(resetInitialSearch);
+    window.setTimeout(resetInitialSearch, 250);
+  }
   
   function updateClearButton() {
     if (clearSearchBtn && searchInput) {
@@ -3798,6 +3813,7 @@ function bindEvents() {
   });
   
   $("#q").addEventListener("input", async (e) => {
+    searchTouched = true;
     state.q = e.target.value || "";
     updateClearButton();
     await renderTable();
@@ -4395,12 +4411,17 @@ function initSidebarActions() {
 
   const syncSidebarStatus = () => {
     const sidebarAvatar = document.querySelector('.sidebar-avatar');
+    const sidebarVersion = document.querySelector('#sidebarAppVersion');
     const sidebarUser = document.querySelector('#sidebarUserName');
     const sidebarCloud = document.querySelector('#sidebarCloudText');
     const currentName = document.querySelector('#currentUserName')?.textContent?.replace(/^👤\s*/, '').trim();
     const cloudText = document.querySelector('#cloudText')?.textContent?.trim();
     const displayName = currentName || window.currentUser?.name || localStorage.getItem('xhs_user_name') || '未登录';
+    const version = window.APP_VERSION || '';
 
+    if (sidebarVersion) {
+      sidebarVersion.textContent = version || sidebarVersion.textContent || '';
+    }
     if (sidebarUser) {
       sidebarUser.textContent = displayName;
     }
@@ -4637,17 +4658,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   applyView(readView());
   
-  // ✅ 在 bindEvents 之前先确保排序设置正确
+  // ✅ 启动默认使用手动排序，避免不同设备默认看到 Olina 分组排在最前
   const sortSelect = $("#sortBy");
   if (sortSelect) {
-    // 强制设置为 "owner"（按所属人排序）
-    state.sortBy = "owner";
-    sortSelect.value = "owner";
-    console.log('✅ 初始化排序设置: 按所属人排序 (owner)');
+    state.sortBy = "order";
+    sortSelect.value = "order";
+    console.log('✅ 初始化排序设置: 手动排序 (order)');
   } else {
-    // 如果下拉框不存在（可能在手机端被隐藏），也确保 state.sortBy 是 "owner"
-    state.sortBy = "owner";
-    console.log('✅ 初始化排序设置: 按所属人排序 (owner) - 下拉框不存在');
+    state.sortBy = "order";
+    console.log('✅ 初始化排序设置: 手动排序 (order) - 下拉框不存在');
   }
   
   bindEvents();

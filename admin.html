@@ -176,6 +176,24 @@
       const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       const { data: { session } } = await client.auth.getSession();
       if (!session) { alert('请先登录'); location.href='login.html'; return; }
+      const adminSidebarAvatar = document.getElementById('adminSidebarAvatar');
+      const adminSidebarCloudText = document.getElementById('adminSidebarCloudText');
+      const adminHomeButton = document.querySelector('[data-admin-sidebar-action="home"]');
+      const displayName = localStorage.getItem('xhs_user_name') || session.user?.email || 'O';
+      const avatarSeed = String(displayName).trim();
+      const latinInitial = avatarSeed.match(/[A-Za-z]/);
+      const fallbackInitial = avatarSeed.charAt(0);
+      if (adminSidebarAvatar) {
+        adminSidebarAvatar.textContent = (latinInitial ? latinInitial[0] : fallbackInitial || 'O').toUpperCase();
+      }
+      if (adminSidebarCloudText) {
+        adminSidebarCloudText.textContent = '已链接';
+      }
+      if (adminHomeButton) {
+        adminHomeButton.addEventListener('click', () => {
+          location.href = 'index.html';
+        });
+      }
       // ✅ 修复权限检查：优先从数据库查询，确保只有sevenoy管理员才能看到管理按钮
       let isAdmin = false;
       try {
@@ -280,22 +298,6 @@
       window.__isAdmin = isAdmin;
       window.__ROUTES = ROUTES;
       window.__BUTTON_MAP = map;
-      
-      // 刷新按钮功能
-      const btnRefreshFrame = document.getElementById('btnRefreshFrame');
-      if (btnRefreshFrame) {
-        btnRefreshFrame.addEventListener('click', () => {
-          const frame = document.getElementById('adminFrame');
-          if (frame && frame.src) {
-            // 重新加载iframe内容
-            const currentSrc = frame.src;
-            frame.src = '';
-            setTimeout(() => {
-              frame.src = currentSrc;
-            }, 100);
-          }
-        });
-      }
       
       // ✅ 更新管理中心的总数据数和版本号显示
       async function updateAdminStats() {
@@ -404,8 +406,166 @@
     }
   </script>
   <link rel="stylesheet" href="./css/style.css?v=V260601.2-subpages">
+  <style>
+    body.admin-with-sidebar {
+      --admin-sidebar-width: clamp(156px, 20vw, 224px);
+      overflow: hidden !important;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(242, 245, 247, 0.96)),
+        var(--pearl-surface) !important;
+    }
+
+    body.admin-with-sidebar .admin-sidebar {
+      width: var(--admin-sidebar-width) !important;
+      max-width: var(--admin-sidebar-width) !important;
+      transform: translateX(0) !important;
+      border-radius: 0 !important;
+      padding: clamp(14px, 2vh, 22px) clamp(10px, 1.3vw, 14px) !important;
+      box-sizing: border-box !important;
+      overflow: hidden auto !important;
+    }
+
+    body.admin-with-sidebar .admin-sidebar .sidebar-profile {
+      justify-content: center !important;
+      gap: 10px !important;
+      padding-bottom: clamp(12px, 1.8vh, 18px) !important;
+      margin-bottom: clamp(12px, 1.8vh, 18px) !important;
+    }
+
+    body.admin-with-sidebar .admin-sidebar .sidebar-avatar {
+      width: clamp(38px, 4.8vh, 48px) !important;
+      height: clamp(38px, 4.8vh, 48px) !important;
+      flex-basis: clamp(38px, 4.8vh, 48px) !important;
+      font-size: clamp(15px, 1.8vh, 18px) !important;
+    }
+
+    body.admin-with-sidebar .admin-sidebar .sidebar-nav {
+      gap: clamp(7px, 1vh, 10px) !important;
+      padding: 0 !important;
+      flex: 0 0 auto !important;
+    }
+
+    body.admin-with-sidebar .admin-sidebar .sidebar-nav-item {
+      min-height: clamp(40px, 4.8vh, 48px) !important;
+      margin: 0 !important;
+      border-radius: clamp(14px, 1.4vw, 18px) !important;
+      font-size: clamp(13px, 1.15vw, 14px) !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap {
+      width: calc(100vw - var(--admin-sidebar-width)) !important;
+      max-width: none !important;
+      height: 100dvh !important;
+      min-height: 0 !important;
+      margin: 0 0 0 var(--admin-sidebar-width) !important;
+      padding: 14px !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: auto auto minmax(0, 1fr) !important;
+      grid-template-areas:
+        "header"
+        "nav"
+        "panel" !important;
+      gap: 12px !important;
+      overflow: hidden !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap > .admin-header {
+      min-height: 58px !important;
+      padding: 10px 14px !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap > .admin-header > div:first-child {
+      flex: 1 1 auto !important;
+      gap: 10px !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap > .nav {
+      height: auto !important;
+      min-height: 0 !important;
+      padding: 8px !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap > .nav button.admin-only {
+      display: none !important;
+      visibility: hidden !important;
+    }
+
+    body.admin-with-sidebar .admin-wrap > .panel {
+      min-height: 0 !important;
+    }
+
+    @media (max-width: 640px) {
+      body.admin-with-sidebar {
+        --admin-sidebar-width: 64px;
+      }
+
+      body.admin-with-sidebar .admin-sidebar {
+        padding: 12px 8px !important;
+      }
+
+      body.admin-with-sidebar .admin-sidebar .sidebar-profile {
+        padding-bottom: 12px !important;
+        margin-bottom: 12px !important;
+      }
+
+      body.admin-with-sidebar .admin-sidebar .sidebar-app-version {
+        display: none !important;
+      }
+
+      body.admin-with-sidebar .admin-sidebar .sidebar-nav {
+        --sidebar-icon-col: 1fr;
+        --sidebar-text-gap: 0;
+        --sidebar-item-pad-x: 0;
+        gap: 8px !important;
+      }
+
+      body.admin-with-sidebar .admin-sidebar .sidebar-nav-item {
+        display: inline-flex !important;
+        justify-content: center !important;
+        width: 48px !important;
+        min-height: 48px !important;
+        padding: 0 !important;
+      }
+
+      body.admin-with-sidebar .admin-sidebar .sidebar-nav-item > span:not(.sidebar-icon) {
+        display: none !important;
+      }
+
+      body.admin-with-sidebar .admin-wrap {
+        padding: 10px !important;
+        gap: 10px !important;
+      }
+
+      body.admin-with-sidebar .admin-wrap > .admin-header h1 {
+        font-size: 18px !important;
+      }
+
+      body.admin-with-sidebar #adminTotalDataCount,
+      body.admin-with-sidebar #adminStatsVersion {
+        min-height: 24px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
+      }
+    }
+  </style>
   </head>
-<body class="subpage-shell">
+<body class="subpage-shell admin-with-sidebar sidebar-expanded">
+  <aside class="app-sidebar admin-sidebar" aria-label="主导航">
+    <div class="sidebar-profile">
+      <div id="adminSidebarAvatar" class="sidebar-avatar" aria-hidden="true">O</div>
+      <div id="adminSidebarAppVersion" class="sidebar-app-version">V260601.15</div>
+    </div>
+    <nav class="sidebar-nav" aria-label="功能导航">
+      <button type="button" class="sidebar-nav-item" data-admin-sidebar-action="home">
+        <span class="sidebar-icon">▦</span>
+        <span>号码管理</span>
+      </button>
+      <button type="button" class="sidebar-nav-item active" data-admin-sidebar-action="admin" aria-current="page">
+        <span class="sidebar-icon">◎</span>
+        <span>管理页面</span>
+      </button>
+    </nav>
+  </aside>
   <div class="admin-wrap">
     <div class="admin-header">
       <div style="display: flex; align-items: center; gap: 12px;">
@@ -413,10 +573,6 @@
         <span id="adminTotalDataCount" style="color: #007aff; font-size: 14px; font-weight: normal;">总数据：0条</span>
         <span style="color: #ccc;">|</span>
         <span id="adminStatsVersion" style="color: #007aff; font-size: 14px; font-weight: normal;">版本 未知</span>
-      </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <button id="btnRefreshFrame" class="ghost" style="padding: 6px 12px; font-size: 14px;" title="刷新当前页面">🔄 刷新</button>
-        <button class="primary" onclick="location.href='index.html'">返回主页</button>
       </div>
     </div>
     <div class="nav">
@@ -436,4 +592,3 @@
   </div>
 </body>
 </html>
-

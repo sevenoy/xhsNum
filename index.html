@@ -221,6 +221,7 @@
   <aside class="app-sidebar" aria-label="主导航">
     <div class="sidebar-profile">
       <div class="sidebar-avatar" aria-hidden="true">O</div>
+      <div id="sidebarAppVersion" class="sidebar-app-version">V260601.15</div>
       <div class="sidebar-profile-text">
         <div id="sidebarUserName" class="sidebar-user-name">未登录</div>
         <div class="sidebar-cloud-line">
@@ -291,7 +292,6 @@
           <span></span>
         </button>
         <h1 id="appTitle">号码管理</h1>
-        <span id="appVersion" class="app-version-pill">V260601.15</span>
       </div>
       <div class="top-right">
         <span id="onlineStatus" style="display:none; margin-right: 10px; color: #34c759; font-size: 13px;"></span>
@@ -319,7 +319,7 @@
     <div class="panel controls-panel">
       <div class="toolbar filter-toolbar">
         <div class="search-wrapper">
-          <input id="q" placeholder="搜索：任意关键词" style="width: 100%; padding-right: 32px;" />
+          <input id="q" name="xhs-search-query" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="搜索：任意关键词" style="width: 100%; padding-right: 32px;" />
           <span id="clearSearch" class="clear-search-btn" title="清除搜索">×</span>
         </div>
         <button id="btnSearchMode" class="ghost function-btn" data-function="search">当前：模糊搜索</button>
@@ -331,8 +331,8 @@
           <option value="all">微信实名人：全部</option>
         </select>
         <select id="sortBy">
-          <option value="order">排序：手动</option>
-          <option value="owner" selected>排序：所属人</option>
+          <option value="order" selected>排序：手动</option>
+          <option value="owner">排序：所属人</option>
           <option value="wx_real">排序：微信实名人</option>
           <option value="phone">排序：电话号码</option>
           <option value="xhs_name">排序：小红书名称</option>

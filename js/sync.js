@@ -199,6 +199,17 @@ function normalizePlatformProfilesForCompare(profilesData) {
     });
 }
 
+function normalizeAiSettingsForCompare(settings) {
+  if (!settings || typeof settings !== 'object') return {};
+  return {
+    provider: String(settings.provider || '').trim(),
+    baseUrl: String(settings.baseUrl || '').trim().replace(/\/+$/, ''),
+    apiKey: String(settings.apiKey || ''),
+    model: String(settings.model || '').trim(),
+    enableAiSummary: Boolean(settings.enableAiSummary)
+  };
+}
+
 function shouldIgnoreOwnRealtimeEvent(row) {
   if (!row) return false;
   const meta = row.payload?.__meta || {};
@@ -562,6 +573,10 @@ export async function cloudLoad(keyOrSilent = SUPABASE_DEFAULT_KEY, silent = fal
         platformProfilesCount: Array.isArray(payload.platformProfiles) ? payload.platformProfiles.length : 0
       });
     }
+    if (payload.aiSettings && typeof window.applyXhsAiSettingsSnapshot === 'function') {
+      window.applyXhsAiSettingsSnapshot(payload.aiSettings);
+      console.log('✅ AI 设置已更新');
+    }
 
     // 更新本地时间戳（只更新一次）
     lastSyncTimestamp = serverTime;
@@ -692,6 +707,9 @@ export async function cloudSave(options = {}) {
     const platformSnapshot = typeof window.getXhsPlatformSnapshot === 'function'
       ? await window.getXhsPlatformSnapshot()
       : { platforms: [], platformProfiles: [] };
+    let aiSettings = typeof window.getXhsAiSettingsSnapshot === 'function'
+      ? window.getXhsAiSettingsSnapshot()
+      : null;
 
     if (shouldBlockEmptyAutoSave(rows, source, reason)) {
       setSaveStatus('本地为空，为避免覆盖云端，已阻止自动同步', 'warning', 5200);
@@ -727,6 +745,10 @@ export async function cloudSave(options = {}) {
       const latestPlatformProfiles = Array.isArray(cloudRow.payload.platformProfiles)
         ? cloudRow.payload.platformProfiles
         : null;
+      const latestAiSettings = cloudRow.payload.aiSettings || null;
+      if (!aiSettings && latestAiSettings) {
+        aiSettings = latestAiSettings;
+      }
 
       const currentRowsData = normalizeRowsForCompare(rows);
       const latestRowsData = normalizeRowsForCompare(latestRows);
@@ -794,10 +816,15 @@ export async function cloudSave(options = {}) {
       const platformProfilesEqual = latestPlatformProfiles === null
         ? currentPlatformProfilesData.length === 0
         : JSON.stringify(currentPlatformProfilesData) === JSON.stringify(latestPlatformProfilesData);
+      const currentAiSettingsData = normalizeAiSettingsForCompare(aiSettings);
+      const latestAiSettingsData = normalizeAiSettingsForCompare(latestAiSettings);
+      const aiSettingsEqual = latestAiSettings === null
+        ? !currentAiSettingsData.apiKey && !currentAiSettingsData.baseUrl && !currentAiSettingsData.model
+        : JSON.stringify(currentAiSettingsData) === JSON.stringify(latestAiSettingsData);
 
       // 关键检查：如果数据内容相同，但数据库时间戳更新了，说明其他设备保存了相同数据
       const cloudTime = new Date(cloudRow.updated_at).getTime();
-      const dataContentEqual = rowsEqual && catsEqual && viewEqual && platformsEqual && platformProfilesEqual;
+      const dataContentEqual = rowsEqual && catsEqual && viewEqual && platformsEqual && platformProfilesEqual && aiSettingsEqual;
       
       console.log('🔍 数据比较结果:', {
         rowsEqual,
@@ -805,6 +832,7 @@ export async function cloudSave(options = {}) {
         viewEqual,
         platformsEqual,
         platformProfilesEqual,
+        aiSettingsEqual,
         latestSnapshotHasPlatformProfiles: latestPlatformProfiles !== null,
         currentPlatformProfilesCount: currentPlatformProfilesData.length,
         latestPlatformProfilesCount: latestPlatformProfilesData.length,
@@ -870,6 +898,7 @@ export async function cloudSave(options = {}) {
       view: view,
       platforms: platformSnapshot.platforms || [],
       platformProfiles: platformSnapshot.platformProfiles || [],
+      ...(aiSettings ? { aiSettings } : {}),
       __meta: {
         schemaVersion: 2,
         clientId: getClientId(),

@@ -38,6 +38,8 @@ let lastQueryState = {
   renderedText: ''
 };
 
+let pendingWritePlan = null;
+
 function $(selector) {
   return document.querySelector(selector);
 }
@@ -59,18 +61,65 @@ function phoneDigits(value) {
   return String(value || '').replace(/\D+/g, '');
 }
 
+function getPlatformTerms() {
+  return [
+    { id: 'douyin', label: '抖音', terms: ['抖音', 'douyin'] },
+    { id: 'tiktok', label: 'TikTok', terms: ['tiktok', 'tik tok'] },
+    { id: 'threads', label: 'Threads', terms: ['threads'] },
+    { id: 'instagram', label: 'Instagram', terms: ['instagram', 'ins', 'ig'] }
+  ];
+}
+
 function readAiSettings() {
   try {
     const raw = localStorage.getItem(AI_SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_AI_SETTINGS };
-    return { ...DEFAULT_AI_SETTINGS, ...JSON.parse(raw) };
+    return normalizeAiSettings(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_AI_SETTINGS };
   }
 }
 
-function saveAiSettings(settings) {
-  localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
+function normalizeAiSettings(settings = {}) {
+  const merged = { ...DEFAULT_AI_SETTINGS, ...settings };
+  return {
+    provider: String(merged.provider || DEFAULT_AI_SETTINGS.provider),
+    baseUrl: String(merged.baseUrl || '').trim().replace(/\/+$/, ''),
+    apiKey: String(merged.apiKey || ''),
+    model: String(merged.model || '').trim(),
+    enableAiSummary: Boolean(merged.enableAiSummary)
+  };
+}
+
+function saveAiSettings(settings, options = {}) {
+  const normalized = normalizeAiSettings(settings);
+  localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(normalized));
+  if (options.updateForm) {
+    hydrateSettingsForm();
+  }
+  return normalized;
+}
+
+async function saveAiSettingsToCloud() {
+  const settings = saveAiSettings(collectSettingsForm());
+  setStatus('保存中...');
+  if (typeof window.cloudSave !== 'function') {
+    setStatus('已保存本机', 'warning');
+    showInlineStatus('AI 设置已保存到本机，云端同步未就绪', 'warning');
+    return settings;
+  }
+  const result = await window.cloudSave({ source: 'manual', reason: 'ai-settings-save' });
+  if (result?.status === 'saved' || result?.status === 'no_change') {
+    setStatus('已保存', 'success');
+    showInlineStatus('AI 设置已保存并同步云端', 'success');
+  } else if (result?.status === 'cloud_newer') {
+    setStatus('待同步', 'warning');
+    showInlineStatus('检测到云端更新，请先云端加载后再保存 AI 设置', 'warning');
+  } else {
+    setStatus('本机已保存', 'warning');
+    showInlineStatus('AI 设置已保存到本机，云端同步失败', 'warning');
+  }
+  return settings;
 }
 
 function setStatus(message, type = 'info') {
@@ -108,6 +157,18 @@ function collectSettingsForm() {
   };
 }
 
+window.getXhsAiSettingsSnapshot = function getXhsAiSettingsSnapshot() {
+  const raw = localStorage.getItem(AI_SETTINGS_KEY);
+  if (!raw) return null;
+  return readAiSettings();
+};
+
+window.applyXhsAiSettingsSnapshot = function applyXhsAiSettingsSnapshot(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  saveAiSettings(settings, { updateForm: true });
+  setStatus('已同步', 'success');
+};
+
 function classifyQuery(query) {
   const q = normalizeText(query);
   if (/重复|重复电话|重复手机号|重复号码/.test(q)) return 'duplicates';
@@ -118,13 +179,7 @@ function classifyQuery(query) {
 
 function detectPlatformIntent(query) {
   const q = normalizeText(query);
-  const platformGroups = [
-    { id: 'douyin', label: '抖音', terms: ['抖音', 'douyin'] },
-    { id: 'tiktok', label: 'TikTok', terms: ['tiktok', 'tik tok'] },
-    { id: 'threads', label: 'Threads', terms: ['threads'] },
-    { id: 'instagram', label: 'Instagram', terms: ['instagram', 'ins', 'ig'] },
-    { id: 'xhs', label: '小红书', terms: ['小红书', 'xhs', 'rednote'] }
-  ];
+  const platformGroups = getPlatformTerms().concat([{ id: 'xhs', label: '小红书', terms: ['小红书', 'xhs', 'rednote'] }]);
   const wantsPhone = /手机|手机号|电话|号码|phone/.test(q);
   const wantsExistingValue = /有|存在|填写|填了|不为空|非空|有字符|有内容|账号|资料|选项/.test(q);
   const matched = platformGroups.find((platform) => platform.terms.some((term) => q.includes(normalizeText(term))));
@@ -136,6 +191,122 @@ function detectPlatformIntent(query) {
     platformLabel: matched.label,
     wantsPhone
   };
+}
+
+function detectWritePlan(query, rows = []) {
+  const text = String(query || '').trim();
+  if (!/(写进|写入|填入|填写|设置|改成|更新)/.test(text)) return null;
+
+  const platform = getPlatformTerms().find((item) => {
+    const normalizedText = normalizeText(text);
+    return item.terms.some((term) => normalizedText.includes(normalizeText(term)));
+  });
+  if (!platform) return null;
+
+  const phoneSet = new Set(rows.map((row) => String(row.phone || '').trim()).filter(Boolean));
+  const phoneMatches = Array.from(text.matchAll(/\b\d{7,15}\b/g)).map((match) => ({
+    phone: match[0],
+    index: match.index || 0
+  }));
+  if (!phoneMatches.length) return null;
+
+  const tasks = phoneMatches.map((match, index) => {
+    const next = phoneMatches[index + 1]?.index ?? text.length;
+    const segment = text.slice(match.index, next);
+    let value = '';
+    const valuePatterns = [
+      /(?:数据|内容|资料|名称|账号|值)\s*(?:是|为|=|：|:)?\s*([^\n，。；;、]+)/,
+      /(?:是|为|=|：|:)\s*([^\n，。；;、]+)/
+    ];
+    for (const pattern of valuePatterns) {
+      const found = segment.match(pattern);
+      if (found?.[1]) {
+        value = found[1].trim();
+        break;
+      }
+    }
+    return {
+      phone: match.phone,
+      platformId: platform.id,
+      platformLabel: platform.label,
+      value,
+      exists: phoneSet.has(match.phone)
+    };
+  }).filter((task) => task.value);
+
+  if (!tasks.length) return null;
+  return {
+    type: 'writePlatformProfiles',
+    query: text,
+    platform,
+    tasks
+  };
+}
+
+function renderWritePlan(plan) {
+  pendingWritePlan = plan;
+  updateCount(plan.tasks.length);
+  $('#aiKeywordSummary').textContent = `待写入：${plan.platform.label}`;
+  const root = $('#aiResults');
+  root.className = 'ai-results-list';
+  root.innerHTML = plan.tasks.map((task) => `
+    <article class="ai-result-item ${task.exists ? '' : 'ai-result-warning'}">
+      <div class="ai-result-main">
+        <strong>${escapeHtml(task.phone)}</strong>
+        <span>${escapeHtml(task.platformLabel)}：${escapeHtml(task.value)}</span>
+      </div>
+      <div class="ai-result-reasons">
+        <span>${task.exists ? '等待确认写入平台资料' : '未找到这个电话号码，确认后也会跳过'}</span>
+      </div>
+    </article>
+  `).join('');
+  const summary = $('#aiSummary');
+  summary.hidden = false;
+  summary.innerHTML = `
+    <h3>AI 写入计划</h3>
+    <pre>${escapeHtml(`我理解你要批量写入 ${plan.tasks.length} 条 ${plan.platform.label} 平台资料。确认后才会写入本地数据库并触发云端同步。`)}</pre>
+    <div class="ai-confirm-actions">
+      <button type="button" class="primary" id="btnAiConfirmWrite">确认写入数据库</button>
+      <button type="button" class="ghost" id="btnAiCancelWrite">取消</button>
+    </div>
+  `;
+  $('#btnAiConfirmWrite')?.addEventListener('click', confirmWritePlan);
+  $('#btnAiCancelWrite')?.addEventListener('click', () => {
+    pendingWritePlan = null;
+    summary.hidden = true;
+    showInlineStatus('已取消 AI 写入计划', 'info');
+  });
+  lastQueryState = {
+    query: plan.query,
+    keywords: [plan.platform.label, '写入'],
+    type: 'writePlan',
+    intent: plan,
+    rows: [],
+    results: plan.tasks.map((task) => ({ row: { phone: task.phone, xhs_name: task.value }, reasons: [`写入 ${task.platformLabel}`] })),
+    renderedText: plan.tasks.map((task) => `${task.phone} ${task.platformLabel} ${task.value}`).join('\n')
+  };
+}
+
+async function confirmWritePlan() {
+  if (!pendingWritePlan?.tasks?.length) return;
+  if (typeof window.applyXhsAiWritePlan !== 'function') {
+    showInlineStatus('AI 写入接口未就绪', 'error');
+    return;
+  }
+  const button = $('#btnAiConfirmWrite');
+  if (button) button.disabled = true;
+  try {
+    const result = await window.applyXhsAiWritePlan(pendingWritePlan.tasks);
+    const summary = $('#aiSummary');
+    summary.hidden = false;
+    summary.innerHTML = `<h3>写入完成</h3><pre>${escapeHtml(`已写入 ${result.changed} 条，跳过 ${result.skipped} 条。数据已进入现有自动同步流程。`)}</pre>`;
+    showInlineStatus(`AI 已写入 ${result.changed} 条`, result.changed ? 'success' : 'warning');
+    pendingWritePlan = null;
+  } catch (error) {
+    showInlineStatus(`AI 写入失败：${error.message || error}`, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function expandSynonyms(tokens) {
@@ -452,6 +623,11 @@ function updateCount(count) {
 async function runLocalQuery() {
   const query = $('#aiUserInput').value.trim();
   const rows = await getRowsForAi();
+  const writePlan = detectWritePlan(query, rows);
+  if (writePlan) {
+    renderWritePlan(writePlan);
+    return lastQueryState;
+  }
   const type = classifyQuery(query);
   const keywords = extractKeywords(query);
   const intent = detectPlatformIntent(query);
@@ -658,9 +834,17 @@ function bindAiAssistant() {
   if (!$('#aiAssistantPanel')) return;
   hydrateSettingsForm();
 
-  $('#btnAiSaveSettings')?.addEventListener('click', () => {
-    saveAiSettings(collectSettingsForm());
-    setStatus('已保存', 'success');
+  $('#btnAiSaveSettings')?.addEventListener('click', async () => {
+    const button = $('#btnAiSaveSettings');
+    if (button) button.disabled = true;
+    try {
+      await saveAiSettingsToCloud();
+    } catch (error) {
+      setStatus('本机已保存', 'warning');
+      showInlineStatus(`AI 设置同步失败：${error.message || error}`, 'warning');
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
   $('#btnAiTestConnection')?.addEventListener('click', testConnection);
   $('#btnAiSearch')?.addEventListener('click', () => {

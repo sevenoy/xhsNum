@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" sizes="192x192" href="./icon/icon-192.png?v=20251107">
   <link rel="apple-touch-icon" sizes="512x512" href="./icon/icon-512.png?v=20251107">
 
-  <link rel="stylesheet" href="./css/style.css?v=V260601.4" />
+  <link rel="stylesheet" href="./css/style.css?v=V260601.5" />
 
   <!-- Dexie：本地 IndexedDB -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.8/dist/dexie.min.js"></script>
@@ -291,6 +291,7 @@
           <span></span>
         </button>
         <h1 id="appTitle">号码管理</h1>
+        <span id="appVersion" class="app-version-pill">V260601.5</span>
       </div>
       <div class="top-right">
         <span id="onlineStatus" style="display:none; margin-right: 10px; color: #34c759; font-size: 13px;"></span>
@@ -448,7 +449,7 @@
           <div class="ai-card-head">
             <div>
               <h3>AI API 设置</h3>
-              <p>API Key 仅保存在当前浏览器 localStorage。</p>
+              <p>保存设置后同步到当前账号的多端设备。</p>
             </div>
             <span id="aiSettingsStatus" class="ai-status-pill">未保存</span>
           </div>
@@ -468,7 +469,7 @@
             </label>
             <label>
               <span>API Key</span>
-              <input id="aiApiKey" type="password" autocomplete="off" placeholder="仅保存在本机浏览器" />
+              <input id="aiApiKey" type="password" autocomplete="off" placeholder="保存后同账号多端同步" />
             </label>
             <label>
               <span>Model</span>
@@ -483,7 +484,7 @@
             <button type="button" class="primary" id="btnAiSaveSettings">保存设置</button>
             <button type="button" class="ghost" id="btnAiTestConnection">测试连接</button>
           </div>
-          <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。</p>
+          <p class="ai-safe-note">测试连接不会发送号码数据。AI 总结最多只发送前 50 条本地匹配结果。API Key 会随当前账号云端快照同步。</p>
         </section>
       </div>
 
@@ -515,7 +516,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.4';
+    const APP_VERSION = 'V260601.5';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

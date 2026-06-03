@@ -449,6 +449,42 @@ window.getXhsRowsForAi = async function getXhsRowsForAi() {
   });
 };
 
+window.applyXhsAiWritePlan = async function applyXhsAiWritePlan(tasks = []) {
+  if (!Array.isArray(tasks) || !tasks.length) {
+    return { changed: 0, skipped: 0, results: [] };
+  }
+  const rows = await getAllRows();
+  await loadPlatformProfilesForRows(rows);
+  const results = [];
+  let changed = 0;
+  let skipped = 0;
+
+  for (const task of tasks) {
+    const phone = String(task.phone || '').trim();
+    const platformId = String(task.platformId || '').trim();
+    const value = String(task.value || '').trim();
+    const row = rows.find((item) => String(item.phone || '').trim() === phone);
+    if (!row || !platformId || platformId === 'xhs' || !value) {
+      skipped += 1;
+      results.push({ ...task, status: 'skipped' });
+      continue;
+    }
+    const result = await savePlatformProfile(row.id, platformId, value);
+    if (result?.changed) changed += 1;
+    results.push({ ...task, rowId: row.id, status: result?.changed ? 'changed' : 'unchanged' });
+  }
+
+  if (changed > 0) {
+    notifyLocalRowsSaved('ai-write-platform-profile');
+    await renderTable();
+    showSaveStatus(`AI 已写入 ${changed} 条平台资料，等待云端同步`, 'warning', 3200);
+  } else {
+    showSaveStatus('AI 写入计划没有产生变化', 'info', 2400);
+  }
+
+  return { changed, skipped, results };
+};
+
 function catNameOf(cats, id) {
   const found = cats.find((c) => c.id === id);
   return found ? found.name : "";

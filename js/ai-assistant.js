@@ -123,6 +123,7 @@ function setSettingsCollapsed(collapsed) {
   const summary = $('#aiSettingsSummary');
   if (!card || !body || !summary) return;
   card.classList.toggle('is-collapsed', Boolean(collapsed));
+  card.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   body.hidden = Boolean(collapsed);
   summary.hidden = !collapsed;
   updateSettingsSummary();
@@ -867,8 +868,15 @@ function bindAiAssistant() {
   hydrateSettingsForm();
   setSettingsCollapsed(localStorage.getItem(AI_SETTINGS_KEY) && aiSettingsConfigured());
 
-  $('#btnAiEditSettings')?.addEventListener('click', () => {
-    setSettingsCollapsed(false);
+  document.querySelector('.ai-settings-card')?.addEventListener('click', (event) => {
+    const interactive = event.target.closest('input, select, button, textarea, label, a');
+    const card = event.currentTarget;
+    if (interactive && !interactive.closest('.ai-card-head') && !interactive.closest('.ai-settings-summary')) return;
+    setSettingsCollapsed(!card.classList.contains('is-collapsed'));
+  });
+  $('#btnAiEditSettings')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setSettingsCollapsed(!document.querySelector('.ai-settings-card')?.classList.contains('is-collapsed'));
   });
   $('#btnAiSaveSettings')?.addEventListener('click', async () => {
     const button = $('#btnAiSaveSettings');

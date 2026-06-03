@@ -7031,6 +7031,7 @@ body.subpage-shell .settings-item input[type="range"] {
   display: grid !important;
   gap: 0 !important;
   padding: 10px 14px !important;
+  cursor: pointer !important;
 }
 
 #aiAssistantPanel .ai-hero > div:first-child {
@@ -7101,6 +7102,15 @@ body.subpage-shell .settings-item input[type="range"] {
 
 #aiAssistantPanel > .ai-settings-card:not(.is-collapsed) .ai-settings-body {
   margin-top: 12px !important;
+  cursor: default !important;
+}
+
+#aiAssistantPanel > .ai-settings-card .ai-settings-body,
+#aiAssistantPanel > .ai-settings-card input,
+#aiAssistantPanel > .ai-settings-card select,
+#aiAssistantPanel > .ai-settings-card label,
+#aiAssistantPanel > .ai-settings-card .ai-actions {
+  cursor: default !important;
 }
 
 #aiAssistantPanel .ai-grid {

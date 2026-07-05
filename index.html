@@ -221,7 +221,7 @@
   <aside class="app-sidebar" aria-label="主导航">
     <div class="sidebar-profile">
       <div class="sidebar-avatar" aria-hidden="true">O</div>
-      <div id="sidebarAppVersion" class="sidebar-app-version">V260601.16</div>
+      <div id="sidebarAppVersion" class="sidebar-app-version">V260601.17</div>
       <div class="sidebar-profile-text">
         <div id="sidebarUserName" class="sidebar-user-name">未登录</div>
         <div class="sidebar-cloud-line">
@@ -517,6 +517,7 @@
   </div>
 
   <!-- 主脚本 -->
+  <script src="./js/csv-export.js?v=V260601.17"></script>
   <script type="module" src="./js/app.js"></script>
   <script type="module" src="./js/ai-assistant.js"></script>
   <script type="module" src="./js/syncBridge.js"></script>
@@ -526,7 +527,7 @@
     // ✅ 应用版本号 - 每次更新代码时修改这个版本号
     // 格式：V + 年月日（6位） + . + 版本更改号
     // 例如：V251213.8 表示 2025年12月13日第8次更新
-    const APP_VERSION = 'V260601.16';
+    const APP_VERSION = 'V260601.17';
     
     // ✅ 兼容性处理：清除旧格式的版本号记录（从 20251212.8 格式迁移到 V251213.8）
     // 确保更新提示能正常显示（针对 iPhone X 等设备）

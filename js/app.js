@@ -2472,27 +2472,10 @@ function parseCSV(text) {
 }
 
 function toCSV(rows) {
-  const headers = [
-    "phone",
-    "owner",
-    "wx_real",
-    "wx_name",
-    "xhs_name",
-    "note1",
-    "row_color",
-    "order",
-  ];
-  const out = [headers.join(",")];
-  for (const r of rows) {
-    const line = headers
-      .map((h) => {
-        const s = String(r[h] ?? "");
-        return `"${s.replaceAll('"', '""')}"`;
-      })
-      .join(",");
-    out.push(line);
-  }
-  return out.join("\n");
+  return window.XhsCsvExport.toCSV(rows, {
+    cats: readCats(),
+    platformProfiles: state.platformProfiles,
+  });
 }
 
 /* =========================
@@ -3895,6 +3878,7 @@ function bindEvents() {
     try {
       if (btn) { btn.disabled = true; btn.textContent = '⏳ 导出中...'; }
       const all = await getAllRows();
+      await loadPlatformProfilesForRows(all);
       const csv = toCSV(all);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
